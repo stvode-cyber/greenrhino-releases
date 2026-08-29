@@ -45,7 +45,6 @@ jobs:
       - name: Set deployed PWA host in strings.xml
         run: |
           HOST=$(echo "$PWA_URL" | sed -E 's#https?://##; s#/.*##')
-          powershell -NoProfile -Command "(Get-Content 'clients/android/app/src/main/res/values/strings.xml') -replace 'greenrhino.example.com', '$HOST' | Set-Content 'clients/android/app/src/main/res/values/strings.xml'" || \
           sed -i "s/greenrhino.example.com/$HOST/g" clients/android/app/src/main/res/values/strings.xml
 
       - name: Decode upload keystore
