@@ -23,6 +23,9 @@ namespace GreenRhino
         private TcpListener _listener;
         private CancellationTokenSource _cts;
         private string _root;
+        // 外部打开（双击文件）白名单：token -> 本地文件路径，仅允许服务白名单内的文件
+        private readonly object _extLock = new();
+        private readonly Dictionary<string, string> _external = new();
 
         private static readonly Dictionary<string, string> Mime = new()
         {
@@ -43,7 +46,28 @@ namespace GreenRhino
             { ".webm", "video/webm" },
             { ".vtt", "text/vtt" },
             { ".woff2", "font/woff2" },
-            { ".txt", "text/plain; charset=utf-8" }
+            { ".txt", "text/plain; charset=utf-8" },
+            // 外部打开（双击文件）时需要正确 mime 才能被 <audio>/<video> 播放
+            { ".flac", "audio/flac" },
+            { ".m4a", "audio/mp4" },
+            { ".aac", "audio/aac" },
+            { ".ogg", "audio/ogg" },
+            { ".oga", "audio/ogg" },
+            { ".opus", "audio/ogg" },
+            { ".wma", "audio/x-ms-wma" },
+            { ".mp2", "audio/mpeg" },
+            { ".mp1", "audio/mpeg" },
+            { ".aiff", "audio/aiff" },
+            { ".mka", "audio/x-matroska" },
+            { ".mkv", "video/x-matroska" },
+            { ".mov", "video/quicktime" },
+            { ".avi", "video/x-msvideo" },
+            { ".m4v", "video/mp4" },
+            { ".ogv", "video/ogg" },
+            { ".ts", "video/mp2t" },
+            { ".flv", "video/x-flv" },
+            { ".wmv", "video/x-ms-wmv" },
+            { ".lrc", "text/plain; charset=utf-8" }
         };
 
         public int Start()
@@ -110,6 +134,36 @@ namespace GreenRhino
                 while (!string.IsNullOrEmpty(await reader.ReadLineAsync())) { } // 丢弃请求头
 
                 if (urlPath == "/" || urlPath == "") urlPath = "/index.html";
+
+                // 外部打开端点：仅服务于白名单 token，杜绝任意本地文件读取
+                if (urlPath.StartsWith("/api/external", StringComparison.OrdinalIgnoreCase))
+                {
+                    string token = "";
+                    var qi = urlPath.IndexOf('?');
+                    if (qi >= 0)
+                    {
+                        foreach (var kv in urlPath.Substring(qi + 1).Split('&'))
+                        {
+                            var eq = kv.IndexOf('=');
+                            if (eq > 0 && kv.Substring(0, eq) == "t") { token = Uri.UnescapeDataString(kv.Substring(eq + 1)); break; }
+                        }
+                    }
+                    string fpath = null;
+                    lock (_extLock) _external.TryGetValue(token, out fpath);
+                    if (!string.IsNullOrEmpty(fpath) && File.Exists(fpath))
+                    {
+                        var fext = Path.GetExtension(fpath).ToLowerInvariant();
+                        var fmime = Mime.TryGetValue(fext, out var fm) ? fm : "application/octet-stream";
+                        var fbody = await File.ReadAllBytesAsync(fpath, ct);
+                        await Send(ns, 200, fmime, fbody);
+                    }
+                    else
+                    {
+                        await Send(ns, 404, "text/plain", Encoding.UTF8.GetBytes("not found"));
+                    }
+                    return;
+                }
+
                 var file = Path.GetFullPath(Path.Combine(_root, urlPath.TrimStart('/')));
                 if (!file.StartsWith(_root, StringComparison.OrdinalIgnoreCase))
                 {
@@ -143,5 +197,31 @@ namespace GreenRhino
         {
             try { _cts?.Cancel(); _listener?.Stop(); } catch { }
         }
+
+        // ---------- 外部打开（双击文件）支持 ----------
+        /// <summary>把本地文件登记进白名单，返回访问 token。web 层凭 token 经 /api/external?t= 取回文件字节。</summary>
+        public string RegisterExternalFile(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            var token = Guid.NewGuid().ToString("N");
+            lock (_extLock) _external[token] = path;
+            return token;
+        }
+        public class ExternalEntry { public string name; public string token; public string type; }
+        public List<ExternalEntry> RegisterExternalFiles(IEnumerable<string> paths)
+        {
+            var list = new List<ExternalEntry>();
+            foreach (var p in paths)
+            {
+                var t = RegisterExternalFile(p);
+                if (t == null) continue;
+                var name = Path.GetFileName(p);
+                var ext = Path.GetExtension(p).ToLowerInvariant();
+                var type = Mime.TryGetValue(ext, out var m) ? m : "application/octet-stream";
+                list.Add(new ExternalEntry { name = name, token = t, type = type });
+            }
+            return list;
+        }
+        public void ClearExternal() { lock (_extLock) _external.Clear(); }
     }
 }

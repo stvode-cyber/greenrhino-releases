@@ -66,6 +66,7 @@ export async function openSettings(app, focus = '') {
     row('主题', '深浅色外观', themeSeg),
     row('默认音量', '新播放的初始音量', vol),
     row('退出续播', '记住进度，下次继续', resumeSeg),
+    row('设为默认播放器', '双击音频/视频直接用本软件打开', h('button', { class: 'opt', onclick: setAsDefaultPlayer }, '设为系统默认')),
     row('交叉淡入', '歌曲间平滑过渡', cf),
     row('均衡器 EQ', '10 段频率调节', eqWrap),
     row('存储', '媒体占用与清理', h('div', {}, storageInfo, h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px' } }, clearThumbBtn, clearBtn))),
@@ -103,6 +104,28 @@ export async function openSettings(app, focus = '') {
           h('button', { class: 'icon-btn', title: '移除记录', onclick: async () => { await dbDelete('imports', r.id); refreshImports(box); app.toast('已移除记录') } }, '✕'))))
     })
   }
+
+  // 设为系统默认播放器：通过 WebView2 原生通道写注册表关联
+  function setAsDefaultPlayer() {
+    const wv = window.chrome && window.chrome.webview
+    if (!wv || typeof wv.postMessage !== 'function') {
+      app.toast('此功能需在 Windows 桌面版绿角犀中执行', 'info')
+      return
+    }
+    const handler = (e) => {
+      try {
+        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        if (d && d.type === 'setDefaultResult') {
+          wv.removeEventListener('message', handler)
+          if (d.ok) app.toast(d.msg || '已设为默认播放器')
+          else app.toast(d.msg || '设置失败', 'err')
+        }
+      } catch { /* 忽略无法解析的消息 */ }
+    }
+    wv.addEventListener('message', handler)
+    wv.postMessage(JSON.stringify({ type: 'setDefault' }))
+  }
+
 }
 
 function row(label, desc, control) {

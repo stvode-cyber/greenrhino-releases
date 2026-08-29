@@ -371,3 +371,25 @@ installBtn?.addEventListener('click', async () => {
 })
 
 console.log('绿角犀播放器 · 离线媒体播放器已就绪')
+
+// ---------- 外部打开（双击文件 / 系统默认关联） ----------
+// C# 壳把双击传入的本地文件登记进 LocalServer 白名单，页面加载完成后通过
+// ExecuteScriptAsync 调用本函数：逐文件经 /api/external?t= 取回字节 -> File -> 导入并播放
+window.__hostOpen = async (list) => {
+  try {
+    if (!Array.isArray(list) || !list.length) return
+    const files = []
+    for (const it of list) {
+      const r = await fetch('/api/external?t=' + encodeURIComponent(it.token))
+      if (!r.ok) continue
+      const blob = await r.blob()
+      files.push(new File([blob], it.name, { type: it.type || '' }))
+    }
+    if (!files.length) return
+    const added = await importFiles(files, '外部打开')
+    if (added.length) {
+      toast(`已打开 ${added.length} 个文件`)
+      playList(added, added[0])
+    } else toast('没有可播放的媒体文件', 'err')
+  } catch (e) { console.error('__hostOpen error', e) }
+}

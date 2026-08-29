@@ -28,6 +28,8 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== location.origin) return // 跨域（如 esm.sh 懒加载）交给网络，失败即降级
+  // 外部打开端点：媒体流直连 LocalServer，禁止 SW 缓存（避免把大视频写进 SW 缓存）
+  if (url.pathname.startsWith('/api/')) return
 
   // 导航请求：网络优先，离线回退到已缓存的 index.html
   if (req.mode === 'navigate') {
