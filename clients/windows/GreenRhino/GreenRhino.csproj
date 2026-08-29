@@ -22,8 +22,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ApplicationDefinition Include="App.xaml" />
-    <Page Include="MainWindow.xaml" />
     <None Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />
     <!-- 运行 clients/copy-web.mjs 后 wwwroot 会自动被打包进输出目录 -->
     <None Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
