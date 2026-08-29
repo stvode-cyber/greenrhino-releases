@@ -23,6 +23,10 @@ if errorlevel 1 (echo build-assets.mjs failed && pause && exit /b 1)
 node copy-web.mjs
 if errorlevel 1 (echo copy-web.mjs failed && pause && exit /b 1)
 
+REM Bundle wwwroot into wwwroot.zip (embedded resource, makes exe truly self-contained)
+powershell -NoProfile -Command "Compress-Archive -Path 'windows\GreenRhino\wwwroot\*' -DestinationPath 'windows\GreenRhino\wwwroot.zip' -Force"
+if errorlevel 1 (echo FAILED to create wwwroot.zip && pause && exit /b 1)
+
 echo [5/5] Publishing self-contained Windows exe (win-x64, single file)...
 dotnet publish windows\GreenRhino\GreenRhino.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o windows\GreenRhino\publish
 if errorlevel 1 (echo dotnet publish failed && pause && exit /b 1)

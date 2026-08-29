@@ -11,6 +11,7 @@ clients/**/build/
 clients/**/bin/
 clients/**/obj/
 clients/**/wwwroot/
+clients/**/wwwroot.zip
 clients/ios/*.xcodeproj
 clients/ios/build/
 

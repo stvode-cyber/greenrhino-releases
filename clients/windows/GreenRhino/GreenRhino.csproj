@@ -23,8 +23,9 @@
 
   <ItemGroup>
     <None Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />
-    <!-- 运行 clients/copy-web.mjs 后 wwwroot 会自动被打包进输出目录 -->
-    <None Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- wwwroot 由 build-windows.bat 在 copy-web 后压缩为 wwwroot.zip，
+         作为嵌入资源打进 exe，运行时自动解压到临时目录（真正单文件自包含） -->
+    <EmbeddedResource Include="wwwroot.zip" />
   </ItemGroup>
 
 </Project>

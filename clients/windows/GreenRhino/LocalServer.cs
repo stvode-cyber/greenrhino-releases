@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,12 +15,14 @@ namespace GreenRhino
     /// 极简内嵌 HTTP 服务：把 wwwroot 中的 PWA 以 http://127.0.0.1:port/ 托管，
     /// 这样 WebView2 内可启用 Service Worker / 离线缓存（file:// 不支持 SW）。
     /// 使用原始 TcpListener，无需管理员提权（避免 http.sys URL ACL）。
+    /// wwwroot 定位策略：优先 exe 同级 wwwroot 文件夹（开发/独立文件场景）；
+    /// 单文件发布时该文件夹不存在，则从内嵌资源 wwwroot.zip 解压到临时目录。
     /// </summary>
     public class LocalServer
     {
         private TcpListener _listener;
         private CancellationTokenSource _cts;
-        private readonly string _root = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+        private string _root;
 
         private static readonly Dictionary<string, string> Mime = new()
         {
@@ -44,15 +48,42 @@ namespace GreenRhino
 
         public int Start()
         {
+            _root = ResolveWebRoot();
             int port = 8890;
             while (true)
             {
                 try { _listener = new TcpListener(IPAddress.Loopback, port); _listener.Start(); break; }
-                catch { port++; if (port > 8999) throw new Exception("无可用端口"); }
+                catch { port++; if (port > 8999) throw new Exception("no free port"); }
             }
             _cts = new CancellationTokenSource();
             _ = Task.Run(() => Loop(_cts.Token));
             return port;
+        }
+
+        private string ResolveWebRoot()
+        {
+            // 1) exe 同级的 wwwroot 文件夹（开发调试 / 非单文件发布）
+            var diskRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            if (Directory.Exists(diskRoot)) return diskRoot;
+
+            // 2) 单文件发布：wwwroot 已作为嵌入资源 wwwroot.zip 打入 exe，解压到临时目录
+            var extractRoot = Path.Combine(Path.GetTempPath(), "GreenRhino", "wwwroot");
+            if (!Directory.Exists(extractRoot))
+            {
+                var asm = Assembly.GetExecutingAssembly();
+                using var zip = asm.GetManifestResourceStream("GreenRhino.wwwroot.zip");
+                if (zip != null)
+                {
+                    ZipFile.ExtractToDirectory(zip, extractRoot);
+                    return extractRoot;
+                }
+            }
+            else
+            {
+                return extractRoot;
+            }
+            // 兜底：仍返回磁盘路径，缺失文件由 Handle 的 404 体现
+            return diskRoot;
         }
 
         private async Task Loop(CancellationToken ct)
