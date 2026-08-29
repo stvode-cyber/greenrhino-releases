@@ -1,0 +1,44 @@
+name: Build Huawei PWA assets
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-huawei:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web asset deps
+        working-directory: clients
+        run: |
+          npm i
+          npx playwright install --with-deps chromium
+
+      - name: Build assets (icons + assetlinks.json)
+        working-directory: clients
+        run: node build-assets.mjs
+
+      - name: Assemble deployable web package
+        run: |
+          mkdir -p deploy/.well-known
+          cp index.html sw.js manifest.webmanifest favicon.svg deploy/ 2>/dev/null || true
+          cp -r public src icons deploy/ 2>/dev/null || true
+          cp clients/huawei/assetlinks.json deploy/.well-known/assetlinks.json
+
+      - name: Verify assetlinks reachable path
+        run: test -f deploy/.well-known/assetlinks.json && echo "OK: /.well-known/assetlinks.json present"
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GreenRhino-Web
+          path: deploy/*
+          if-no-files-found: error

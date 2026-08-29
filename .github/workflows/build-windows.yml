@@ -1,0 +1,44 @@
+name: Build Windows (.exe)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web asset deps
+        working-directory: clients
+        run: |
+          npm i
+          npx playwright install chromium
+
+      - name: Build assets + copy web into wwwroot
+        working-directory: clients
+        run: |
+          node build-assets.mjs
+          node copy-web.mjs
+
+      - name: Publish self-contained exe
+        run: dotnet publish clients/windows/GreenRhino/GreenRhino.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o clients/windows/GreenRhino/publish
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GreenRhino-Windows
+          path: clients/windows/GreenRhino/publish/*
+          if-no-files-found: error

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500" width="1024" height="500">
+  <rect width="1024" height="500" fill="#0E1116"/>
+  <circle cx="512" cy="220" r="120" fill="none" stroke="#2D6CDF" stroke-width="18"/>
+  <circle cx="512" cy="220" r="38" fill="#2D6CDF"/>
+  <path d="M704 150 L704 290 L760 258 L760 182 Z" fill="#2D6CDF"/>
+  <path d="M320 170 L320 270" stroke="#2D6CDF" stroke-width="18" stroke-linecap="round"/>
+  <text x="512" y="410" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="64" font-weight="700" fill="#FFFFFF" text-anchor="middle">绿角犀播放器 · 离线媒体播放器</text>
+  <text x="512" y="462" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="30" fill="#9AA7B8" text-anchor="middle">离线优先 · 隐私友好 · 跨平台</text>
+</svg>

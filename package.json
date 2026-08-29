@@ -1,0 +1,17 @@
+{
+  "name": "offline-player",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "离线媒体播放器 PWA — 音乐 + 视频双模式，离线优先（零构建，原生 ES Module）",
+  "scripts": {
+    "dev": "python -m http.server 4173",
+    "serve": "python -m http.server 4173"
+  },
+  "dependencies": {
+    "jsmediatags": "^3.9.7"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}

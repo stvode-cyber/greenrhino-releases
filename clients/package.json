@@ -1,0 +1,14 @@
+{
+  "name": "greenrhino-clients",
+  "version": "1.0.0",
+  "private": true,
+  "description": "绿角犀播放器 跨平台原生客户端工程（Windows WebView2 / Android TWA / iOS WKWebView / 华为 AppGallery PWA）",
+  "type": "module",
+  "scripts": {
+    "assets": "node build-assets.mjs",
+    "copy-web": "node copy-web.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.47.0"
+  }
+}

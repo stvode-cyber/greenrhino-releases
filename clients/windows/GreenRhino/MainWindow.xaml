@@ -1,0 +1,13 @@
+<Window x:Class="GreenRhino.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="绿角犀播放器 · 离线媒体播放器"
+        Width="1180" Height="760"
+        MinWidth="820" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        Background="#0E1116">
+    <Grid>
+        <wv2:WebView2 x:Name="webView" />
+    </Grid>
+</Window>

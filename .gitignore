@@ -1,0 +1,24 @@
+# 项目记忆 / 个人数据（不上仓库）
+.workbuddy/
+
+# 依赖
+node_modules/
+
+# 构建产物
+clients/**/publish/
+clients/**/build/
+clients/ios/*.xcodeproj
+clients/ios/build/
+
+# 签名与本地配置（含密钥，严禁入库）
+*.keystore
+*.jks
+clients/android/local.properties
+clients/ios/ExportOptions.plist
+cert.p12
+profile.mobileprovision
+
+# 系统 / 临时
+.DS_Store
+Thumbs.db
+*.log

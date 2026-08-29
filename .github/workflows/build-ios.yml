@@ -1,0 +1,81 @@
+name: Build iOS (.ipa)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Install web asset deps
+        working-directory: clients
+        run: |
+          npm i
+          npx playwright install chromium
+
+      - name: Build assets + copy web into wwwroot
+        working-directory: clients
+        run: |
+          node build-assets.mjs
+          node copy-web.mjs
+
+      - name: Set DEVELOPMENT_TEAM in project.yml
+        if: ${{ secrets.IOS_TEAM_ID != '' }}
+        run: |
+          sed -i '' "s/DEVELOPMENT_TEAM: \"\"/DEVELOPMENT_TEAM: \"${{ secrets.IOS_TEAM_ID }}\"/" clients/ios/project.yml
+
+      - name: Import signing certificate
+        if: ${{ secrets.IOS_CERT_P12_BASE64 != '' }}
+        env:
+          CERT_PWD: ${{ secrets.IOS_CERT_PASSWORD }}
+        run: |
+          echo "${{ secrets.IOS_CERT_P12_BASE64 }}" | base64 -d > cert.p12
+          security import cert.p12 -P "$CERT_PWD" -T /usr/bin/codesign
+          security find-identity -v -p codesigning
+
+      - name: Install provisioning profile
+        if: ${{ secrets.IOS_PROVISIONING_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.IOS_PROVISIONING_BASE64 }}" | base64 -d > profile.mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Generate Xcode project
+        working-directory: clients/ios
+        run: xcodegen generate
+
+      - name: Archive
+        working-directory: clients/ios
+        run: xcodebuild -scheme GreenRhino -archivePath build/GreenRhino.xcarchive archive -configuration Release -allowProvisioningUpdates
+
+      - name: Export IPA
+        working-directory: clients/ios
+        run: |
+          [ -f ExportOptions.plist ] || cat > ExportOptions.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/GreenRhino.xcarchive -exportPath build/ipa -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: GreenRhino-iOS
+          path: clients/ios/build/ipa/*.ipa
+          if-no-files-found: error

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E1116" />
+  <title>绿角犀播放器 · 离线媒体播放器</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 侧边栏 -->
+    <aside id="sidebar">
+      <div class="brand">
+        <img src="./icons/icon.svg" alt="logo" class="brand-logo" />
+        <span class="brand-name">绿角犀播放器</span>
+      </div>
+      <nav id="nav">
+        <button class="nav-item active" data-view="library"><span class="ico">🎬</span>媒体库</button>
+        <button class="nav-item" data-view="recent"><span class="ico">🕒</span>最近播放</button>
+        <button class="nav-item" data-view="playlists"><span class="ico">📃</span>歌单</button>
+        <button class="nav-item" data-view="favorites"><span class="ico">⭐</span>收藏</button>
+        <button class="nav-item" data-view="settings"><span class="ico">⚙️</span>设置</button>
+        <button class="nav-item" data-action="help"><span class="ico">❓</span>使用说明</button>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="install-btn" class="ghost-btn accent" hidden>📲 安装应用</button>
+        <button id="import-folder" class="ghost-btn">📁 导入文件夹</button>
+        <button id="import-files" class="ghost-btn">＋ 添加文件</button>
+      </div>
+    </aside>
+
+    <!-- 主区 -->
+    <main id="main">
+      <header id="topbar">
+        <button id="menu-toggle" class="icon-btn" title="菜单">☰</button>
+        <div class="mode-switch">
+          <button class="mode-btn active" data-mode="music">音乐</button>
+          <button class="mode-btn" data-mode="video">视频</button>
+        </div>
+        <div class="search-box">
+          <input id="search" type="search" placeholder="搜索歌名 / 歌手 / 文件名…" autocomplete="off" />
+        </div>
+        <div class="filter-tags" id="filter-tags">
+          <button class="tag active" data-filter="all">全部</button>
+          <button class="tag" data-filter="music">音乐</button>
+          <button class="tag" data-filter="video">视频</button>
+        </div>
+      </header>
+      <section id="view"><!-- 动态视图 --></section>
+    </main>
+
+    <!-- 常驻底栏 -->
+    <footer id="bottombar"><!-- 由 JS 构建 --></footer>
+  </div>
+
+  <!-- 抽屉 / 引导 / 提示 容器 -->
+  <div id="queue-drawer" class="drawer" hidden></div>
+  <div id="modal-root"></div>
+  <div id="toast-host"></div>
+
+  <!-- 隐藏的媒体元素由播放引擎创建 -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

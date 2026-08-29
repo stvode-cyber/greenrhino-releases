@@ -1,0 +1,50 @@
+<svg viewBox="0 0 680 500" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif" role="img">
+  <title>播放器 UI 线框 · 视频模式</title>
+  <desc>展示侧边栏、主区（播放画面加字幕加控制条）与常驻底栏的整体布局。</desc>
+  <text x="20" y="30" font-size="14" font-weight="500" fill="#1f2937">播放器 UI 线框 · 视频模式</text>
+
+  <rect x="20" y="52" width="640" height="400" rx="14" fill="#f7f9fc" stroke="#c9d3e0" stroke-width="1"/>
+  <rect x="20" y="52" width="150" height="400" rx="14" fill="#eef2f7"/>
+  <rect x="150" y="52" width="14" height="400" fill="#eef2f7"/>
+
+  <text x="36" y="80" font-size="13" font-weight="500" fill="#444441">媒体库</text>
+  <rect x="32" y="92" width="126" height="30" rx="6" fill="#d6e4fb"/>
+  <text x="44" y="111" font-size="12" fill="#0C447C">媒体库</text>
+  <rect x="32" y="130" width="126" height="30" rx="6" fill="#ffffff" stroke="#d0d8e2" stroke-width="0.5"/>
+  <text x="44" y="149" font-size="12" fill="#444441">歌单</text>
+  <rect x="32" y="168" width="126" height="30" rx="6" fill="#ffffff" stroke="#d0d8e2" stroke-width="0.5"/>
+  <text x="44" y="187" font-size="12" fill="#444441">收藏</text>
+  <rect x="32" y="206" width="126" height="30" rx="6" fill="#ffffff" stroke="#d0d8e2" stroke-width="0.5"/>
+  <text x="44" y="225" font-size="12" fill="#444441">设置</text>
+
+  <rect x="186" y="74" width="56" height="24" rx="12" fill="#e3e8ee"/>
+  <text x="214" y="90" text-anchor="middle" font-size="12" fill="#444441">音乐</text>
+  <rect x="250" y="74" width="56" height="24" rx="12" fill="#2D6CDF"/>
+  <text x="278" y="90" text-anchor="middle" font-size="12" fill="#ffffff">视频</text>
+
+  <rect x="186" y="104" width="468" height="200" rx="10" fill="#2c2c2a"/>
+  <rect x="300" y="262" width="240" height="16" rx="4" fill="#ffffff"/>
+  <text x="420" y="274" text-anchor="middle" font-size="10" fill="#444441">字幕文字</text>
+
+  <rect x="186" y="312" width="468" height="34" rx="8" fill="#e7edf5"/>
+  <circle cx="210" cy="329" r="11" fill="#2D6CDF"/>
+  <path d="M206 324 L206 334 L215 329 Z" fill="#ffffff"/>
+  <rect x="230" y="326" width="300" height="6" rx="3" fill="#d0d8e2"/>
+  <rect x="230" y="326" width="120" height="6" rx="3" fill="#2D6CDF"/>
+  <rect x="490" y="321" width="44" height="16" rx="4" fill="#ffffff" stroke="#d0d8e2" stroke-width="0.5"/>
+  <text x="512" y="332" text-anchor="middle" font-size="10" fill="#444441">字幕</text>
+  <rect x="544" y="320" width="44" height="18" rx="9" fill="#2D6CDF"/>
+  <text x="566" y="333" text-anchor="middle" font-size="10" fill="#ffffff">1.0x</text>
+
+  <text x="186" y="368" font-size="11" fill="#888780">队列（上滑展开） · AB 循环 · 章节跳转</text>
+
+  <rect x="170" y="416" width="490" height="30" rx="6" fill="#e7edf5"/>
+  <circle cx="196" cy="431" r="11" fill="#2D6CDF"/>
+  <path d="M192 426 L192 436 L201 431 Z" fill="#ffffff"/>
+  <rect x="216" y="428" width="280" height="6" rx="3" fill="#d0d8e2"/>
+  <rect x="216" y="428" width="120" height="6" rx="3" fill="#2D6CDF"/>
+  <rect x="508" y="424" width="40" height="14" rx="4" fill="#d0d8e2"/>
+  <text x="566" y="435" font-size="11" fill="#444441">顺序</text>
+
+  <text x="20" y="478" font-size="12" fill="#888780">视频模式：主区为播放画面 + 字幕，控制条含 倍速 / 字幕 / 旋转 / 比例 / 画中画。</text>
+</svg>

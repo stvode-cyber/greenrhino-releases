@@ -1,0 +1,45 @@
+<svg viewBox="0 0 680 500" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif" role="img">
+  <title>播放器 UI 线框 · 音乐模式</title>
+  <desc>展示侧边栏、主区（专辑图加歌词）与常驻底栏的整体布局。</desc>
+  <text class="th" x="20" y="30" font-size="14" font-weight="500" fill="#1f2937">播放器 UI 线框 · 音乐模式</text>
+
+  <rect x="20" y="52" width="640" height="400" rx="14" fill="#f7f9fc" stroke="#c9d3e0" stroke-width="1"/>
+  <rect x="20" y="52" width="150" height="400" rx="14" fill="#eef2f7"/>
+  <rect x="150" y="52" width="14" height="400" fill="#eef2f7"/>
+
+  <text x="36" y="80" font-size="13" font-weight="500" fill="#444441">媒体库</text>
+  <rect x="32" y="92" width="126" height="30" rx="6" fill="#d6e4fb"/>
+  <text x="44" y="111" font-size="12" fill="#0C447C">媒体库</text>
+  <rect x="32" y="130" width="126" height="30" rx="6" fill="#ffffff" stroke="#d0d8e2" stroke-width="0.5"/>
+  <text x="44" y="149" font-size="12" fill="#444441">歌单</text>
+  <rect x="32" y="168" width="126" height="30" rx="6" fill="#ffffff" stroke="#d0d8e2" stroke-width="0.5"/>
+  <text x="44" y="187" font-size="12" fill="#444441">收藏</text>
+  <rect x="32" y="206" width="126" height="30" rx="6" fill="#ffffff" stroke="#d0d8e2" stroke-width="0.5"/>
+  <text x="44" y="225" font-size="12" fill="#444441">设置</text>
+
+  <rect x="186" y="74" width="56" height="24" rx="12" fill="#2D6CDF"/>
+  <text x="214" y="90" text-anchor="middle" font-size="12" fill="#ffffff">音乐</text>
+  <rect x="250" y="74" width="56" height="24" rx="12" fill="#e3e8ee"/>
+  <text x="278" y="90" text-anchor="middle" font-size="12" fill="#444441">视频</text>
+
+  <rect x="190" y="112" width="120" height="120" rx="12" fill="#cfe0f7"/>
+  <text x="250" y="176" text-anchor="middle" font-size="12" fill="#0C447C">专辑图 / 频谱</text>
+
+  <rect x="330" y="112" width="150" height="10" rx="4" fill="#e3e8ee"/>
+  <rect x="330" y="132" width="150" height="10" rx="4" fill="#e3e8ee"/>
+  <rect x="330" y="152" width="150" height="10" rx="4" fill="#2D6CDF"/>
+  <rect x="330" y="172" width="150" height="10" rx="4" fill="#e3e8ee"/>
+  <rect x="330" y="192" width="150" height="10" rx="4" fill="#e3e8ee"/>
+  <rect x="330" y="212" width="150" height="10" rx="4" fill="#e3e8ee"/>
+  <text x="330" y="246" font-size="11" fill="#888780">歌词（当前句高亮）</text>
+
+  <rect x="170" y="416" width="490" height="30" rx="6" fill="#e7edf5"/>
+  <circle cx="196" cy="431" r="11" fill="#2D6CDF"/>
+  <path d="M192 426 L192 436 L201 431 Z" fill="#ffffff"/>
+  <rect x="216" y="428" width="280" height="6" rx="3" fill="#d0d8e2"/>
+  <rect x="216" y="428" width="120" height="6" rx="3" fill="#2D6CDF"/>
+  <rect x="508" y="424" width="40" height="14" rx="4" fill="#d0d8e2"/>
+  <text x="566" y="435" font-size="11" fill="#444441">顺序</text>
+
+  <text x="20" y="478" font-size="12" fill="#888780">切到「视频」模式：主区替换为播放画面 + 字幕，控制条增加倍速 / 字幕 / 旋转。</text>
+</svg>

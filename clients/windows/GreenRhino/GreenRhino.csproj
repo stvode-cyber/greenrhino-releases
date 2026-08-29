@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>GreenRhino</RootNamespace>
+    <AssemblyName>GreenRhino</AssemblyName>
+    <AssemblyTitle>绿角犀播放器 · 离线媒体播放器</AssemblyTitle>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Version>1.0.0.0</Version>
+    <!-- 自包含发布：用户无需安装 .NET -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml" />
+    <Page Include="MainWindow.xaml" />
+    <None Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 运行 clients/copy-web.mjs 后 wwwroot 会自动被打包进输出目录 -->
+    <None Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
