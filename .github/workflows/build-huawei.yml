@@ -30,7 +30,7 @@ jobs:
         run: |
           mkdir -p deploy/.well-known
           cp index.html sw.js manifest.webmanifest favicon.svg deploy/ 2>/dev/null || true
-          cp -r public src icons deploy/ 2>/dev/null || true
+          cp -r src icons deploy/ 2>/dev/null || true
           cp clients/huawei/assetlinks.json deploy/.well-known/assetlinks.json
 
       - name: Verify assetlinks reachable path
