@@ -122,13 +122,34 @@ async function doImport(files, folder) {
   } else toast('没有可导入的音频/视频文件', 'err')
 }
 async function importFiles(files, folder = '导入') {
+  // ① 离线自动歌词：扫描选中的文件，建立「去扩展名基名 -> .lrc 文件」映射
+  const lrcByName = {}
+  for (const f of files) {
+    if (/\.lrc$/i.test(f.name)) {
+      const base = f.name.replace(/\.[^.]+$/, '')
+      lrcByName[base] = f
+    }
+  }
   const added = await addMediaFiles(files, folder)
   for (const it of added) {
     if (it.type === 'music') {
+      const base = it.name.replace(/\.[^.]+$/, '')
+      // 同名 .lrc 优先写入（不依赖元数据解析，避免 CDN 卡顿时歌词也丢失）
+      const lrcFile = lrcByName[base]
+      let lyric = ''
+      if (lrcFile) { try { lyric = (await lrcFile.text()).trim() } catch (e) {} }
+      if (lyric) await updateMedia(it.id, { lyric })
+      // 解析元数据（parseTags 内部带超时，CDN 挂起不影响）
       const tags = await parseTags(it.blob)
+      const patch = {}
       if (tags && (tags.title || tags.artist || tags.cover)) {
-        await updateMedia(it.id, { title: tags.title || it.name, artist: tags.artist, album: tags.album, cover: tags.cover })
+        patch.title = tags.title || it.name
+        patch.artist = tags.artist
+        patch.album = tags.album
+        patch.cover = tags.cover
       }
+      if (tags && tags.lyrics && !lyric) patch.lyric = tags.lyrics   // 内嵌 USLT：无同名 lrc 时才用
+      if (Object.keys(patch).length) await updateMedia(it.id, patch)
     }
   }
   if (added.length) await addImportRecord({ folder, count: added.length })

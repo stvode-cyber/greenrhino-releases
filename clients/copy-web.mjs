@@ -40,7 +40,7 @@ function copyPath(src, dst) {
 }
 
 for (const t of targets) {
-  fs.rmSync(t, { recursive: true, force: true })
+  try { fs.rmSync(t, { recursive: true, force: true }) } catch (e) { /* 清旧目录失败可忽略，下方 copyPath 会覆盖重建 */ }
   for (const it of items) {
     const s = path.join(SRC, it)
     if (fs.existsSync(s)) copyPath(s, path.join(t, it))

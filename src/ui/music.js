@@ -2,6 +2,7 @@
 import { h, toast } from './dom.js'
 import { player } from '../player.js'
 import { Spectrum } from './spectrum.js'
+import { updateMedia } from '../store.js'
 import { parseLRC } from '../lrc.js'
 
 export function buildMusic(app) {
@@ -82,8 +83,40 @@ export function buildMusic(app) {
   const offTime = player.on('time', ({ time }) => highlightLyric(time))
   const offTrack = player.on('trackchanged', (item) => {
     if (item.type === 'video') return
-    lyrics = []; renderLyrics(); setCover(item)
+    if (item.lyric && item.lyric.trim()) {
+      lyrics = parseLRC(item.lyric); renderLyrics()
+    } else {
+      lyrics = []; renderLyrics()
+      fetchOnlineLyric(item)   // ② 在线自动匹配
+    }
+    setCover(item)
   })
+  // ② 在线自动歌词：按歌名+歌手请求公开 LRCLIB API，命中则渲染并缓存回 IndexedDB（下次离线也有）
+  async function fetchOnlineLyric(item) {
+    if (!item || item.type === 'video') return
+    const title = (item.title || item.name || '').trim()
+    const artist = (item.artist || '').trim()
+    if (!title || !navigator.onLine) return
+    try {
+      const q = new URLSearchParams({ track: title, artist })
+      const res = await fetch(`https://lrclib.net/api/search?${q.toString()}`)
+      if (!res.ok) return
+      const arr = await res.json()
+      if (!Array.isArray(arr) || !arr.length) return
+      const pick = (a) => (a && (a.syncedLyrics || a.plainLyrics)) ? (a.syncedLyrics || a.plainLyrics) : ''
+      let lrc = pick(arr[0])
+      if (artist) {
+        const exact = arr.find((a) => a.artist && a.artist.toLowerCase().includes(artist.toLowerCase()) && (a.syncedLyrics || a.plainLyrics))
+        if (exact) lrc = pick(exact)
+      }
+      if (!lrc || !lrc.trim()) return
+      const parsed = parseLRC(lrc)
+      if (!parsed.length) return
+      lyrics = parsed; renderLyrics()
+      toast('已从网络匹配歌词')
+      try { await updateMedia(item.id, { lyric: lrc }) } catch (e) {}
+    } catch (e) { /* 离线或接口异常：静默，不影响播放 */ }
+  }
 
   return {
     el,
