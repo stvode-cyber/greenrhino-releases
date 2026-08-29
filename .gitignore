@@ -5,6 +5,7 @@
 node_modules/
 
 # 构建产物
+dist/
 clients/**/publish/
 clients/**/build/
 clients/ios/*.xcodeproj
