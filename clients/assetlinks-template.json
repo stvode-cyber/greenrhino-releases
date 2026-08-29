@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.greenrhino.player",
+      "sha256_cert_fingerprints": [
+        "<DEPLOY_AFTER: 用 keytool -list -v -keystore upload-keystore.jks 取 SHA256 指纹填入，逗号分隔可填多个>"
+      ]
+    }
+  }
+]
