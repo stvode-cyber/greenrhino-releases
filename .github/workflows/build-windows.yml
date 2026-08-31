@@ -1,12 +1,14 @@
-name: Build Windows (.exe)
+name: Build Windows EXE
 
+# 推 tag（如 v1.2.3）即自动出包 Windows 单文件 exe，并作为 artifact / release 资产上传。
+# 用法：git tag v1.0.0 && git push origin v1.0.0
 on:
-  workflow_dispatch:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
 
 jobs:
-  build-windows:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,26 +21,29 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Install web asset deps
-        working-directory: clients
+      - name: Copy web + pack zip
+        shell: bash
         run: |
-          npm i
-          npx playwright install chromium
+          node clients/copy-web.mjs
+          python clients/zip-wwwroot.py
 
-      - name: Build assets + copy web into wwwroot
-        working-directory: clients
+      - name: Publish self-contained single-file exe
+        shell: bash
         run: |
-          node build-assets.mjs
-          node copy-web.mjs
-
-      - name: Publish self-contained exe
-        run: dotnet publish clients/windows/GreenRhino/GreenRhino.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o clients/windows/GreenRhino/publish
+          dotnet publish clients/windows/GreenRhino/GreenRhino.csproj \
+            -c Release -r win-x64 --self-contained \
+            -p:PublishSingleFile=true -o publish
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GreenRhino-Windows
-          path: clients/windows/GreenRhino/publish/*
-          if-no-files-found: error
+          name: GreenRhino-windows
+          path: publish/GreenRhino.exe
+
+      - name: Release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: publish/GreenRhino.exe

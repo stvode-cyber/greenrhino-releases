@@ -41,6 +41,10 @@ with zipfile.ZipFile(io.BytesIO(zbuf)) as z:
         ("src/metadata.js", b"guessFromFilename"),
         ("src/ui/music.js", b"/api/lyric"),
         ("src/ui/music.js", b"fetchLrclib"),
+        ("src/ui/music.js", b"doSearch"),
+        ("src/ui/music.js", b"toggleSearch"),
+        ("src/ui/music.js", b"offsetSlider"),
+        ("src/ui/music.js", b"fetchOnlineLyric(item"),
         ("src/main.js", b"guessFromFilename"),
         ("src/player.js", b"canPlayType"),
     ]:
