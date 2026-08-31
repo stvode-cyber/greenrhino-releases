@@ -100,6 +100,29 @@ export async function getAllMedia() {
   const all = await dbGetAll('media')
   return all.sort((a, b) => b.addedAt - a.addedAt)
 }
+// 媒体库重复检测：优先按 标题+歌手+专辑 元数据匹配，缺失时退回 文件名+大小。
+// 返回分组数组，每组内已按 addedAt 降序排好（[0] 为建议保留的最先后入项）。
+export async function findDuplicates() {
+  const all = await getAllMedia()
+  const keyOf = (m) => {
+    const meta = (m.title && m.artist) ? `${m.title} ${m.artist} ${m.album || ''}`.trim() : null
+    return meta || `${m.name} ${m.size || 0}`
+  }
+  const map = new Map()
+  for (const m of all) {
+    const k = keyOf(m)
+    if (!map.has(k)) map.set(k, [])
+    map.get(k).push(m)
+  }
+  const groups = []
+  for (const items of map.values()) {
+    if (items.length > 1) {
+      items.sort((a, b) => b.addedAt - a.addedAt)
+      groups.push(items)
+    }
+  }
+  return groups
+}
 export const getMedia = (id) => dbGet('media', id)
 export async function deleteMedia(id) {
   await dbDelete('media', id)

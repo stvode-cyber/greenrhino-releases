@@ -1,6 +1,6 @@
 // library.js — 媒体库网格（音乐/视频）+ 多选与批量操作
 import { h, openModal } from './dom.js'
-import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist } from '../store.js'
+import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
 import { player } from '../player.js'
 
 const TYPE_ICON = { music: '🎵', video: '🎬' }
@@ -32,7 +32,8 @@ export function buildLibrary(app) {
     seg.append(mk('manual', '手动'), mk('scan', '扫描'))
     const btn = h('button', { class: 'ghost-btn', style: { padding: '6px 14px' }, onclick: () => importMode === 'scan' ? app.importFolderDialog() : app.importFilesDialog() }, '＋ 导入')
     const selBtn = h('button', { class: 'ghost-btn' + (selMode ? ' active' : ''), style: { padding: '6px 14px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, selMode ? '✓ 退出选择' : '☑ 多选')
-    return h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' } }, seg, btn, selBtn)
+    const dupBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 14px' }, onclick: () => openDuplicates(), title: '查找媒体库中重复的文件' }, '🔁 查重复')
+    return h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' } }, seg, btn, selBtn, dupBtn)
   }
 
   async function refresh() {
@@ -138,6 +139,41 @@ export function buildLibrary(app) {
     for (const id of ids) await deleteMedia(id)
     app.toast(`已移除 ${ids.length} 个文件`)
     exitSelect()
+  }
+
+  // 媒体库重复检测弹窗（设计清单⑨）
+  async function openDuplicates() {
+    const fmtSize = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + 'MB' : (b / 1024).toFixed(0) + 'KB'
+    const groups = await findDuplicates()
+    const body = h('div', { class: 'mb' })
+    if (!groups.length) {
+      body.appendChild(h('div', { class: 'empty' }, h('div', { class: 'big' }, '🎉'), h('div', {}, '没有发现重复文件')))
+    } else {
+      const totalDup = groups.reduce((n, g) => n + g.length - 1, 0)
+      body.appendChild(h('p', { style: { color: 'var(--text-3)', margin: '0 0 10px' } }, `发现 ${groups.length} 组重复，共 ${totalDup} 个可清理副本（每组保留最新导入的一个）`))
+      for (const g of groups) {
+        const keep = g[0]
+        const card = h('div', { class: 'dup-group', style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '10px', marginBottom: '10px' } })
+        card.appendChild(h('div', { class: 'dup-title', style: { fontWeight: '600', marginBottom: '6px' } }, keep.title || keep.name))
+        g.forEach((it, i) => {
+          const row = h('div', { class: 'dup-row', style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' } })
+          row.appendChild(h('span', { style: { flex: '1' } }, `${i === 0 ? '✅ 保留' : '副本'} · ${it.name} · ${fmtSize(it.size)}`))
+          if (i !== 0) {
+            row.appendChild(h('button', { class: 'ghost-btn danger', style: { padding: '2px 10px' }, onclick: async () => { if (confirm('移除该副本？')) { await deleteMedia(it.id); app.toast('已移除副本'); close(); openDuplicates() } } }, '移除'))
+          }
+          card.appendChild(row)
+        })
+        body.appendChild(card)
+      }
+      body.appendChild(h('button', { class: 'cta', style: { width: '100%', marginTop: '4px' }, onclick: async () => {
+        if (!confirm(`一键移除全部 ${totalDup} 个副本（每组保留最新一个）？`)) return
+        for (const g of groups) for (let i = 1; i < g.length; i++) await deleteMedia(g[i].id)
+        app.toast(`已清理 ${totalDup} 个副本`); close(); refresh()
+      } }, `🧹 一键清理全部 ${totalDup} 个副本`))
+    }
+    const modal = h('div', { class: 'modal' },
+      h('div', { class: 'mh' }, h('h3', {}, '重复文件检测'), h('button', { class: 'icon-btn', onclick: () => close() }, '✕')), body)
+    const close = openModal(modal)
   }
 
   // 拖拽导入
