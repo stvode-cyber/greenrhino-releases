@@ -12,6 +12,7 @@ import { buildVideo } from './ui/video.js'
 import { buildFavorites } from './ui/favorites.js'
 import { buildPlaylists } from './ui/playlists.js'
 import { buildRecent } from './ui/recent.js'
+import { buildCloud } from './ui/cloud.js'
 import { buildQueue } from './ui/queue.js'
 import { openSettings } from './ui/settings.js'
 import { openHelp } from './help.js'
@@ -42,7 +43,8 @@ const video = buildVideo(app)
 const favorites = buildFavorites(app)
 const playlists = buildPlaylists(app)
 const recent = buildRecent(app)
-const pages = { library, music, video, favorites, playlists, recent }
+const cloud = buildCloud(app)
+const pages = { library, music, video, favorites, playlists, recent, cloud }
 for (const p of Object.values(pages)) view.appendChild(p.el)
 
 function showPage(name) {

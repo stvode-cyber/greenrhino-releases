@@ -308,6 +308,36 @@ button { font-family: inherit; cursor: pointer; }
 .toast.err { border-color: var(--danger); color: #ffd9da; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ---------- 云盘（我的云盘） ---------- */
+.cloud-card { max-width: 420px; margin: 8% auto 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: 22px; box-shadow: var(--shadow); }
+.cloud-hero { text-align: center; margin-bottom: 16px; }
+.cloud-hero-ico { font-size: 40px; }
+.cloud-hero h2 { margin: 8px 0 4px; font-size: 19px; }
+.cloud-hero p { margin: 0; color: var(--text-3); font-size: 12px; }
+.cloud-tabs { margin-bottom: 14px; }
+.cloud-tabs button { flex: 1; }
+.cloud-form { display: flex; flex-direction: column; gap: 10px; }
+.cloud-inp { width: 100%; background: var(--card-2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 11px 13px; font-size: 14px; box-sizing: border-box; }
+.cloud-inp:focus { border-color: var(--accent); outline: none; }
+.cloud-err { color: var(--danger); font-size: 12px; min-height: 14px; }
+.cloud-tip { margin: 14px 0 0; color: var(--text-3); font-size: 11px; line-height: 1.6; text-align: center; }
+
+.cloud-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.cloud-head-info { flex: 1; min-width: 0; }
+.cloud-user { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.cloud-quota-bar { height: 9px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.cloud-quota-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #56b3ff); transition: width .4s; }
+.cloud-quota-text { font-size: 11px; color: var(--text-3); margin-top: 5px; }
+
+.cloud-drop { border: 1.5px dashed var(--line); border-radius: 14px; padding: 26px 16px; text-align: center; color: var(--text-2); font-size: 13px; }
+.cloud-drop.over { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.cloud-list { display: flex; flex-direction: column; gap: 8px; }
+.cloud-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; }
+.cloud-row-main { flex: 1; min-width: 0; }
+.cloud-row-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cloud-row-meta { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+.cloud-row-act { display: flex; gap: 4px; flex-shrink: 0; }
+
 /* ---------- 移动端 ---------- */
 @media (max-width: 760px) {
   #app { grid-template-columns: 1fr; grid-template-areas: "main" "bottom"; }
