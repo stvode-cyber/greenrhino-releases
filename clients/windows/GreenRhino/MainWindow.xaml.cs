@@ -204,14 +204,34 @@ namespace GreenRhino
                 }
                 using (var reg = Registry.CurrentUser.CreateSubKey(@"Software\RegisteredApplications"))
                     reg.SetValue("GreenRhino", @"Software\Classes\" + progId + @"\Capabilities");
-                // 直接把每个扩展名默认指向我们的 ProgID（无 UserChoice 时即生效）
+                // 2) 注册到「打开方式」列表。
+                // Windows 的"打开方式"主要读 Applications\<exe> + 各扩展名的
+                // OpenWithList / OpenWithProgids；只写扩展名默认值是不够的——
+                // 那样双击可能生效，但"打开方式"里压根看不到本程序。
+                var exeName = Path.GetFileName(exe);   // GreenRhino.exe
+                using (var app = Registry.CurrentUser.CreateSubKey(@"Software\Classes\Applications\" + exeName))
+                {
+                    app.SetValue("FriendlyAppName", "绿角犀播放器");
+                    app.SetValue("DefaultIcon", "\"" + exe + "\",0");
+                    using (var cmd = app.CreateSubKey(@"shell\open\command"))
+                        cmd.SetValue("", "\"" + exe + "\" \"%1\"");
+                    using (var st = app.CreateSubKey("SupportedTypes"))
+                        foreach (var ext in MediaExts) st.SetValue(ext, "");
+                }
+
+                // 3) 每个扩展名：默认值指向 ProgID（无 UserChoice 时即生效），
+                //    并加进 OpenWithList / OpenWithProgids 让它出现在"打开方式"里
                 foreach (var ext in MediaExts)
                 {
                     using var ek = Registry.CurrentUser.CreateSubKey(@"Software\Classes\" + ext);
                     ek.SetValue("", progId);
+                    using (var owl = ek.CreateSubKey("OpenWithList"))
+                        owl.SetValue(exeName, "");
+                    using (var owp = ek.CreateSubKey("OpenWithProgids"))
+                        owp.SetValue(progId, "");
                 }
 
-                // 2) 用官方 COM 接口设为默认（正确处理 UserChoice 哈希，覆盖已设默认的情况）
+                // 4) 用官方 COM 接口设为默认（正确处理 UserChoice 哈希，覆盖已设默认的情况）
                 try { SetAppAsDefaultViaCom("GreenRhino"); }
                 catch (Exception ex) { System.Diagnostics.Debug.WriteLine("SetAppAsDefault COM 失败: " + ex.Message); }
 
