@@ -106,10 +106,39 @@ namespace GreenRhino
             webView.Source = new Uri($"http://127.0.0.1:{port}/");
         }
 
+        private bool _autoRegisterChecked;
+
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             _pageReady = true;
             FlushPendingFiles();
+            // 首次运行就自动注册为默认播放器（用户要求"装好即默认"），只尝试一次
+            if (!_autoRegisterChecked)
+            {
+                _autoRegisterChecked = true;
+                AutoRegisterDefaultOnce();
+            }
+        }
+
+        /// <summary>
+        /// 首次运行时自动把本程序设为默认播放器。
+        /// 用注册表标志保证"只做一次"——否则用户后来手动换回别的播放器，
+        /// 每次启动又被改回来，就成了流氓行为。
+        /// 失败时不写标志，下次启动会再试一次。
+        /// </summary>
+        private void AutoRegisterDefaultOnce()
+        {
+            try
+            {
+                using var k = Registry.CurrentUser.CreateSubKey(@"Software\GreenRhino\Player");
+                if (!string.IsNullOrEmpty(k.GetValue("AutoRegisteredDefault") as string)) return;
+
+                var (ok, _err) = SetAsDefaultPlayer();
+                if (!ok) return;   // 失败不落标志，留待下次再试
+
+                k.SetValue("AutoRegisteredDefault", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            }
+            catch { /* 自动注册失败不该影响正常使用 */ }
         }
 
         /// <summary>把待播放文件登记进 LocalServer 白名单，并让页面打开播放。</summary>
