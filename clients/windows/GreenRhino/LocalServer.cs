@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,6 +28,16 @@ namespace GreenRhino
         // 外部打开（双击文件）白名单：token -> 本地文件路径，仅允许服务白名单内的文件
         private readonly object _extLock = new();
         private readonly Dictionary<string, string> _external = new();
+
+        // 歌词代理用的共享 HttpClient（绕开浏览器跨域，服务端聚合多源）
+        private static readonly HttpClient _http = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(12)
+        };
+        static LocalServer()
+        {
+            _http.DefaultRequestHeaders.UserAgent.TryParseAdd("GreenRhino/1.0 (offline media player)");
+        }
 
         private static readonly Dictionary<string, string> Mime = new()
         {
@@ -165,6 +177,13 @@ namespace GreenRhino
                     return;
                 }
 
+                // 在线歌词代理：聚合 LRCLIB（国际）+ 歌词迷 gecimi（国内兜底），绕开浏览器跨域，返回 {lyric}
+                if (urlPath.StartsWith("/api/lyric", StringComparison.OrdinalIgnoreCase))
+                {
+                    await HandleLyric(ns, urlPath);
+                    return;
+                }
+
                 var file = Path.GetFullPath(Path.Combine(_root, urlPath.TrimStart('/')));
                 if (!file.StartsWith(_root, StringComparison.OrdinalIgnoreCase))
                 {
@@ -224,5 +243,103 @@ namespace GreenRhino
             return list;
         }
         public void ClearExternal() { lock (_extLock) _external.Clear(); }
+
+        // ---------- 在线歌词代理（多源聚合，绕开浏览器跨域） ----------
+        private async Task HandleLyric(NetworkStream ns, string urlPath)
+        {
+            string title = "", artist = "";
+            var qi = urlPath.IndexOf('?');
+            if (qi >= 0)
+            {
+                foreach (var kv in urlPath.Substring(qi + 1).Split('&'))
+                {
+                    var eq = kv.IndexOf('=');
+                    if (eq > 0)
+                    {
+                        var k = kv.Substring(0, eq);
+                        var v = Uri.UnescapeDataString(kv.Substring(eq + 1));
+                        if (k == "title") title = v;
+                        else if (k == "artist") artist = v;
+                    }
+                }
+            }
+            var lyric = await FetchLyricAggregate(title, artist);
+            var json = JsonSerializer.Serialize(new { lyric });
+            await Send(ns, 200, "application/json; charset=utf-8", Encoding.UTF8.GetBytes(json));
+        }
+
+        // 顺序尝试：① LRCLIB（国际，免费无 Key）② 歌词迷 gecimi（国内兜底）
+        private async Task<string> FetchLyricAggregate(string title, string artist)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return "";
+            // ① LRCLIB
+            try
+            {
+                var q = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title);
+                if (!string.IsNullOrWhiteSpace(artist)) q += "&artist_name=" + Uri.EscapeDataString(artist);
+                var txt = await _http.GetStringAsync(q);
+                using var doc = JsonDocument.Parse(txt);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var it in doc.RootElement.EnumerateArray())
+                    {
+                        var lrc = PickLrc(it);
+                        if (!string.IsNullOrEmpty(lrc)) return lrc;
+                    }
+                }
+            }
+            catch { /* LRCLIB 不可用：继续歌词迷 */ }
+
+            // ② 歌词迷 gecimi（国内兜底）：先取搜索结果里的 .lrc 下载地址，再抓取内容
+            try
+            {
+                var url = "http://gecimi.com/api/lyric/" + Uri.EscapeDataString(title);
+                if (!string.IsNullOrWhiteSpace(artist)) url += "/" + Uri.EscapeDataString(artist);
+                var txt = await _http.GetStringAsync(url);
+                using var doc = JsonDocument.Parse(txt);
+                if (doc.RootElement.TryGetProperty("result", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var it in arr.EnumerateArray())
+                    {
+                        if (it.TryGetProperty("lrc", out var lrcProp))
+                        {
+                            var lrcUrl = lrcProp.GetString();
+                            if (!string.IsNullOrEmpty(lrcUrl))
+                            {
+                                var content = await FetchTextAutoEnc(lrcUrl);
+                                if (!string.IsNullOrWhiteSpace(content)) return content.Trim();
+                            }
+                        }
+                    }
+                }
+            }
+            catch { /* 歌词迷不可用：返回空，由 web 端兜底 */ }
+            return "";
+        }
+
+        // 抓取文本并按 UTF-8 / GBK 容错解码（歌词迷部分 .lrc 为 GBK）
+        private async Task<string> FetchTextAutoEnc(string url)
+        {
+            try
+            {
+                var bytes = await _http.GetByteArrayAsync(url);
+                var s = Encoding.UTF8.GetString(bytes);
+                if (s.Contains('\uFFFD'))
+                {
+                    try { s = Encoding.GetEncoding("gbk").GetString(bytes); } catch { }
+                }
+                return s;
+            }
+            catch { return ""; }
+        }
+
+        private static string PickLrc(JsonElement it)
+        {
+            string synced = null, plain = null;
+            if (it.TryGetProperty("syncedLyrics", out var s) && s.ValueKind == JsonValueKind.String) synced = s.GetString();
+            if (it.TryGetProperty("plainLyrics", out var p) && p.ValueKind == JsonValueKind.String) plain = p.GetString();
+            var v = (synced ?? plain ?? "").Trim();
+            return v;
+        }
     }
 }

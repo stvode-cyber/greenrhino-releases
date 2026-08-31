@@ -91,37 +91,54 @@ export function buildMusic(app) {
     }
     setCover(item)
   })
-  // ② 在线自动歌词：按歌名+歌手请求公开 LRCLIB API，命中则渲染并缓存回 IndexedDB（下次离线也有）
+  // ② 在线自动歌词：优先走原生壳本地代理 /api/lyric（多源聚合 LRCLIB+歌词迷，且绕开浏览器跨域），
+  //    纯 PWA 模式（无本地服务）再兜底直连 LRCLIB。命中后渲染并缓存回 IndexedDB（下次离线也有）。
   async function fetchOnlineLyric(item) {
     if (!item || item.type === 'video') return
     const title = (item.title || item.name || '').trim()
     const artist = (item.artist || '').trim()
     if (!title || !navigator.onLine) return
+    let lrc = ''
+    // ① 原生壳本地代理（exe 专属）：同源请求，无跨域问题
     try {
-      // LRCLIB 现行接口参数：track_name / artist_name / album_name（旧参数 track/artist 会 0 命中）
-      const q = new URLSearchParams()
-      q.set('track_name', title)
-      if (artist) q.set('artist_name', artist)
-      if (item.album) q.set('album_name', item.album)
-      const res = await fetch(`https://lrclib.net/api/search?${q.toString()}`, {
-        headers: { 'X-User-Agent': 'GreenRhino/1.0 (offline media player)' }
-      })
-      if (!res.ok) return
-      const arr = await res.json()
-      if (!Array.isArray(arr) || !arr.length) return
-      const pick = (a) => (a && (a.syncedLyrics || a.plainLyrics)) ? (a.syncedLyrics || a.plainLyrics) : ''
-      let lrc = pick(arr[0])
-      if (artist) {
-        const exact = arr.find((a) => a.artistName && a.artistName.toLowerCase().includes(artist.toLowerCase()) && (a.syncedLyrics || a.plainLyrics))
-        if (exact) lrc = pick(exact)
+      const u = new URLSearchParams({ title, artist })
+      const res = await fetch(`/api/lyric?${u.toString()}`)
+      if (res.ok) {
+        const j = await res.json().catch(() => null)
+        if (j && j.lyric && j.lyric.trim()) lrc = j.lyric.trim()
       }
-      if (!lrc || !lrc.trim()) return
-      const parsed = parseLRC(lrc)
-      if (!parsed.length) return
-      lyrics = parsed; renderLyrics()
-      toast('已从网络匹配歌词')
-      try { await updateMedia(item.id, { lyric: lrc }) } catch (e) {}
-    } catch (e) { /* 离线或接口异常：静默，不影响播放 */ }
+    } catch (e) { /* 本地服务不存在（纯 PWA）或非 200：走兜底 */ }
+    // ② 直连 LRCLIB 兜底（仅当代理未命中）
+    if (!lrc) {
+      try { lrc = await fetchLrclib(title, artist, item.album) } catch (e) {}
+    }
+    if (!lrc) return
+    const parsed = parseLRC(lrc)
+    if (!parsed.length) return
+    lyrics = parsed; renderLyrics()
+    toast('已从网络匹配歌词')
+    try { await updateMedia(item.id, { lyric: lrc }) } catch (e) {}
+  }
+
+  // LRCLIB（国际公共歌词库，免费无 Key）直连，供纯 PWA 模式兜底
+  async function fetchLrclib(title, artist, album) {
+    const q = new URLSearchParams()
+    q.set('track_name', title)
+    if (artist) q.set('artist_name', artist)
+    if (album) q.set('album_name', album)
+    const res = await fetch(`https://lrclib.net/api/search?${q.toString()}`, {
+      headers: { 'X-User-Agent': 'GreenRhino/1.0 (offline media player)' }
+    })
+    if (!res.ok) return ''
+    const arr = await res.json()
+    if (!Array.isArray(arr) || !arr.length) return ''
+    const pick = (a) => (a && (a.syncedLyrics || a.plainLyrics)) ? (a.syncedLyrics || a.plainLyrics) : ''
+    let lrc = pick(arr[0])
+    if (artist) {
+      const exact = arr.find((a) => a.artistName && a.artistName.toLowerCase().includes(artist.toLowerCase()) && (a.syncedLyrics || a.plainLyrics))
+      if (exact) lrc = pick(exact)
+    }
+    return (lrc || '').trim()
   }
 
   return {

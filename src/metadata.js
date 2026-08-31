@@ -18,3 +18,19 @@ export async function parseTags(blob) {
     return {}
   }
 }
+
+// 无 ID3 标签时，从文件名推断「歌名 / 歌手」，提升离线条目显示与联网匹配命中率。
+// 中文惯例多为「歌手 - 歌名」（如「周杰伦 - 晴天.mp3」）；也兼容「歌名 - 歌手」反查失败场景（仍按惯例取首段为歌手）。
+// 自动去掉前缀曲目号（01 / 01. / 01 -）与扩展名。
+export function guessFromFilename(name) {
+  if (!name) return {}
+  let base = name.replace(/\.[^.]+$/, '').trim()
+  base = base.replace(/^\d+[\s.\-_]+/, '')          // 去前缀曲目号
+  const segs = base.split(/\s+[–—-]\s+/)             // 优先「空格-空格」分隔
+  if (segs.length >= 2) {
+    const artist = segs[0].trim()
+    const title = segs.slice(1).join(' ').trim()
+    if (artist && title) return { artist, title }
+  }
+  return base ? { title: base } : {}
+}

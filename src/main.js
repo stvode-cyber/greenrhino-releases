@@ -4,7 +4,7 @@ import { player } from './player.js'
 import {
   addMediaFiles, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore
 } from './store.js'
-import { parseTags } from './metadata.js'
+import { parseTags, guessFromFilename } from './metadata.js'
 import { initBottomBar } from './ui/bottombar.js'
 import { buildLibrary } from './ui/library.js'
 import { buildMusic } from './ui/music.js'
@@ -139,15 +139,15 @@ async function importFiles(files, folder = '导入') {
       let lyric = ''
       if (lrcFile) { try { lyric = (await lrcFile.text()).trim() } catch (e) {} }
       if (lyric) { const upd = await updateMedia(it.id, { lyric }); if (upd) Object.assign(it, upd) }
-      // 解析元数据（本地零依赖 ID3 解析，完全离线）
+      // 解析元数据（本地零依赖 ID3 解析，完全离线）；无标签时从文件名推断
       const tags = await parseTags(it.blob)
+      const guessed = guessFromFilename(it.name)
       const patch = {}
-      if (tags && (tags.title || tags.artist || tags.cover)) {
-        patch.title = tags.title || it.name
-        patch.artist = tags.artist
-        patch.album = tags.album
-        patch.cover = tags.cover
-      }
+      patch.title = (tags && tags.title) ? tags.title : (guessed.title || it.name)
+      if (tags && tags.artist) patch.artist = tags.artist
+      else if (guessed.artist) patch.artist = guessed.artist
+      if (tags && tags.album) patch.album = tags.album
+      if (tags && tags.cover) patch.cover = tags.cover
       if (tags && tags.lyrics && !lyric) patch.lyric = tags.lyrics   // 内嵌 USLT：无同名 lrc 时才用
       if (Object.keys(patch).length) { const upd = await updateMedia(it.id, patch); if (upd) Object.assign(it, upd) }
     }
@@ -168,7 +168,12 @@ function relocateMedia(id) {
     const patch = { blob: file, size: file.size, name: file.name, type, mime: file.type || (type === 'video' ? 'video/mp4' : 'audio/mpeg') }
     if (type === 'music') {
       const tags = await parseTags(file)
-      if (tags) { patch.title = tags.title || file.name; patch.artist = tags.artist; patch.album = tags.album; patch.cover = tags.cover }
+      const guessed = guessFromFilename(file.name)
+      patch.title = (tags && tags.title) ? tags.title : (guessed.title || file.name)
+      if (tags && tags.artist) patch.artist = tags.artist
+      else if (guessed.artist) patch.artist = guessed.artist
+      if (tags && tags.album) patch.album = tags.album
+      if (tags && tags.cover) patch.cover = tags.cover
     }
     await updateMedia(id, patch)
     toast('已重新定位文件，可正常播放')
