@@ -11,7 +11,7 @@
     <AssemblyName>GreenRhino</AssemblyName>
     <AssemblyTitle>绿角犀播放器 · 离线媒体播放器</AssemblyTitle>
     <ApplicationIcon>icon.ico</ApplicationIcon>
-    <Version>1.0.0.0</Version>
+    <Version>1.1.0.0</Version>
     <!-- 自包含发布：用户无需安装 .NET -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
