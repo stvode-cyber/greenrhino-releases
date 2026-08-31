@@ -145,6 +145,8 @@ class PlayerEngine {
       eng.src.connect(eng.gain)
       eng.gain.connect(this.eqInput)
     }
+    // 视频图延迟连接：setVideoElement 在 ctx 就绪前已调用，这里补接（createMediaElementSource 只能调一次）
+    if (this.videoEl && !this.videoSrc) this._connectVideoGraph(this.videoEl)
   }
 
   _wireEngine(eng) {
@@ -240,6 +242,7 @@ class PlayerEngine {
 
   async _playVideo(item, autoplay = true) {
     if (!this.videoEl) { this.emit('error', '视频播放器未就绪'); return }
+    this._videoErrShown = false
     const switching = !this.current || item.id !== this.current.id
     const url = this._urlFor(item)
     this.current = item
@@ -373,22 +376,34 @@ class PlayerEngine {
   // ---------- 视频专用 ----------
   setVideoElement(el) {
     this.videoEl = el
-    if (!this.ctx) { this.ensureCtx() }
-    if (!this.videoSrc && this.ctx) {
+    // 监听必须无条件挂载：初始化时 ctx 为 null（ensureCtx 是异步的，这里不能靠它同步拿到 ctx），
+    // 否则视频进度条不动 / 不续播 / 解码失败无提示 全部失效
+    el.addEventListener('timeupdate', () => this._onVideoTime())
+    el.addEventListener('ended', () => this._onVideoEnded())
+    el.addEventListener('loadedmetadata', () => {
+      if (this._videoResumeTo) { try { el.currentTime = this._videoResumeTo } catch {} ; this._videoResumeTo = 0 }
+      this.emit('loaded', this.current); this._saveProgressThrottled()
+    })
+    el.addEventListener('error', () => {
+      if (this._videoErrShown) return
+      this._videoErrShown = true
+      const it = this.current
+      this.emit('error', `「${it?.name || '该视频'}」解码失败：很可能是 H.265/HEVC 等浏览器不支持的编码（MP4 容器但非 H.264）。请用 HandBrake / 格式工厂转码为 H.264 的 MP4，或等待绿角犀内置转码。`, it)
+    })
+    el.volume = 1
+    // Web Audio 图：ctx 就绪则立即接，否则标记，ensureCtx 建好后再接（createMediaElementSource 只能调一次）
+    if (this.ctx && !this.videoSrc) this._connectVideoGraph(el)
+  }
+
+  _connectVideoGraph(el) {
+    if (this.videoSrc || !this.ctx) return
+    try {
       this.videoSrc = this.ctx.createMediaElementSource(el)
       this.videoGain = this.ctx.createGain()
       this.videoGain.gain.value = 1
       this.videoSrc.connect(this.videoGain)
       this.videoGain.connect(this.master)
-      el.volume = 1
-      el.addEventListener('timeupdate', () => this._onVideoTime())
-      el.addEventListener('ended', () => this._onVideoEnded())
-      el.addEventListener('loadedmetadata', () => {
-        if (this._videoResumeTo) { try { this.videoEl.currentTime = this._videoResumeTo } catch {} ; this._videoResumeTo = 0 }
-        this.emit('loaded', this.current); this._saveProgressThrottled()
-      })
-      el.addEventListener('error', () => this.emit('error', '视频解码失败，该格式可能不被浏览器支持', this.current))
-    }
+    } catch (e) { /* 视频直出，不影响画面 */ }
   }
   _onVideoTime() {
     if (this._ab && this._ab.b > 0 && this.videoEl.currentTime >= this._ab.b) this.videoEl.currentTime = this._ab.a
