@@ -30,3 +30,6 @@ Thumbs.db
 
 # 沙箱自测素材（Playwright 导入/播放测试用，非产品内容）
 test-assets/
+
+# 云盘后端运行时状态（账号/上传文件，非源码，严禁入库）
+server/data/
