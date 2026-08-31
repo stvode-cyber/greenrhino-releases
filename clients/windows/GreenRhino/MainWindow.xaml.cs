@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -13,6 +14,7 @@ namespace GreenRhino
     public partial class MainWindow : Window
     {
         private readonly LocalServer _server = new LocalServer();
+        private readonly DlnaCaster _caster = new DlnaCaster();
 
         // 系统托盘图标（关闭窗口时最小化到后台，只有托盘菜单「退出」才真正关闭）
         private System.Windows.Forms.NotifyIcon _tray;
@@ -189,7 +191,7 @@ namespace GreenRhino
             catch { /* 激活失败不影响文件已送达 */ }
         }
 
-        // web 请求「设为系统默认播放器」
+        // web 请求「设为系统默认播放器」/ 投屏控制
         private void OnWebMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             var msg = e.TryGetWebMessageAsString();
@@ -197,19 +199,88 @@ namespace GreenRhino
             try
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(msg);
-                if (doc.RootElement.TryGetProperty("type", out var t) && t.GetString() == "setDefault")
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("type", out var t)) return;
+                var type = t.GetString();
+
+                if (type == "setDefault")
                 {
                     var (ok, err) = SetAsDefaultPlayer();
-                    var res = System.Text.Json.JsonSerializer.Serialize(new
+                    PostCast(new
                     {
                         type = "setDefaultResult",
                         ok,
                         msg = err ?? "已设为默认播放器，可双击音频/视频文件直接打开"
                     });
-                    webView.CoreWebView2.PostWebMessageAsString(res);
+                }
+                else if (type == "cast:scan")
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        var devs = await _caster.DiscoverAsync(4000);
+                        PostCast(new
+                        {
+                            type = "cast:devices",
+                            devices = devs.Select(d => new { id = d.Id, name = d.Name }).ToArray()
+                        });
+                    });
+                }
+                else if (type == "cast:play")
+                {
+                    string uri = Str(root, "uri");
+                    string deviceId = Str(root, "deviceId");
+                    _ = Task.Run(async () =>
+                    {
+                        await _caster.Play(deviceId, uri);
+                        PostCast(new { type = "cast:status", deviceId, state = "playing" });
+                    });
+                }
+                else if (type == "cast:stop")
+                {
+                    string deviceId = Str(root, "deviceId");
+                    _ = Task.Run(async () =>
+                    {
+                        await _caster.Stop(deviceId);
+                        PostCast(new { type = "cast:status", deviceId, state = "stopped" });
+                    });
+                }
+                else if (type == "cast:pause")
+                {
+                    string deviceId = Str(root, "deviceId");
+                    _ = Task.Run(async () =>
+                    {
+                        await _caster.Pause(deviceId);
+                        PostCast(new { type = "cast:status", deviceId, state = "paused" });
+                    });
+                }
+                else if (type == "cast:seek")
+                {
+                    string deviceId = Str(root, "deviceId");
+                    string pos = Str(root, "pos");
+                    _ = Task.Run(async () =>
+                    {
+                        await _caster.Seek(deviceId, pos);
+                        PostCast(new { type = "cast:status", deviceId, state = "seeked" });
+                    });
                 }
             }
             catch { /* 忽略无法解析的消息 */ }
+        }
+
+        private static string Str(System.Text.Json.JsonElement root, string name)
+        {
+            if (root.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String) return v.GetString();
+            return "";
+        }
+
+        private void PostCast(object obj)
+        {
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(obj);
+                webView.CoreWebView2?.PostWebMessageAsString(json);
+            }
+            catch { /* 页面未就绪等异常忽略 */ }
         }
 
         // ---------- 注册为系统默认媒体播放器 ----------

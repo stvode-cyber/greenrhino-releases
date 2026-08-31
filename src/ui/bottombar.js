@@ -1,6 +1,7 @@
 // bottombar.js — 常驻底栏（播放/进度/音量/队列/模式）
 import { h, formatTime } from './dom.js'
 import { player } from '../player.js'
+import { cast } from '../cast.js'
 
 const PLAYMODE_LABEL = { order: '顺序', loop: '列表', random: '随机', one: '单曲' }
 
@@ -59,13 +60,15 @@ export function initBottomBar(app) {
   const vol = h('input', { class: 'vol', type: 'range', min: '0', max: '100', value: String(Math.round(player.volume * 100)) })
   vol.addEventListener('input', () => player.setVolume(vol.value / 100))
 
+  const castBtn = h('button', { class: 'icon-btn', title: '投屏到电视 (DLNA)', onclick: onCastClick }, '📺')
+
   bar.append(
     h('div', { class: 'bb-now' }, cover, h('div', { class: 'txt' }, title, sub)),
     h('div', { class: 'bb-center' },
       h('div', { class: 'bb-controls' }, prevBtn, playBtn, nextBtn),
       h('div', { class: 'progress-row' }, tCur, seekWrap, tDur)
     ),
-    h('div', { class: 'bb-right' }, queueBtn, modeWrap, sleepBtn,
+    h('div', { class: 'bb-right' }, castBtn, queueBtn, modeWrap, sleepBtn,
       h('div', { class: 'vol-row' }, muteBtn, vol))
   )
 
@@ -79,6 +82,50 @@ export function initBottomBar(app) {
   function closeModeMenu() { modeMenu.hidden = true }
   function syncModeMenu() { modeBtns.forEach(({ m, b }) => b.classList.toggle('active', m === player.playMode)) }
   document.addEventListener('click', (e) => { if (!modeMenu.hidden && !modeWrap.contains(e.target)) closeModeMenu() })
+
+  // ---------- 投屏面板（DLNA，仅 Windows 客户端可用） ----------
+  const castPanel = h('div', { class: 'cast-panel' })
+  const castList = h('div', { class: 'cast-list' })
+  const castScan = h('button', { class: 'cast-scan', onclick: () => cast.scan() }, '扫描设备')
+  const castStop = h('button', { class: 'cast-stop', onclick: () => cast.stop() }, '■ 停止投屏')
+  const castClose = h('button', { class: 'cast-close', onclick: () => { castPanel.hidden = true } }, '✕')
+  castPanel.hidden = true
+  castPanel.append(
+    h('div', { class: 'cast-head' }, h('span', {}, '投屏到'), castClose),
+    h('div', { class: 'cast-actions' }, castScan, castStop),
+    castList
+  )
+  document.body.appendChild(castPanel)
+
+  function renderCastList() {
+    castList.innerHTML = ''
+    if (cast.state.scanning) { castList.appendChild(h('div', { class: 'cast-empty' }, '扫描中…')); return }
+    if (!cast.state.devices.length) {
+      castList.appendChild(h('div', { class: 'cast-empty' }, '未发现设备。请确认电视已开机、与电脑同一 Wi-Fi，且支持 DLNA 投屏。'))
+      return
+    }
+    cast.state.devices.forEach((d) => {
+      castList.appendChild(h('button', { class: 'cast-dev', onclick: () => {
+        cast.castTo(d.id)
+        castPanel.hidden = true
+        app.toast('正在投屏到 ' + d.name, 'info')
+      } }, '📺 ' + (d.name || '设备')))
+    })
+  }
+  function onCastClick() {
+    if (!cast.isHost()) { app.toast('投屏需在 Windows 客户端（绿角犀 exe）中使用', 'info'); return }
+    if (!player.current || !player.current.blob) { app.toast('当前没有可投屏的媒体', 'err'); return }
+    castPanel.hidden = !castPanel.hidden
+    if (!castPanel.hidden) { renderCastList(); cast.scan() }
+  }
+  cast.on('devices', renderCastList)
+  cast.on('status', (s) => {
+    if (s.state === 'uploading') app.toast('正在准备投屏文件…', 'info')
+    else if (s.state === 'playing') app.toast('已投屏到 ' + (cast.state.deviceName || '设备'), 'info')
+    else if (s.state === 'stopped') app.toast('已停止投屏', 'info')
+    castStop.hidden = !cast.state.casting
+  })
+  cast.on('error', (m) => app.toast(m, 'err'))
 
   function setIcon(btn, txt) { btn.textContent = txt }
 

@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -25,6 +26,7 @@ namespace GreenRhino
         private TcpListener _listener;
         private CancellationTokenSource _cts;
         private string _root;
+        private int _port;
         // 外部打开（双击文件）白名单：token -> 本地文件路径，仅允许服务白名单内的文件
         private readonly object _extLock = new();
         private readonly Dictionary<string, string> _external = new();
@@ -89,9 +91,10 @@ namespace GreenRhino
             int port = 8890;
             while (true)
             {
-                try { _listener = new TcpListener(IPAddress.Loopback, port); _listener.Start(); break; }
+                try { _listener = new TcpListener(IPAddress.Any, port); _listener.Start(); break; }
                 catch { port++; if (port > 8999) throw new Exception("no free port"); }
             }
+            _port = port;
             _cts = new CancellationTokenSource();
             _ = Task.Run(() => Loop(_cts.Token));
             return port;
@@ -143,12 +146,47 @@ namespace GreenRhino
                 var line = await reader.ReadLineAsync();
                 if (string.IsNullOrEmpty(line)) return;
                 var parts = line.Split(' ');
+                var method = parts.Length > 0 ? parts[0] : "GET";
                 var urlPath = parts.Length > 1 ? parts[1] : "/";
-                while (!string.IsNullOrEmpty(await reader.ReadLineAsync())) { } // 丢弃请求头
-
                 if (urlPath == "/" || urlPath == "") urlPath = "/index.html";
 
-                // 外部打开端点：仅服务于白名单 token，杜绝任意本地文件读取
+                // 解析请求头（投屏上传需读 Content-Length 对应的 body）
+                var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                string hl;
+                while (!string.IsNullOrEmpty(hl = await reader.ReadLineAsync()))
+                {
+                    var ci = hl.IndexOf(':');
+                    if (ci > 0) headers[hl.Substring(0, ci).Trim()] = hl.Substring(ci + 1).Trim();
+                }
+                var remote = (IPEndPoint)client.Client.RemoteEndPoint;
+                var fromLoopback = IPAddress.IsLoopback(remote.Address);
+
+                // 投屏上传：web 端把当前播放的 Blob 以 localhost POST 上来，落临时文件并登记白名单，
+                // 返回局域网可访问的 URL（电视经此拉流）。仅允许本机回环调用。
+                if (method == "POST" && urlPath.StartsWith("/api/cast-upload", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!fromLoopback) { await Send(ns, 403, "text/plain", Encoding.UTF8.GetBytes("forbidden")); return; }
+                    var name = "";
+                    var qi = urlPath.IndexOf('?');
+                    if (qi >= 0) foreach (var kv in urlPath.Substring(qi + 1).Split('&'))
+                    {
+                        var eq = kv.IndexOf('=');
+                        if (eq > 0 && kv.Substring(0, eq) == "name") { name = Uri.UnescapeDataString(kv.Substring(eq + 1)); break; }
+                    }
+                    if (string.IsNullOrEmpty(name) && headers.TryGetValue("X-Cast-Name", out var hn)) name = hn;
+                    int cl = 0;
+                    if (headers.TryGetValue("Content-Length", out var clv)) int.TryParse(clv, out cl);
+                    var castBytes = cl > 0 ? new byte[cl] : Array.Empty<byte>();
+                    int got = 0;
+                    while (got < cl) { int n = await ns.ReadAsync(castBytes, got, cl - got, ct); if (n <= 0) break; got += n; }
+                    var token = RegisterCastFile(castBytes, name);
+                    var url = $"http://{LanIp()}:{_port}/api/external?t={token}";
+                    var json = JsonSerializer.Serialize(new { token, url });
+                    await Send(ns, 200, "application/json; charset=utf-8", Encoding.UTF8.GetBytes(json));
+                    return;
+                }
+
+                // 外部打开端点（投屏媒体源）：仅服务于白名单 token，允许来自局域网（电视拉流）
                 if (urlPath.StartsWith("/api/external", StringComparison.OrdinalIgnoreCase))
                 {
                     string token = "";
@@ -184,6 +222,9 @@ namespace GreenRhino
                     return;
                 }
 
+                // 其余（wwwroot 静态资源）仅允许本机回环，避免把 PWA 暴露到局域网
+                if (!fromLoopback) { await Send(ns, 403, "text/plain", Encoding.UTF8.GetBytes("forbidden")); return; }
+
                 var file = Path.GetFullPath(Path.Combine(_root, urlPath.TrimStart('/')));
                 if (!file.StartsWith(_root, StringComparison.OrdinalIgnoreCase))
                 {
@@ -197,8 +238,8 @@ namespace GreenRhino
                 }
                 var ext = Path.GetExtension(file).ToLowerInvariant();
                 var mime = Mime.TryGetValue(ext, out var m) ? m : "application/octet-stream";
-                var body = await File.ReadAllBytesAsync(file, ct);
-                await Send(ns, 200, mime, body);
+                var fileBytes = await File.ReadAllBytesAsync(file, ct);
+                await Send(ns, 200, mime, fileBytes);
             }
             catch { /* 忽略单个连接异常 */ }
             finally { client.Close(); }
@@ -216,6 +257,44 @@ namespace GreenRhino
         public void Stop()
         {
             try { _cts?.Cancel(); _listener?.Stop(); } catch { }
+        }
+
+        // ---------- 投屏：把 web 端上传的媒体字节落临时文件并登记白名单 ----------
+        /// <summary>把上传的媒体字节写入临时文件，登记进外部白名单，返回访问 token（供电视经局域网拉流）。</summary>
+        public string RegisterCastFile(byte[] data, string name)
+        {
+            try
+            {
+                var dir = Path.Combine(Path.GetTempPath(), "GreenRhino", "cast");
+                Directory.CreateDirectory(dir);
+                var ext = Path.GetExtension(name ?? "").ToLowerInvariant();
+                if (string.IsNullOrEmpty(ext) || ext.Length > 10) ext = ".bin";
+                var fname = Guid.NewGuid().ToString("N") + ext;
+                var path = Path.Combine(dir, fname);
+                File.WriteAllBytes(path, data ?? Array.Empty<byte>());
+                return RegisterExternalFile(path);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>取本机局域网 IPv4（电视经此地址访问投屏媒体）。无则回退 127.0.0.1。</summary>
+        public static string LanIp()
+        {
+            try
+            {
+                foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != OperationalStatus.Up) continue;
+                    if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                    foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ua.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ua.Address))
+                            return ua.Address.ToString();
+                    }
+                }
+            }
+            catch { }
+            return "127.0.0.1";
         }
 
         // ---------- 外部打开（双击文件）支持 ----------
