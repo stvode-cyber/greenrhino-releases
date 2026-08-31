@@ -98,15 +98,21 @@ export function buildMusic(app) {
     const artist = (item.artist || '').trim()
     if (!title || !navigator.onLine) return
     try {
-      const q = new URLSearchParams({ track: title, artist })
-      const res = await fetch(`https://lrclib.net/api/search?${q.toString()}`)
+      // LRCLIB 现行接口参数：track_name / artist_name / album_name（旧参数 track/artist 会 0 命中）
+      const q = new URLSearchParams()
+      q.set('track_name', title)
+      if (artist) q.set('artist_name', artist)
+      if (item.album) q.set('album_name', item.album)
+      const res = await fetch(`https://lrclib.net/api/search?${q.toString()}`, {
+        headers: { 'X-User-Agent': 'GreenRhino/1.0 (offline media player)' }
+      })
       if (!res.ok) return
       const arr = await res.json()
       if (!Array.isArray(arr) || !arr.length) return
       const pick = (a) => (a && (a.syncedLyrics || a.plainLyrics)) ? (a.syncedLyrics || a.plainLyrics) : ''
       let lrc = pick(arr[0])
       if (artist) {
-        const exact = arr.find((a) => a.artist && a.artist.toLowerCase().includes(artist.toLowerCase()) && (a.syncedLyrics || a.plainLyrics))
+        const exact = arr.find((a) => a.artistName && a.artistName.toLowerCase().includes(artist.toLowerCase()) && (a.syncedLyrics || a.plainLyrics))
         if (exact) lrc = pick(exact)
       }
       if (!lrc || !lrc.trim()) return

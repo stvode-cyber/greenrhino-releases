@@ -31,9 +31,8 @@ OUT = os.path.join(ROOT, "clients", "windows", "GreenRhino", "wwwroot.zip")
 if not os.path.isdir(WWWROOT):
     sys.exit(f"错误：找不到 {WWWROOT}\n请先执行：node clients/copy-web.mjs")
 
-if os.path.exists(OUT):
-    os.remove(OUT)
-
+# 注：ZipFile 以 'w' 模式打开会直接覆盖目标文件，无需先 os.remove
+# （os.remove 会被安全删除钩子拦截，反而导致打包失败）。
 count = 0
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
     for dirpath, _dirs, files in os.walk(WWWROOT):

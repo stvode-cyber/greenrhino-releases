@@ -14,6 +14,10 @@ namespace GreenRhino
     {
         private readonly LocalServer _server = new LocalServer();
 
+        // 系统托盘图标（关闭窗口时最小化到后台，只有托盘菜单「退出」才真正关闭）
+        private System.Windows.Forms.NotifyIcon _tray;
+        private bool _forceClose;
+
         // 支持双击/默认打开的音频与视频扩展名
         private static readonly HashSet<string> MediaExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
             ".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wma", ".mp2", ".mp1", ".aiff", ".mka",
@@ -31,6 +35,8 @@ namespace GreenRhino
             InitializeComponent();
             // 解析命令行参数：系统双击文件会以 "GreenRhino.exe \"路径\"" 启动
             EnqueuePaths(Environment.GetCommandLineArgs().Skip(1));
+            // 初始化系统托盘（关闭 -> 最小化到后台）
+            SetupTray();
         }
 
         /// <summary>把路径过滤成可播放的媒体文件（并带上同名 .lrc）后入队。</summary>
@@ -307,8 +313,57 @@ namespace GreenRhino
             try { SHChangeNotify(0x08000000 /*SHCNE_ASSOCCHANGED*/, 0, IntPtr.Zero, IntPtr.Zero); } catch { }
         }
 
+        // ---------- 系统托盘：关闭窗口 -> 最小化到后台 ----------
+        private void SetupTray()
+        {
+            try
+            {
+                var exe = Environment.ProcessPath ?? (AppContext.BaseDirectory.TrimEnd('\\') + "\\GreenRhino.exe");
+                System.Drawing.Icon icon = null;
+                try { icon = System.Drawing.Icon.ExtractAssociatedIcon(exe); } catch { icon = null; }
+
+                _tray = new System.Windows.Forms.NotifyIcon
+                {
+                    Icon = icon,
+                    Text = "绿角犀播放器",
+                    Visible = true
+                };
+
+                var menu = new System.Windows.Forms.ContextMenuStrip();
+                var showItem = new System.Windows.Forms.ToolStripMenuItem("显示窗口");
+                showItem.Click += (s, e) => Dispatcher.Invoke(BringToFront);
+                var exitItem = new System.Windows.Forms.ToolStripMenuItem("退出");
+                exitItem.Click += (s, e) => { _forceClose = true; Close(); };
+                menu.Items.Add(showItem);
+                menu.Items.Add(exitItem);
+                _tray.ContextMenuStrip = menu;
+
+                // 左键 / 双击托盘图标：恢复窗口
+                _tray.MouseClick += (s, e) =>
+                {
+                    if (e.Button == System.Windows.Forms.MouseButtons.Left) Dispatcher.Invoke(BringToFront);
+                };
+                _tray.DoubleClick += (s, e) => Dispatcher.Invoke(BringToFront);
+            }
+            catch { /* 托盘创建失败不应影响主功能 */ }
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            // 非真正退出：取消关闭，隐藏到后台（任务栏按钮也消失，只留托盘图标）
+            if (!_forceClose)
+            {
+                e.Cancel = true;
+                Hide();
+                try { _tray?.ShowBalloonTip(3000, "绿角犀播放器", "已最小化到后台，点击托盘图标可恢复", System.Windows.Forms.ToolTipIcon.Info); } catch { }
+                return;
+            }
+            base.OnClosing(e);
+        }
+
         protected override void OnClosed(EventArgs e)
         {
+            try { _tray?.Dispose(); } catch { }
             _server.Stop();
             base.OnClosed(e);
         }

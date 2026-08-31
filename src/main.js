@@ -138,8 +138,8 @@ async function importFiles(files, folder = '导入') {
       const lrcFile = lrcByName[base]
       let lyric = ''
       if (lrcFile) { try { lyric = (await lrcFile.text()).trim() } catch (e) {} }
-      if (lyric) await updateMedia(it.id, { lyric })
-      // 解析元数据（parseTags 内部带超时，CDN 挂起不影响）
+      if (lyric) { const upd = await updateMedia(it.id, { lyric }); if (upd) Object.assign(it, upd) }
+      // 解析元数据（本地零依赖 ID3 解析，完全离线）
       const tags = await parseTags(it.blob)
       const patch = {}
       if (tags && (tags.title || tags.artist || tags.cover)) {
@@ -149,7 +149,7 @@ async function importFiles(files, folder = '导入') {
         patch.cover = tags.cover
       }
       if (tags && tags.lyrics && !lyric) patch.lyric = tags.lyrics   // 内嵌 USLT：无同名 lrc 时才用
-      if (Object.keys(patch).length) await updateMedia(it.id, patch)
+      if (Object.keys(patch).length) { const upd = await updateMedia(it.id, patch); if (upd) Object.assign(it, upd) }
     }
   }
   if (added.length) await addImportRecord({ folder, count: added.length })

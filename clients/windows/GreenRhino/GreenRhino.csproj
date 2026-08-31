@@ -5,6 +5,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
+    <!-- 托盘（NotifyIcon）需要 WinForms 运行时，与本项目的 WPF 可共存 -->
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>GreenRhino</RootNamespace>
     <AssemblyName>GreenRhino</AssemblyName>
     <AssemblyTitle>绿角犀播放器 · 离线媒体播放器</AssemblyTitle>
