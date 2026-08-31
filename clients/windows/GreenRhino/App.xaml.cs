@@ -1,23 +1,45 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 
 namespace GreenRhino
 {
     public partial class App : Application
     {
+        private const string MutexName = "GreenRhino_SingleInstance_v1";
+
         protected override void OnStartup(StartupEventArgs e)
         {
-            var si = new SingleInstance("GreenRhino_SingleInstance_v1");
+            var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
+            var si = new SingleInstance(MutexName);
 
-            // 已经有实例在跑：把双击的文件交给它，把它的窗口切到前台，然后自己退出。
-            // 注意这里不调 base.OnStartup(e)，避免第二个窗口闪一下再消失。
             if (!si.TryBecomePrimary())
             {
-                si.SendToPrimary(Environment.GetCommandLineArgs().Skip(1));
+                // 只是重复启动了程序、没有文件参数：把已有窗口切到前台就够
+                if (args.Length == 0)
+                {
+                    SingleInstance.ActivateExistingInstance();
+                    Shutdown();
+                    return;
+                }
+
+                // 带文件参数：转发给已有实例后自己退出。
+                // 注意这里不调 base.OnStartup(e)，避免第二个窗口闪一下再消失。
+                var sent = si.SendToPrimary(args);
                 SingleInstance.ActivateExistingInstance();
-                Shutdown();
-                return;
+                if (sent)
+                {
+                    Shutdown();
+                    return;
+                }
+
+                // 转发失败多半是老实例正在退出、管道已断开。
+                // 这时要抢过 Mutex 自己接管，否则用户双击文件会毫无反应。
+                si.Dispose();
+                si = new SingleInstance(MutexName);
+                for (var i = 0; i < 20 && !si.TryBecomePrimary(); i++) Thread.Sleep(250);
+                if (!si.IsPrimary) { Shutdown(); return; }
             }
 
             Instance = si;
