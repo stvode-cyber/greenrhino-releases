@@ -33,3 +33,11 @@ test-assets/
 
 # 云盘后端运行时状态（账号/上传文件，非源码，严禁入库）
 server/data/
+
+# Python 缓存
+server/__pycache__/
+__pycache__/
+
+# Python 缓存
+server/__pycache__/
+__pycache__/
