@@ -20,24 +20,32 @@ namespace GreenRhino
             ".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".ogv", ".ts", ".flv", ".wmv"
         };
 
-        // 启动参数中传入的媒体文件（含兄弟 .lrc），双击文件时填充
-        private readonly List<string> _launchFiles = new();
+        // 待交给页面播放的文件（含兄弟 .lrc）。
+        // 页面加载完成前先入队，加载完成后统一 flush；
+        // 后续实例经管道转发过来的文件也走这里，所以不能只在启动时读一次命令行。
+        private readonly List<string> _pendingFiles = new();
+        private bool _pageReady;
 
         public MainWindow()
         {
             InitializeComponent();
             // 解析命令行参数：系统双击文件会以 "GreenRhino.exe \"路径\"" 启动
-            var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
-            foreach (var a in args)
+            EnqueuePaths(Environment.GetCommandLineArgs().Skip(1));
+        }
+
+        /// <summary>把路径过滤成可播放的媒体文件（并带上同名 .lrc）后入队。</summary>
+        private void EnqueuePaths(IEnumerable<string> paths)
+        {
+            foreach (var a in paths ?? Enumerable.Empty<string>())
             {
                 try
                 {
                     if (File.Exists(a) && MediaExts.Contains(Path.GetExtension(a)))
                     {
-                        _launchFiles.Add(a);
+                        _pendingFiles.Add(a);
                         // 顺带带上同名 .lrc（离线歌词自动匹配复用 importFiles 逻辑）
                         var lrc = Path.ChangeExtension(a, ".lrc");
-                        if (File.Exists(lrc)) _launchFiles.Add(lrc);
+                        if (File.Exists(lrc)) _pendingFiles.Add(lrc);
                     }
                 }
                 catch { /* 忽略无法访问的路径 */ }
@@ -100,11 +108,50 @@ namespace GreenRhino
 
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
-            if (_launchFiles.Count == 0) return;
-            var items = _server.RegisterExternalFiles(_launchFiles);
-            if (items.Count == 0) return;
-            var json = System.Text.Json.JsonSerializer.Serialize(items);
-            _ = webView.CoreWebView2.ExecuteScriptAsync("window.__hostOpen && window.__hostOpen(" + json + ")");
+            _pageReady = true;
+            FlushPendingFiles();
+        }
+
+        /// <summary>把待播放文件登记进 LocalServer 白名单，并让页面打开播放。</summary>
+        private void FlushPendingFiles()
+        {
+            if (_pendingFiles.Count == 0) return;
+            var files = _pendingFiles.ToList();
+            _pendingFiles.Clear();
+            try
+            {
+                var items = _server.RegisterExternalFiles(files);
+                if (items.Count == 0) return;
+                var json = System.Text.Json.JsonSerializer.Serialize(items);
+                _ = webView.CoreWebView2.ExecuteScriptAsync("window.__hostOpen && window.__hostOpen(" + json + ")");
+            }
+            catch { /* 页面尚未就绪等异常不应拖垮主窗口 */ }
+        }
+
+        /// <summary>
+        /// 供 App 在收到后续实例经管道转发来的文件时调用。
+        /// 页面已就绪就立刻播放；否则先入队，等 NavigationCompleted 再统一播放。
+        /// </summary>
+        public void OpenExternalFiles(IEnumerable<string> paths)
+        {
+            EnqueuePaths(paths);
+            if (_pageReady) FlushPendingFiles();
+        }
+
+        /// <summary>把窗口切到前台（最小化时先还原）。</summary>
+        public void BringToFront()
+        {
+            try
+            {
+                // 管道回调在 UI 线程，但双击启动等路径可能在别的线程
+                if (!Dispatcher.CheckAccess()) { Dispatcher.Invoke(BringToFront); return; }
+                if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+                Show();
+                Activate();
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero) { ShowWindow(hwnd, SW_RESTORE); SetForegroundWindow(hwnd); }
+            }
+            catch { /* 激活失败不影响文件已送达 */ }
         }
 
         // web 请求「设为系统默认播放器」
@@ -197,6 +244,12 @@ namespace GreenRhino
             try { reg.SetAppAsDefaultAll(appName); }
             catch { reg.SetAppAsDefault(appName, "", 0); } // 兜底：旧系统无 SetAppAsDefaultAll 时回退
         }
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        private const int SW_RESTORE = 9;
 
         [DllImport("shell32.dll")]
         private static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
