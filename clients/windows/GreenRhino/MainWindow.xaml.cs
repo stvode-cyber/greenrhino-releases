@@ -263,6 +263,26 @@ namespace GreenRhino
                         PostCast(new { type = "cast:status", deviceId, state = "seeked" });
                     });
                 }
+                else if (type == "cast:mirror")
+                {
+                    // 系统无线显示（Miracast，等效 Win+K）：唤起系统「连接到无线显示器」面板，
+                    // 用户在面板里点电视即整屏镜像。比 WinRT ProjectionManager 风险低、零互操作坑。
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            var psi = new System.Diagnostics.ProcessStartInfo(
+                                "explorer.exe", "ms-settings-connectabledevices:devicediscovery");
+                            psi.UseShellExecute = true;
+                            System.Diagnostics.Process.Start(psi);
+                            PostCast(new { type = "cast:mirror", ok = true });
+                        }
+                        catch (Exception ex)
+                        {
+                            PostCast(new { type = "cast:mirror", ok = false, msg = ex.Message });
+                        }
+                    });
+                }
             }
             catch { /* 忽略无法解析的消息 */ }
         }

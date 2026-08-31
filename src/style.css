@@ -221,7 +221,9 @@ button { font-family: inherit; cursor: pointer; }
 .cast-head { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text); font-weight: 600; }
 .cast-close { background: transparent; border: 0; color: var(--text-3); font-size: 14px; cursor: pointer; }
 .cast-actions { display: flex; gap: 8px; }
-.cast-scan, .cast-stop { flex: 1; background: var(--card-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px; font-size: 12px; cursor: pointer; }
+.cast-scan, .cast-stop, .cast-mirror { flex: 1; background: var(--card-2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px; font-size: 12px; cursor: pointer; }
+.cast-mirror { border-color: #2D8A6D; }
+.cast-mirror:hover { border-color: #2D8A6D; color: #34C99A; }
 .cast-scan:hover, .cast-stop:hover { border-color: var(--accent); color: var(--accent); }
 .cast-stop[hidden] { display: none !important; }
 .cast-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }

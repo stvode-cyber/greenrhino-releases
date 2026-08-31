@@ -46,6 +46,9 @@ function initHost() {
       state.devices = Array.isArray(msg.devices) ? msg.devices : []
       state.scanning = false
       emit('devices', state.devices)
+    } else if (msg.type === 'cast:mirror') {
+      // 原生壳已唤起系统无线显示（Win+K）连接面板，提示用户在面板里选电视
+      emit('mirror', msg.ok === false ? (msg.msg || '唤起系统无线显示失败') : '')
     } else if (msg.type === 'cast:status') {
       state.status = msg.state
       state.deviceId = msg.deviceId || state.deviceId
@@ -97,6 +100,12 @@ function pause() {
   post({ type: 'cast:pause', deviceId: state.deviceId })
 }
 
+// 唤起系统无线显示（Miracast，Win+K 连接面板）：整屏镜像到电视，操作最简最稳
+function mirror() {
+  if (!state.host) return
+  post({ type: 'cast:mirror' })
+}
+
 export const cast = {
   state,
   isHost,
@@ -104,7 +113,8 @@ export const cast = {
   scan,
   castTo,
   stop,
-  pause
+  pause,
+  mirror
 }
 
 initHost()
