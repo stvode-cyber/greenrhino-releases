@@ -163,7 +163,7 @@ function relocateMedia(id) {
   input.onchange = async () => {
     const file = input.files[0]
     if (!file) return
-    const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv)$/i.test(file.name)
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(file.name)
     const type = isVideo ? 'video' : 'music'
     const patch = { blob: file, size: file.size, name: file.name, type, mime: file.type || (type === 'video' ? 'video/mp4' : 'audio/mpeg') }
     if (type === 'music') {

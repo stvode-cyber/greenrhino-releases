@@ -59,6 +59,7 @@ namespace GreenRhino
             { ".mp1", "audio/mpeg" },
             { ".aiff", "audio/aiff" },
             { ".mka", "audio/x-matroska" },
+            { ".ape", "audio/x-ape" },
             { ".mkv", "video/x-matroska" },
             { ".mov", "video/quicktime" },
             { ".avi", "video/x-msvideo" },

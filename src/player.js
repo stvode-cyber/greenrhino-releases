@@ -34,6 +34,25 @@ export const EQ_PRESETS = {
   electronic: [4, 3, 0, 0, -2, 1, 0, 2, 3, 4]
 }
 
+// 编解码能力预检：浏览器原生不支持的格式（如 APE）提前给出明确提示，而非静默无反应
+const PROBE_A = document.createElement('audio')
+const PROBE_V = document.createElement('video')
+const MIME_BY_EXT = {
+  mp3: 'audio/mpeg', flac: 'audio/flac', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac',
+  ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wma: 'audio/x-ms-wma',
+  mp2: 'audio/mpeg', mp1: 'audio/mpeg', aiff: 'audio/aiff', mka: 'audio/x-matroska',
+  ape: 'audio/x-ape', tak: 'audio/x-tak', dsf: 'audio/x-dsf',
+  mp4: 'video/mp4', mkv: 'video/x-matroska', webm: 'video/webm', mov: 'video/quicktime',
+  avi: 'video/x-msvideo', m4v: 'video/mp4', ogv: 'video/ogg', ts: 'video/mp2t',
+  flv: 'video/x-flv', wmv: 'video/x-ms-wmv'
+}
+function guessMime(name, type) {
+  const m = /\.([a-z0-9]+)$/i.exec(name || '')
+  const ext = m ? m[1].toLowerCase() : ''
+  if (MIME_BY_EXT[ext]) return MIME_BY_EXT[ext]
+  return type === 'video' ? 'video/mp4' : 'audio/mpeg'
+}
+
 class AudioEngine {
   constructor() {
     this.el = new Audio()
@@ -158,6 +177,15 @@ class PlayerEngine {
   async playItem(item, { crossfade = false, autoplay = true } = {}) {
     // §12 文件已丢失：blob 缺失或为空，不尝试加载（避免 URL.createObjectURL(null) 崩溃），直接上报
     if (!item || !item.blob || item.blob.size === 0) { this.emit('lost', item); return }
+    // 编解码能力预检：浏览器原生不支持的格式（如 APE、部分特殊编码）提前明确提示，避免静默无反应
+    const _mime = item.mime || guessMime(item.name, item.type)
+    const _isVid = item.type === 'video' || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(item.name || '')
+    const _probe = _isVid ? PROBE_V : PROBE_A
+    const _sup = _mime ? _probe.canPlayType(_mime) : 'maybe'
+    if (_sup === '') {
+      this.emit('error', `「${item.name || '该文件'}」所用格式浏览器无法解码（如 APE 或特殊编码）。请转码为 MP3 或 FLAC 后再用绿角犀播放。`, item)
+      return
+    }
     await this.ensureCtx()
     if (item.type === 'video') {
     this.mode = 'video'
@@ -216,6 +244,7 @@ class PlayerEngine {
     const url = this._urlFor(item)
     this.current = item
     this.videoEl.src = url
+    this.videoEl.load()
     this.videoEl.playbackRate = this.speed
     this._videoResumeTo = 0
     if (this.resumeEnabled) {

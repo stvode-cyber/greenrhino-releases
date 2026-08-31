@@ -74,8 +74,11 @@ export function emit(evt, payload) {
 export async function addMediaFiles(files, folder = '未分类') {
   const items = []
   for (const file of files) {
-    const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv)$/i.test(file.name)
-    const isAudio = file.type.startsWith('audio/') || /\.(mp3|flac|wav|ogg|m4a|aac|opus|wma)$/i.test(file.name)
+    // 注意：必须与 clients/windows/GreenRhino/MainWindow.xaml.cs 的 MediaExts 保持一致，
+    // 否则 C# 接受双击、web 端却 continue 丢弃，表现为「双击没反应/放不了」。
+    // ape 等浏览器原生不支持解码的格式也纳入导入，播放时由 player.js 的 canPlayType 预检给出明确提示。
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(file.name)
+    const isAudio = file.type.startsWith('audio/') || /\.(mp3|flac|wav|m4a|aac|ogg|oga|opus|wma|mp2|mp1|aiff|mka|ape)$/i.test(file.name)
     if (!isVideo && !isAudio) continue
     const type = isVideo ? 'video' : 'music'
     const id = hashId(file.name + file.size + (file.lastModified || 0) + type)
