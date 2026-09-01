@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -78,28 +79,49 @@ namespace GreenRhino
                 Environment.SetEnvironmentVariable("PATH", add + pathEnv);
 
             int port = _server.Start();                 // 启动内嵌本地服务（托管 wwwroot 中的 PWA）
+            App.Log("内嵌服务已启动 port=" + port);
             try
             {
-                // 允许双击打开文件后自动播放（避免自动播放策略拦截）
-                CoreWebView2Environment env = null;
-                try
+                var opts = new CoreWebView2EnvironmentOptions
                 {
-                    var opts = new CoreWebView2EnvironmentOptions
+                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required"
+                };
+                var userData = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "GreenRhino", "wv2data");
+                CoreWebView2Environment env = null;
+
+                // 优先用随附的 webview2-runtime 文件夹（文件夹版发布时一并发放，彻底不依赖系统 WebView2）；
+                // 没有就从内嵌资源解压；再没有就用系统 WebView2。
+                var rt = ExtractWebView2Runtime();
+                if (rt != null)
+                {
+                    try
                     {
-                        AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required"
-                    };
-                    env = await CoreWebView2Environment.CreateAsync(null, null, opts);
+                        env = await CoreWebView2Environment.CreateAsync(rt, userData, opts);
+                        App.Log("WebView2 环境：使用随附/内嵌运行时 " + rt);
+                    }
+                    catch (Exception ex) { App.Log("随附运行时创建失败: " + ex.Message); env = null; }
                 }
-                catch { env = null; }
+                if (env == null)
+                {
+                    try
+                    {
+                        env = await CoreWebView2Environment.CreateAsync(null, userData, opts);
+                        App.Log("WebView2 环境：使用系统运行时");
+                    }
+                    catch (Exception ex) { App.Log("系统 WebView2 创建失败: " + ex.Message); env = null; }
+                }
+
                 if (env != null) await webView.EnsureCoreWebView2Async(env);
                 else await webView.EnsureCoreWebView2Async();
+                App.Log("CoreWebView2 初始化完成");
             }
             catch (Exception ex)
             {
+                App.Log("WebView2 初始化失败: " + ex.Message);
                 MessageBox.Show(
-                    "WebView2 初始化失败。请先安装 WebView2 运行时（约一次，Win11 通常已自带）：\n" +
-                    "https://developer.microsoft.com/zh-cn/microsoft-edge/webview2/\n\n" +
-                    "错误详情：" + ex.Message,
+                    "WebView2 初始化失败：\n" + ex.Message + "\n\n详细日志见 %LOCALAPPDATA%\\GreenRhino\\greenrhino.log",
                     "绿角犀播放器", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
@@ -115,6 +137,50 @@ namespace GreenRhino
             // 页面加载完成后，把双击传入的文件交给 web 层打开并播放
             webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
             webView.Source = new Uri($"http://127.0.0.1:{port}/");
+        }
+
+        /// <summary>
+        /// 解析 WebView2 运行时目录：
+        /// 1) 优先用 exe 同级的 webview2-runtime 文件夹（文件夹版发布随附，最稳）；
+        /// 2) 否则从内嵌 webview2rt.zip 解压到本地缓存（单文件版）；
+        /// 3) 都没有返回 null（调用方退回系统 WebView2）。
+        /// </summary>
+        private static string ExtractWebView2Runtime()
+        {
+            try
+            {
+                // 1) 同级文件夹
+                var sibling = Path.Combine(AppContext.BaseDirectory, "webview2-runtime");
+                if (Directory.Exists(sibling) && File.Exists(Path.Combine(sibling, "msedge.exe")))
+                {
+                    App.Log("wvrt: 使用同级文件夹 " + sibling);
+                    return sibling;
+                }
+                // 2) 内嵌资源解压（单文件版）
+                var baseDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "GreenRhino", "wvrt");
+                var marker = Path.Combine(baseDir, "version.txt");
+                var asm = System.Reflection.Assembly.GetExecutingAssembly();
+                var resName = asm.GetManifestResourceNames()
+                    .FirstOrDefault(n => n.EndsWith("webview2rt.zip", StringComparison.OrdinalIgnoreCase));
+                if (resName == null) { App.Log("wvrt: 无内嵌运行时资源，退回系统"); return null; }
+                if (File.Exists(marker))
+                {
+                    App.Log("wvrt: 已解压，复用 " + baseDir);
+                    return baseDir;
+                }
+                App.Log("wvrt: 首次解压内嵌运行时 -> " + baseDir);
+                Directory.CreateDirectory(baseDir);
+                using var stream = asm.GetManifestResourceStream(resName);
+                if (stream == null) { App.Log("wvrt: 资源流为空"); return null; }
+                using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+                archive.ExtractToDirectory(baseDir);
+                File.WriteAllText(marker, "151.0.4129.107");
+                App.Log("wvrt: 解压完成");
+                return baseDir;
+            }
+            catch (Exception ex) { App.Log("wvrt 解析失败: " + ex.Message); return null; }
         }
 
         private bool _autoRegisterChecked;

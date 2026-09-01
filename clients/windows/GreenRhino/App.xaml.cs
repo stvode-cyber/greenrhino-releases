@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
@@ -56,6 +57,20 @@ namespace GreenRhino
 
         internal static SingleInstance Instance { get; private set; }
 
+        /// <summary>把启动关键步骤与异常写到 %LOCALAPPDATA%\GreenRhino\greenrhino.log，
+        /// 即使窗口没弹出来，也能从日志看出卡在哪一步。</summary>
+        internal static void Log(string msg)
+        {
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GreenRhino");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "greenrhino.log"),
+                    DateTime.Now.ToString("HH:mm:ss") + " " + msg + "\n");
+            }
+            catch { }
+        }
+
         protected override void OnExit(ExitEventArgs e)
         {
             Instance?.Dispose();
@@ -64,9 +79,11 @@ namespace GreenRhino
 
         public App()
         {
+            Log("App..ctor 进入");
             // 任何未处理异常都弹窗提示，避免静默退出（之前“什么也不显示”的元凶）
             this.DispatcherUnhandledException += (s, e) =>
             {
+                Log("DispatcherUnhandledException: " + e.Exception?.Message);
                 MessageBox.Show("程序发生未处理错误：\n" + e.Exception?.Message,
                     "绿角犀播放器", MessageBoxButton.OK, MessageBoxImage.Error);
                 e.Handled = true;
@@ -74,9 +91,13 @@ namespace GreenRhino
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
                 if (e.ExceptionObject is Exception ex)
+                {
+                    Log("AppDomain.UnhandledException: " + ex.Message);
                     MessageBox.Show("致命错误：\n" + ex.Message,
                         "绿角犀播放器", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             };
+            Log("App..ctor 完成");
         }
     }
 }
