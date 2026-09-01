@@ -71,19 +71,28 @@ export function emit(evt, payload) {
 }
 
 // ---------- 媒体库 ----------
-export async function addMediaFiles(files, folder = '未分类') {
+// 判定文件是否为可导入的音频/视频（须与 clients/windows/GreenRhino/MainWindow.xaml.cs 的 MediaExts 保持一致）
+export function isMediaFile(file) {
+  const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(file.name)
+  const isAudio = file.type.startsWith('audio/') || /\.(mp3|flac|wav|m4a|aac|ogg|oga|opus|wma|mp2|mp1|aiff|mka|ape)$/i.test(file.name)
+  return isVideo || isAudio
+}
+
+export async function addMediaFiles(files, folder = '未分类', onProgress) {
   const items = []
+  const total = files.length
+  let done = 0
   for (const file of files) {
     // 注意：必须与 clients/windows/GreenRhino/MainWindow.xaml.cs 的 MediaExts 保持一致，
     // 否则 C# 接受双击、web 端却 continue 丢弃，表现为「双击没反应/放不了」。
     // ape 等浏览器原生不支持解码的格式也纳入导入，播放时由 player.js 的 canPlayType 预检给出明确提示。
     const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(file.name)
     const isAudio = file.type.startsWith('audio/') || /\.(mp3|flac|wav|m4a|aac|ogg|oga|opus|wma|mp2|mp1|aiff|mka|ape)$/i.test(file.name)
-    if (!isVideo && !isAudio) continue
+    if (!isVideo && !isAudio) { done++; onProgress?.(done, total, '正在导入'); continue }
     const type = isVideo ? 'video' : 'music'
     const id = hashId(file.name + file.size + (file.lastModified || 0) + type)
     const exists = await dbGet('media', id)
-    if (exists) continue
+    if (exists) { done++; onProgress?.(done, total, '正在导入'); continue }
     const item = {
       id, name: file.name, type, mime: file.type || (type === 'video' ? 'video/mp4' : 'audio/mpeg'),
       size: file.size, addedAt: Date.now(), folder, artist: '', album: '', title: '', duration: 0,
@@ -91,6 +100,7 @@ export async function addMediaFiles(files, folder = '未分类') {
     }
     await dbPut('media', item, id)
     items.push(item)
+    done++; onProgress?.(done, total, '正在导入')
   }
   if (items.length) emit('library:changed', items)
   return items

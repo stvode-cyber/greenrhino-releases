@@ -2,7 +2,7 @@
 import { h, toast, openModal } from './ui/dom.js'
 import { player } from './player.js'
 import {
-  addMediaFiles, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore
+  addMediaFiles, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile
 } from './store.js'
 import { parseTags, guessFromFilename } from './metadata.js'
 import { initBottomBar } from './ui/bottombar.js'
@@ -49,6 +49,11 @@ for (const p of Object.values(pages)) view.appendChild(p.el)
 
 function showPage(name) {
   app.page = name
+  // 音乐 / 视频 属于「模式」页：切换时同步全局模式，顶栏模式按钮与左导航高亮一起联动
+  if (name === 'music' || name === 'video') {
+    app.mode = name
+    saveLastMode(name)
+  }
   for (const [k, p] of Object.entries(pages)) {
     const active = k === name
     p.el.style.display = active ? '' : 'none'
@@ -56,6 +61,9 @@ function showPage(name) {
     else p.hide?.()
   }
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === name))
+  // 顶栏 音乐/视频 模式开关与当前模式同步；非模式页（媒体库等）保留当前模式高亮
+  const modeView = (name === 'music' || name === 'video') ? name : app.mode
+  document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === modeView))
 }
 showPage('library')
 
@@ -89,6 +97,37 @@ player.on('trackchanged', (item) => { if (item) saveSettings({ lastPlayedId: ite
 // 播放模式变更后持久化
 player.on('playmode', (m) => saveSettings({ playMode: m }))
 
+// ---------- 导入进度浮层（大量文件时给出反馈，避免误以为卡死） ----------
+const importOverlay = (() => {
+  const bar = h('div', { class: 'import-bar-fill' })
+  const label = h('div', { class: 'import-label' }, '准备导入…')
+  const count = h('div', { class: 'import-count' }, '')
+  const el = h('div', { class: 'import-overlay', hidden: true },
+    h('div', { class: 'import-card' },
+      h('div', { class: 'import-title' }, '📥 正在导入媒体'),
+      label, count,
+      h('div', { class: 'import-bar' }, bar)))
+  document.body.appendChild(el)
+  let hideTimer = null
+  return {
+    progress(done, total, msg) {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
+      el.hidden = false
+      const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 100
+      bar.style.width = pct + '%'
+      label.textContent = msg || '正在导入…'
+      count.textContent = `${done} / ${total}`
+    },
+    done(msg) {
+      bar.style.width = '100%'
+      label.textContent = msg || '导入完成'
+      count.textContent = '✓ 完成'
+      hideTimer = setTimeout(() => { el.hidden = true }, 1300)
+    },
+    hide() { el.hidden = true; if (hideTimer) clearTimeout(hideTimer) }
+  }
+})()
+
 // ---------- 导入 ----------
 function makeFileInput() {
   const input = document.createElement('input')
@@ -117,13 +156,13 @@ function importFolderDialog() {
   input.click()
 }
 async function doImport(files, folder) {
-  const added = await importFiles(files, folder)
+  const added = await importFiles(files, folder, importOverlay.progress)
   if (added.length) {
-    toast(`已导入 ${added.length} 个文件`)
+    importOverlay.done(`已导入 ${added.length} 个文件`)
     showPage('library')
-  } else toast('没有可导入的音频/视频文件', 'err')
+  } else { importOverlay.hide(); toast('没有可导入的音频/视频文件', 'err') }
 }
-async function importFiles(files, folder = '导入') {
+async function importFiles(files, folder = '导入', onProgress) {
   // ① 离线自动歌词：扫描选中的文件，建立「去扩展名基名 -> .lrc 文件」映射
   const lrcByName = {}
   for (const f of files) {
@@ -132,7 +171,11 @@ async function importFiles(files, folder = '导入') {
       lrcByName[base] = f
     }
   }
-  const added = await addMediaFiles(files, folder)
+  onProgress?.(0, files.length, '准备导入')
+  const added = await addMediaFiles(files, folder, onProgress)
+  // 元数据解析阶段：进度条继续推进，让用户知道仍在处理（大量文件时此处最易卡顿）
+  const total = files.length + added.length
+  let done = files.length
   for (const it of added) {
     if (it.type === 'music') {
       const base = it.name.replace(/\.[^.]+$/, '')
@@ -153,6 +196,7 @@ async function importFiles(files, folder = '导入') {
       if (tags && tags.lyrics && !lyric) patch.lyric = tags.lyrics   // 内嵌 USLT：无同名 lrc 时才用
       if (Object.keys(patch).length) { const upd = await updateMedia(it.id, patch); if (upd) Object.assign(it, upd) }
     }
+    done++; onProgress?.(done, total, '解析封面与歌词')
   }
   if (added.length) await addImportRecord({ folder, count: added.length })
   app.refreshCurrent()
@@ -393,10 +437,10 @@ window.__hostOpen = async (list) => {
       files.push(new File([blob], it.name, { type: it.type || '' }))
     }
     if (!files.length) return
-    const added = await importFiles(files, '外部打开')
+    const added = await importFiles(files, '外部打开', importOverlay.progress)
     if (added.length) {
-      toast(`已打开 ${added.length} 个文件`)
+      importOverlay.done(`已打开 ${added.length} 个文件`)
       playList(added, added[0])
-    } else toast('没有可播放的媒体文件', 'err')
+    } else { importOverlay.hide(); toast('没有可播放的媒体文件', 'err') }
   } catch (e) { console.error('__hostOpen error', e) }
 }

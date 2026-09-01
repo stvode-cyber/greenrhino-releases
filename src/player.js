@@ -74,8 +74,6 @@ class PlayerEngine {
     this.engines = [new AudioEngine(), new AudioEngine()]
     this.activeIndex = 0
     this.videoEl = null
-    this.videoSrc = null
-    this.videoGain = null
     this.queue = []
     this.index = -1
     this.current = null
@@ -145,8 +143,9 @@ class PlayerEngine {
       eng.src.connect(eng.gain)
       eng.gain.connect(this.eqInput)
     }
-    // 视频图延迟连接：setVideoElement 在 ctx 就绪前已调用，这里补接（createMediaElementSource 只能调一次）
-    if (this.videoEl && !this.videoSrc) this._connectVideoGraph(this.videoEl)
+    // 注意：视频元素【不】接入 Web Audio 图。
+    // WebView2 下若将 <video> 经 createMediaElementSource 捕获，视频帧会脱离正常合成管线，
+    // 表现为「有声音、无画面」（黑屏）。视频音频直接由元素输出即可，频谱/均衡仅作用于音乐引擎。
   }
 
   _wireEngine(eng) {
@@ -305,11 +304,13 @@ class PlayerEngine {
     this.volume = Math.max(0, Math.min(1, v))
     this.muted = false
     if (this.master) this.master.gain.value = this.volume
+    if (this.videoEl) { this.videoEl.volume = this.volume; this.videoEl.muted = false }
     this.emit('volume', this.volume)
   }
   setMute(b) {
     this.muted = b
     if (this.master) this.master.gain.value = b ? 0 : this.volume
+    if (this.videoEl) this.videoEl.muted = b
     this.emit('mute', b)
   }
   setSpeed(s) {
@@ -390,21 +391,10 @@ class PlayerEngine {
       const it = this.current
       this.emit('error', `「${it?.name || '该视频'}」解码失败：很可能是 H.265/HEVC 等浏览器不支持的编码（MP4 容器但非 H.264）。请用 HandBrake / 格式工厂转码为 H.264 的 MP4，或等待绿角犀内置转码。`, it)
     })
-    el.volume = 1
-    // Web Audio 图：ctx 就绪则立即接，否则标记，ensureCtx 建好后再接（createMediaElementSource 只能调一次）
-    if (this.ctx && !this.videoSrc) this._connectVideoGraph(el)
+    el.volume = this.volume
+    el.muted = this.muted
   }
 
-  _connectVideoGraph(el) {
-    if (this.videoSrc || !this.ctx) return
-    try {
-      this.videoSrc = this.ctx.createMediaElementSource(el)
-      this.videoGain = this.ctx.createGain()
-      this.videoGain.gain.value = 1
-      this.videoSrc.connect(this.videoGain)
-      this.videoGain.connect(this.master)
-    } catch (e) { /* 视频直出，不影响画面 */ }
-  }
   _onVideoTime() {
     if (this._ab && this._ab.b > 0 && this.videoEl.currentTime >= this._ab.b) this.videoEl.currentTime = this._ab.a
     this._saveProgressThrottled()
