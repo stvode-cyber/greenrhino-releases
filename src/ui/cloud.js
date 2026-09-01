@@ -3,9 +3,11 @@
 // 部署：本机运行 `python server/cloud_api.py` 即可；生产可设 OSS 环境变量走阿里云。
 import { h, toast } from './dom.js'
 
-// 后端基址：优先 url ?cloud=，其次 window.GR_CLOUD_BASE，默认本机 8787
+// 后端基址：优先 url ?cloud=，其次 window.GR_CLOUD_BASE（原生壳注入的内嵌服务端口），默认本机 8787
 const CLOUD_BASE = (new URLSearchParams(location.search).get('cloud')
   || window.GR_CLOUD_BASE || 'http://localhost:8787').replace(/\/+$/, '')
+// 是否运行在原生壳（WebView2）：内嵌云盘同源可用，纯网页需另起 Python 后端
+const IS_HOST = !!window.GR_HOST
 
 const SKEY = 'gr_cloud_session'
 
@@ -100,7 +102,7 @@ export function buildCloud(app) {
         h('p', {}, '注册即送 5GB 离线空间，文件存本机、断网也能用。')),
       tabWrap,
       h('div', { class: 'cloud-form' }, userInp, pwInp, errBox, submit),
-      h('p', { class: 'cloud-tip' }, '提示：云盘服务需在本机运行 server/cloud_api.py（默认 8787 端口）。')
+      h('p', { class: 'cloud-tip' }, IS_HOST ? '云盘已内嵌在本程序，离线也能用。' : '提示：纯网页模式需在本机运行 server/cloud_api.py（默认 8787 端口）。')
     )
     el.appendChild(card)
   }

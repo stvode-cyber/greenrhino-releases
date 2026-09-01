@@ -109,6 +109,9 @@ namespace GreenRhino
             webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
             // web -> 原生 消息（如「设为默认播放器」）
             webView.CoreWebView2.WebMessageReceived += OnWebMessage;
+            // 让 web 端「我的云盘」指向内嵌本机服务（同源，零 CORS）；GR_HOST 标记原生壳
+            _ = webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                "window.GR_CLOUD_BASE='http://127.0.0.1:" + port + "';window.GR_HOST=true;");
             // 页面加载完成后，把双击传入的文件交给 web 层打开并播放
             webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
             webView.Source = new Uri($"http://127.0.0.1:{port}/");

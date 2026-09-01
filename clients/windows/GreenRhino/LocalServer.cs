@@ -11,6 +11,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
+using System.Linq;
 
 namespace GreenRhino
 {
@@ -142,21 +144,44 @@ namespace GreenRhino
             try
             {
                 using var ns = client.GetStream();
-                using var reader = new StreamReader(ns, Encoding.ASCII, false, 1024, true);
-                var line = await reader.ReadLineAsync();
-                if (string.IsNullOrEmpty(line)) return;
-                var parts = line.Split(' ');
+
+                // 读请求头：按块读到 "\r\n\r\n" 为止，并把其后已读到的字节保留为 body 前缀。
+                // 不能用 StreamReader 读头后再从原始流读体——StreamReader 的内部缓冲会把部分 body
+                // 字节"偷"进自己的 buffer，导致后续按 Content-Length 读体时永远读不满而挂起
+                // （投屏上传、云盘上传都会卡死在等待 body 上）。
+                var headBuf = new MemoryStream();
+                var block = new byte[1024];
+                int headEnd = -1;
+                while (true)
+                {
+                    int n = await ns.ReadAsync(block, 0, block.Length, ct);
+                    if (n <= 0) break;
+                    headBuf.Write(block, 0, n);
+                    var arrCheck = headBuf.GetBuffer();
+                    for (int i = 3; i < (int)headBuf.Length; i++)
+                    {
+                        if (arrCheck[i - 3] == 13 && arrCheck[i - 2] == 10 && arrCheck[i - 1] == 13 && arrCheck[i] == 10) { headEnd = i - 3; break; }
+                    }
+                    if (headEnd >= 0) break;
+                    if (headBuf.Length > 64 * 1024) break; // 请求头过大，放弃
+                }
+                if (headEnd < 0) return;
+                var arrAll = headBuf.ToArray();
+                var headerText = Encoding.ASCII.GetString(arrAll, 0, headEnd);
+                var bodyPrefix = new byte[arrAll.Length - (headEnd + 4)];
+                if (bodyPrefix.Length > 0) Array.Copy(arrAll, headEnd + 4, bodyPrefix, 0, bodyPrefix.Length);
+
+                var lines = headerText.Split(new[] { "\r\n" }, StringSplitOptions.None);
+                var parts = lines.Length > 0 ? lines[0].Split(' ') : new[] { "GET", "/" };
                 var method = parts.Length > 0 ? parts[0] : "GET";
                 var urlPath = parts.Length > 1 ? parts[1] : "/";
                 if (urlPath == "/" || urlPath == "") urlPath = "/index.html";
 
-                // 解析请求头（投屏上传需读 Content-Length 对应的 body）
                 var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                string hl;
-                while (!string.IsNullOrEmpty(hl = await reader.ReadLineAsync()))
+                for (int li = 1; li < lines.Length; li++)
                 {
-                    var ci = hl.IndexOf(':');
-                    if (ci > 0) headers[hl.Substring(0, ci).Trim()] = hl.Substring(ci + 1).Trim();
+                    var ci = lines[li].IndexOf(':');
+                    if (ci > 0) headers[lines[li].Substring(0, ci).Trim()] = lines[li].Substring(ci + 1).Trim();
                 }
                 var remote = (IPEndPoint)client.Client.RemoteEndPoint;
                 var fromLoopback = IPAddress.IsLoopback(remote.Address);
@@ -176,13 +201,22 @@ namespace GreenRhino
                     if (string.IsNullOrEmpty(name) && headers.TryGetValue("X-Cast-Name", out var hn)) name = hn;
                     int cl = 0;
                     if (headers.TryGetValue("Content-Length", out var clv)) int.TryParse(clv, out cl);
-                    var castBytes = cl > 0 ? new byte[cl] : Array.Empty<byte>();
-                    int got = 0;
-                    while (got < cl) { int n = await ns.ReadAsync(castBytes, got, cl - got, ct); if (n <= 0) break; got += n; }
+                    var castBytes = await ReadBodyAsync(ns, bodyPrefix, cl, ct);
                     var token = RegisterCastFile(castBytes, name);
                     var url = $"http://{LanIp()}:{_port}/api/external?t={token}";
                     var json = JsonSerializer.Serialize(new { token, url });
                     await Send(ns, 200, "application/json; charset=utf-8", Encoding.UTF8.GetBytes(json));
+                    return;
+                }
+
+                // 云盘 API（仅本机回环）：注册送5G / 登录 / 配额 / 文件上传下载删除
+                if (urlPath.StartsWith("/api/register", StringComparison.OrdinalIgnoreCase) ||
+                    urlPath.StartsWith("/api/login", StringComparison.OrdinalIgnoreCase) ||
+                    urlPath.StartsWith("/api/quota", StringComparison.OrdinalIgnoreCase) ||
+                    urlPath.StartsWith("/api/files", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!fromLoopback) { await Send(ns, 403, "text/plain", Encoding.UTF8.GetBytes("forbidden")); return; }
+                    await HandleCloud(ns, bodyPrefix, method, urlPath, headers, ct);
                     return;
                 }
 
@@ -243,6 +277,31 @@ namespace GreenRhino
             }
             catch { /* 忽略单个连接异常 */ }
             finally { client.Close(); }
+        }
+
+        /// <summary>读取请求体：先取请求头之后已读到的前缀字节，再从 socket 补足到 Content-Length。
+        /// （不能先 StreamReader 读头再从原始流读体——缓冲会吞掉部分 body，导致读不满而挂起。）</summary>
+        private static async Task<byte[]> ReadBodyAsync(NetworkStream ns, byte[] prefix, int cl, CancellationToken ct)
+        {
+            if (cl <= 0) return Array.Empty<byte>();
+            var res = new byte[cl];
+            int got = 0;
+            if (prefix != null && prefix.Length > 0)
+            {
+                int c = Math.Min(prefix.Length, cl);
+                Array.Copy(prefix, 0, res, 0, c);
+                got = c;
+            }
+            while (got < cl)
+            {
+                int n = await ns.ReadAsync(res, got, cl - got, ct);
+                if (n <= 0) break;
+                got += n;
+            }
+            if (got == cl) return res;
+            var trimmed = new byte[got];
+            Array.Copy(res, trimmed, got);
+            return trimmed;
         }
 
         private static async Task Send(NetworkStream ns, int code, string mime, byte[] body)
@@ -419,6 +478,201 @@ namespace GreenRhino
             if (it.TryGetProperty("plainLyrics", out var p) && p.ValueKind == JsonValueKind.String) plain = p.GetString();
             var v = (synced ?? plain ?? "").Trim();
             return v;
+        }
+
+        // ===================== 账号云盘（内嵌，零云依赖，离线可用） =====================
+        private const long CLOUD_QUOTA = 5L * 1024 * 1024 * 1024;
+        private const string CloudHmacKey = "GreenRhino-Cloud-v1";
+
+        private class CloudUser { public string username { get; set; } public string uid { get; set; } public string pw { get; set; } }
+        private class CloudFileMeta { public string id { get; set; } public string name { get; set; } public long size { get; set; } public string ctime { get; set; } }
+
+        private static async Task SendJson(NetworkStream ns, int code, object obj)
+        {
+            var json = JsonSerializer.Serialize(obj);
+            await Send(ns, code, "application/json; charset=utf-8", Encoding.UTF8.GetBytes(json));
+        }
+
+        private static string CloudDir() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GreenRhino", "cloud");
+        private static string UsersFile() => Path.Combine(CloudDir(), "users.json");
+        private static List<CloudUser> LoadUsers()
+        {
+            try { var t = File.ReadAllText(UsersFile()); if (!string.IsNullOrEmpty(t)) return JsonSerializer.Deserialize<List<CloudUser>>(t) ?? new(); } catch { }
+            return new List<CloudUser>();
+        }
+        private static void SaveUsers(List<CloudUser> u)
+        {
+            try { Directory.CreateDirectory(CloudDir()); File.WriteAllText(UsersFile(), JsonSerializer.Serialize(u, new JsonSerializerOptions { WriteIndented = true })); } catch { }
+        }
+        private static string UserFilesDir(string uid) { var d = Path.Combine(CloudDir(), "files", uid); Directory.CreateDirectory(d); return d; }
+        private static string MetaFile(string uid) => Path.Combine(UserFilesDir(uid), ".index.json");
+        private static List<CloudFileMeta> LoadMeta(string uid)
+        {
+            try { var t = File.ReadAllText(MetaFile(uid)); if (!string.IsNullOrEmpty(t)) return JsonSerializer.Deserialize<List<CloudFileMeta>>(t) ?? new(); } catch { }
+            return new List<CloudFileMeta>();
+        }
+        private static void SaveMeta(string uid, List<CloudFileMeta> m)
+        {
+            try { File.WriteAllText(MetaFile(uid), JsonSerializer.Serialize(m, new JsonSerializerOptions { WriteIndented = true })); } catch { }
+        }
+
+        private static string HashPw(string pw)
+        {
+            var salt = Guid.NewGuid().ToString("N");
+            using var sha = SHA256.Create();
+            var h = sha.ComputeHash(Encoding.UTF8.GetBytes(salt + pw));
+            return salt + ":" + Convert.ToHexString(h);
+        }
+        private static bool CheckPw(string pw, string stored)
+        {
+            if (string.IsNullOrEmpty(stored) || !stored.Contains(':')) return false;
+            var parts = stored.Split(':', 2);
+            using var sha = SHA256.Create();
+            var h = sha.ComputeHash(Encoding.UTF8.GetBytes(parts[0] + pw));
+            return Convert.ToHexString(h).Equals(parts[1], StringComparison.OrdinalIgnoreCase);
+        }
+        private static string MakeToken(string uid)
+        {
+            var exp = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
+            var data = uid + ":" + exp;
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(CloudHmacKey));
+            var sig = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            return data + "." + sig;
+        }
+        private static bool VerifyToken(string token, out string uid)
+        {
+            uid = null;
+            if (string.IsNullOrEmpty(token)) return false;
+            var parts = token.Split('.');
+            if (parts.Length != 2) return false;
+            var data = parts[0];
+            var expStr = data.Contains(':') ? data.Substring(data.IndexOf(':') + 1) : "";
+            if (!long.TryParse(expStr, out var exp)) return false;
+            if (exp < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) return false;
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(CloudHmacKey));
+            var expect = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            if (expect != parts[1]) return false;
+            uid = data.Substring(0, data.IndexOf(':'));
+            return true;
+        }
+
+        private static int IndexOf(byte[] hay, byte[] needle, int start)
+        {
+            for (int i = start; i <= hay.Length - needle.Length; i++)
+            {
+                bool ok = true;
+                for (int j = 0; j < needle.Length; j++) if (hay[i + j] != needle[j]) { ok = false; break; }
+                if (ok) return i;
+            }
+            return -1;
+        }
+        private static (string filename, byte[] content) ParseMultipart(byte[] body, string ct)
+        {
+            string filename = "";
+            var boundary = "";
+            var bi = ct.IndexOf("boundary=");
+            if (bi >= 0) boundary = ct.Substring(bi + "boundary=".Length).Trim().Trim('"');
+            if (string.IsNullOrEmpty(boundary)) return (filename, Array.Empty<byte>());
+            var bstart = Encoding.ASCII.GetBytes("--" + boundary);
+            var s = IndexOf(body, bstart, 0);
+            if (s < 0) return (filename, Array.Empty<byte>());
+            s += bstart.Length + 2;
+            var he = IndexOf(body, Encoding.ASCII.GetBytes("\r\n\r\n"), s);
+            if (he < 0) return (filename, Array.Empty<byte>());
+            var headStr = Encoding.ASCII.GetString(body, s, he - s);
+            var fi = headStr.IndexOf("filename=\"");
+            if (fi >= 0) { var en = headStr.IndexOf("\"", fi + "filename=\"".Length); if (en > fi) filename = headStr.Substring(fi + "filename=\"".Length, en - fi - "filename=\"".Length); }
+            else { var fi2 = headStr.IndexOf("filename="); if (fi2 >= 0) { var sp = headStr.IndexOfAny(new[] { ' ', ';' }, fi2 + "filename=".Length); filename = headStr.Substring(fi2 + "filename=".Length, (sp > fi2 ? sp : headStr.Length) - fi2 - "filename=".Length).Trim().Trim('"'); } }
+            var e = IndexOf(body, Encoding.ASCII.GetBytes("\r\n--" + boundary), he + 4);
+            if (e < 0) e = body.Length;
+            var content = new byte[Math.Max(0, e - (he + 4))];
+            if (content.Length > 0) Array.Copy(body, he + 4, content, 0, content.Length);
+            return (filename, content);
+        }
+
+        private async Task HandleCloud(NetworkStream ns, byte[] bodyPrefix, string method, string urlPath, Dictionary<string, string> headers, CancellationToken ct)
+        {
+            try
+            {
+                int cl = 0; if (headers.TryGetValue("Content-Length", out var clv)) int.TryParse(clv, out cl);
+                var body = await ReadBodyAsync(ns, bodyPrefix, cl, ct);
+
+                string tok = null;
+                if (headers.TryGetValue("Authorization", out var az) && az.StartsWith("Bearer ")) tok = az.Substring(7).Trim();
+
+                if (urlPath.StartsWith("/api/register", StringComparison.OrdinalIgnoreCase) && method == "POST")
+                {
+                    string username = "", password = "";
+                    try { var d = JsonDocument.Parse(body); var r = d.RootElement; username = r.GetProperty("username").GetString() ?? ""; password = r.GetProperty("password").GetString() ?? ""; } catch { }
+                    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password)) { await SendJson(ns, 400, new { error = "用户名和密码必填" }); return; }
+                    var users = LoadUsers();
+                    if (users.Any(u => u.username == username)) { await SendJson(ns, 400, new { error = "用户名已存在" }); return; }
+                    var cu = new CloudUser { username = username, uid = Guid.NewGuid().ToString("N"), pw = HashPw(password) };
+                    users.Add(cu); SaveUsers(users);
+                    await SendJson(ns, 200, new { token = MakeToken(cu.uid), quota = CLOUD_QUOTA, used = 0L });
+                    return;
+                }
+                if (urlPath.StartsWith("/api/login", StringComparison.OrdinalIgnoreCase) && method == "POST")
+                {
+                    string username = "", password = "";
+                    try { var d = JsonDocument.Parse(body); var r = d.RootElement; username = r.GetProperty("username").GetString() ?? ""; password = r.GetProperty("password").GetString() ?? ""; } catch { }
+                    var users = LoadUsers();
+                    var cu = users.FirstOrDefault(u => u.username == username);
+                    if (cu == null || !CheckPw(password, cu.pw)) { await SendJson(ns, 401, new { error = "用户名或密码错误" }); return; }
+                    await SendJson(ns, 200, new { token = MakeToken(cu.uid), quota = CLOUD_QUOTA, used = LoadMeta(cu.uid).Sum(m => m.size) });
+                    return;
+                }
+                if (!VerifyToken(tok, out var uid)) { await SendJson(ns, 401, new { error = "未登录或登录已过期" }); return; }
+
+                if (urlPath.StartsWith("/api/quota", StringComparison.OrdinalIgnoreCase))
+                {
+                    await SendJson(ns, 200, new { quota = CLOUD_QUOTA, used = LoadMeta(uid).Sum(m => m.size) });
+                    return;
+                }
+                if (urlPath == "/api/files" && method == "GET")
+                {
+                    await SendJson(ns, 200, new { files = LoadMeta(uid).OrderByDescending(m => m.ctime).ToArray() });
+                    return;
+                }
+                if (urlPath == "/api/files" && method == "POST")
+                {
+                    headers.TryGetValue("Content-Type", out var ctHeader);
+                    var (filename, content) = ParseMultipart(body, ctHeader ?? "");
+                    if (string.IsNullOrEmpty(filename) || content.Length == 0) { await SendJson(ns, 400, new { error = "无效的上传内容" }); return; }
+                    if (LoadMeta(uid).Sum(m => m.size) + content.Length > CLOUD_QUOTA) { await SendJson(ns, 400, new { error = "空间不足（配额 5GB）" }); return; }
+                    var ext = Path.GetExtension(filename); if (ext.Length > 12) ext = "";
+                    var id = Guid.NewGuid().ToString("N");
+                    File.WriteAllBytes(Path.Combine(UserFilesDir(uid), id + ext), content);
+                    var meta = LoadMeta(uid);
+                    meta.Add(new CloudFileMeta { id = id, name = filename, size = content.Length, ctime = DateTime.Now.ToString("o") });
+                    SaveMeta(uid, meta);
+                    await SendJson(ns, 200, new { id, name = filename, size = content.Length });
+                    return;
+                }
+                if (urlPath.StartsWith("/api/files/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var id = Uri.UnescapeDataString(urlPath.Substring("/api/files/".Length));
+                    var meta = LoadMeta(uid);
+                    var fm = meta.FirstOrDefault(m => m.id == id);
+                    var fpath = fm == null ? null : Path.Combine(UserFilesDir(uid), id + Path.GetExtension(fm.name));
+                    if (fm == null || fpath == null || !File.Exists(fpath)) { await SendJson(ns, 404, new { error = "文件不存在" }); return; }
+                    if (method == "GET")
+                    {
+                        var fb = await File.ReadAllBytesAsync(fpath, ct);
+                        await Send(ns, 200, "application/octet-stream", fb);
+                        return;
+                    }
+                    if (method == "DELETE")
+                    {
+                        File.Delete(fpath);
+                        meta.Remove(fm); SaveMeta(uid, meta);
+                        await SendJson(ns, 200, new { ok = true });
+                        return;
+                    }
+                }
+                await SendJson(ns, 404, new { error = "not found" });
+            }
+            catch (Exception ex) { await SendJson(ns, 500, new { error = ex.Message }); }
         }
     }
 }
