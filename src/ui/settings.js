@@ -1,7 +1,7 @@
 // settings.js — 设置模态（主题/音量/续播/EQ/存储/导入记录）
 import { h, toast, openModal } from './dom.js'
 import { player, EQ_FREQS, EQ_PRESETS } from '../player.js'
-import { getSettings, saveSettings, getAllMedia, dbDelete, dbClear, dbGetAll, getImportRecords } from '../store.js'
+import { getSettings, saveSettings, getAllMedia, dbDelete, dbClear, dbGetAll, getImportRecords, exportSyncData, importSyncData } from '../store.js'
 
 const HZ_LABEL = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '16k']
 
@@ -62,6 +62,33 @@ export async function openSettings(app, focus = '') {
   const importBox = h('div', {})
   refreshImports(importBox)
 
+  // 多端同步（零成本手动同步：导出/导入 JSON 文件，覆盖进度+歌单+收藏+偏好）
+  const syncInput = h('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' },
+    onchange: async (e) => {
+      const f = e.target.files && e.target.files[0]
+      if (!f) return
+      try {
+        const json = JSON.parse(await f.text())
+        const n = await importSyncData(json)
+        app.toast(`已导入 ${n} 项同步数据`)
+        app.refreshCurrent()
+      } catch (err) { app.toast('导入失败：' + (err.message || err), 'err') }
+      e.target.value = ''
+    } })
+  const exportBtn = h('button', { class: 'opt', onclick: async () => {
+    const data = await exportSyncData()
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const d = new Date(); const p = (n) => String(n).padStart(2, '0')
+    a.href = url
+    a.download = `greenrhino-sync-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    app.toast('已导出同步文件（进度·歌单·收藏·偏好）')
+  } }, '导出同步数据')
+  const importBtn = h('button', { class: 'opt', onclick: () => syncInput.click() }, '导入同步数据')
+
   body.append(
     row('主题', '深浅色外观', themeSeg),
     row('默认音量', '新播放的初始音量', vol),
@@ -69,6 +96,7 @@ export async function openSettings(app, focus = '') {
     row('设为默认播放器', '双击音频/视频直接用本软件打开', h('button', { class: 'opt', onclick: setAsDefaultPlayer }, '设为系统默认')),
     row('交叉淡入', '歌曲间平滑过渡', cf),
     row('均衡器 EQ', '10 段频率调节', eqWrap),
+    row('多端同步', '导出/导入进度·歌单·收藏·偏好（手动同步，不同步媒体文件）', h('div', {}, syncInput, h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, exportBtn, importBtn))),
     row('存储', '媒体占用与清理', h('div', {}, storageInfo, h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px' } }, clearThumbBtn, clearBtn))),
     row('导入记录', '历史导入来源', importBox)
   )

@@ -243,3 +243,55 @@ export async function saveSettings(patch) {
   emit('settings:changed', next)
   return next
 }
+
+// ---------- 多端同步（零成本手动同步：导出/导入 JSON）----------
+// 范围：仅进度 + 歌单 + 收藏 + 偏好；不同步媒体文件本身（媒体以 Blob 存本地，体积大、且含隐私）。
+// 收藏按 id 集合同步：同一文件在另一设备导入（同名+同体积+同修改时间 → 同 hash id）后自动点亮收藏。
+export async function exportSyncData() {
+  const progress = await dbGetAll('progress')
+  const playlists = await dbGetAll('playlists')
+  const favorites = await dbGetAll('favorites')
+  const s = await getSettings()
+  const settings = {
+    theme: s.theme, defaultVolume: s.defaultVolume, resumeEnabled: s.resumeEnabled,
+    crossfade: s.crossfade, playMode: s.playMode, eqPreset: s.eqPreset, eqBands: s.eqBands,
+    lastMode: s.lastMode
+  }
+  return {
+    app: 'GreenRhino', schema: 1, exportedAt: Date.now(),
+    device: (s.deviceName || '未知设备'),
+    progress, playlists, favorites, settings
+  }
+}
+
+export async function importSyncData(json) {
+  if (!json || json.app !== 'GreenRhino' || json.schema !== 1)
+    throw new Error('不是有效的绿角犀同步文件')
+  let count = 0
+  // 进度：按 updatedAt 取较新者，避免旧进度覆盖新进度
+  if (Array.isArray(json.progress) && json.progress.length) {
+    const local = {}
+    for (const p of (await dbGetAll('progress'))) local[p.id] = p
+    for (const p of json.progress) {
+      const cur = local[p.id]
+      if (!cur || (p.updatedAt || 0) >= (cur.updatedAt || 0)) await dbPut('progress', p, p.id)
+    }
+    count += json.progress.length
+  }
+  // 歌单：按 id 覆盖（含名称与条目）
+  if (Array.isArray(json.playlists) && json.playlists.length) {
+    for (const p of json.playlists) await dbPut('playlists', p, p.id)
+    count += json.playlists.length
+  }
+  // 收藏：合并 id 集合（另一设备导入相同文件后自动生效）
+  if (Array.isArray(json.favorites) && json.favorites.length) {
+    for (const id of json.favorites) await dbPut('favorites', id, id)
+    count += json.favorites.length
+  }
+  // 偏好：合并同步相关键（设备专属状态不覆盖）
+  if (json.settings && typeof json.settings === 'object') await saveSettings(json.settings)
+  emit('library:changed', [])
+  emit('playlists:changed')
+  emit('favorites:changed')
+  return count
+}
