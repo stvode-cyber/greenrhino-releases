@@ -288,10 +288,22 @@ namespace GreenRhino
                 }
                 else if (type == "videoKick")
                 {
-                    // WebView2 黑屏有声音的二次保险：视频开播时让宿主强制重绘，唤醒视频合成层。
+                    // WebView2 黑屏有声音的二次保险：视频开播/切到视频页时让宿主强制重绘。
+                    // 先做一次 1px 尺寸微抖（WPF WebView2 黑屏的经典修复），再 InvalidateVisual。
                     Dispatcher.Invoke(() =>
                     {
-                        try { webView.InvalidateVisual(); } catch { }
+                        try
+                        {
+                            var w = webView.ActualWidth;
+                            if (w > 0)
+                            {
+                                webView.Width = w - 1;
+                                webView.UpdateLayout();
+                                webView.Width = double.NaN; // 恢复自动宽度，避免钉死视频区
+                            }
+                            webView.InvalidateVisual();
+                        }
+                        catch { }
                     });
                 }
             }

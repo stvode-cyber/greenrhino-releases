@@ -132,7 +132,16 @@ export function buildVideo(app) {
 
   return {
     el,
-    show() {},
+    // 视频页显示瞬间立即重建合成层（比开播后再 kick 更靠前，覆盖 WebView2 display:none 黑屏）
+    show() {
+      const v = video
+      if (!v) return
+      v.style.display = 'none'
+      void v.offsetWidth // 强制同步重排
+      requestAnimationFrame(() => { v.style.display = '' })
+      // 通知 C# 宿主强制重绘（二次保险；纯浏览器无 webview 对象时静默忽略）
+      try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoKick' })) } catch {}
+    },
     hide() { try { video.pause() } catch {} },
     cleanup() { offTrack() }
   }
