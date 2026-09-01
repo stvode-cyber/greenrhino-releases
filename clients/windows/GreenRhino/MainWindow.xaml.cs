@@ -286,6 +286,14 @@ namespace GreenRhino
                         }
                     });
                 }
+                else if (type == "videoKick")
+                {
+                    // WebView2 黑屏有声音的二次保险：视频开播时让宿主强制重绘，唤醒视频合成层。
+                    Dispatcher.Invoke(() =>
+                    {
+                        try { webView.InvalidateVisual(); } catch { }
+                    });
+                }
             }
             catch { /* 忽略无法解析的消息 */ }
         }

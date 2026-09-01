@@ -254,6 +254,7 @@ class PlayerEngine {
       if (p && p.time > 3 && p.duration > 0 && p.time < p.duration - 3) this._videoResumeTo = p.time
     }
     if (autoplay) { try { await this.videoEl.play() } catch {} }
+    this._kickVideoLayer() // 修复 WebView2 黑屏有声音：重建视频合成层
     if (switching) this._chapters = []
     this.emit('trackchanged', item)
     this.emit('chapters', this._chapters)
@@ -381,6 +382,9 @@ class PlayerEngine {
     // 否则视频进度条不动 / 不续播 / 解码失败无提示 全部失效
     el.addEventListener('timeupdate', () => this._onVideoTime())
     el.addEventListener('ended', () => this._onVideoEnded())
+    // WebView2/Chromium 合成 bug：video 在 display:none 子树中创建、切到视频页显示后，
+    // 视频帧可能不提交（黑屏有声音）。播放真正开始时强制「隐藏→重排→显示」重建合成层。
+    el.addEventListener('playing', () => this._kickVideoLayer())
     el.addEventListener('loadedmetadata', () => {
       if (this._videoResumeTo) { try { el.currentTime = this._videoResumeTo } catch {} ; this._videoResumeTo = 0 }
       this.emit('loaded', this.current); this._saveProgressThrottled()
@@ -399,6 +403,17 @@ class PlayerEngine {
     if (this._ab && this._ab.b > 0 && this.videoEl.currentTime >= this._ab.b) this.videoEl.currentTime = this._ab.a
     this._saveProgressThrottled()
     this.emit('time', { time: this.videoEl.currentTime, duration: this.videoEl.duration || 0 })
+  }
+  // 强制重建视频合成层（修复 WebView2 黑屏有声音）。display:none→同步重排→显示，
+  // 让 Chromium 重新为该 <video> 分配可显示的视频图层。
+  _kickVideoLayer() {
+    const v = this.videoEl
+    if (!v) return
+    v.style.display = 'none'
+    void v.offsetWidth // 强制同步重排
+    requestAnimationFrame(() => { v.style.display = '' })
+    // 通知 C# 宿主强制重绘（WebView2 黑屏二次保险；纯浏览器环境无 webview 对象，静默忽略）
+    try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoKick' })) } catch {}
   }
   _onVideoEnded() { this._advance(true) }
   setAB(a, b) { this._ab = { a, b } }
