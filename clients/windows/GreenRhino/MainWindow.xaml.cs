@@ -6,6 +6,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Win32;
@@ -33,6 +35,12 @@ namespace GreenRhino
         private readonly List<string> _pendingFiles = new();
         private bool _pageReady;
 
+        // 原生视频兜底（WebView2 黑屏有声音时由 C# 用 MediaElement 直接播放本地文件）
+        private bool _nativeActive;
+        private bool _nativePlaying;
+        private bool _nativeDragging;
+        private DispatcherTimer _nativeTimer;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -40,6 +48,8 @@ namespace GreenRhino
             EnqueuePaths(Environment.GetCommandLineArgs().Skip(1));
             // 初始化系统托盘（关闭 -> 最小化到后台）
             SetupTray();
+            // 原生视频兜底层控制条接线
+            WireNativeVideo();
         }
 
         /// <summary>把路径过滤成可播放的媒体文件（并带上同名 .lrc）后入队。</summary>
@@ -380,6 +390,21 @@ namespace GreenRhino
                         catch { }
                     });
                 }
+                else if (type == "videoNoFrame")
+                {
+                    // WebView2 视频黑屏有声音：web 看门狗确认无帧后通知 C#。
+                    // 若当前视频是本地文件（双击/外部打开），直接用原生 MediaElement 播放，绕开 WebView2 overlay。
+                    string p = Str(root, "path");
+                    if (!string.IsNullOrEmpty(p) && File.Exists(p) && MediaExts.Contains(Path.GetExtension(p)))
+                    {
+                        Dispatcher.Invoke(() => ShowNativeVideo(p));
+                        PostCast(new { type = "nativeShown" });
+                    }
+                    else
+                    {
+                        PostCast(new { type = "noNative" }); // web 端会自行 reload
+                    }
+                }
             }
             catch { /* 忽略无法解析的消息 */ }
         }
@@ -398,6 +423,75 @@ namespace GreenRhino
                 webView.CoreWebView2?.PostWebMessageAsString(json);
             }
             catch { /* 页面未就绪等异常忽略 */ }
+        }
+
+        // ---------- 原生视频兜底 ----------
+        private void WireNativeVideo()
+        {
+            NativePlayPause.Click += (s, e) =>
+            {
+                if (_nativePlaying) { try { NativeVideo.Pause(); } catch { } _nativePlaying = false; NativePlayPause.Content = "▶"; }
+                else { try { NativeVideo.Play(); } catch { } _nativePlaying = true; NativePlayPause.Content = "⏸"; }
+            };
+            NativeClose.Click += (s, e) => HideNativeVideo();
+            NativeVideo.MediaOpened += (s, e) => { _nativePlaying = true; NativePlayPause.Content = "⏸"; App.Log("原生视频已打开"); };
+            NativeVideo.MediaEnded += (s, e) => { _nativePlaying = false; NativePlayPause.Content = "▶"; };
+            NativeVideo.MediaFailed += (s, e) => App.Log("原生视频 MediaFailed: " + (e.ErrorException?.Message ?? "未知"));
+
+            NativeSeek.PreviewMouseDown += (s, e) => _nativeDragging = true;
+            NativeSeek.PreviewMouseUp += (s, e) => _nativeDragging = false;
+            NativeSeek.ValueChanged += (s, e) =>
+            {
+                if (!_nativeDragging) return;
+                var d = NativeVideo.NaturalDuration.HasTimeSpan ? NativeVideo.NaturalDuration.TimeSpan : TimeSpan.Zero;
+                try { NativeVideo.Position = TimeSpan.FromSeconds(d.TotalSeconds * e.NewValue); } catch { }
+            };
+
+            _nativeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _nativeTimer.Tick += (s, e) =>
+            {
+                if (NativeVideo.Visibility != Visibility.Visible) return;
+                var pos = NativeVideo.Position;
+                var dur = NativeVideo.NaturalDuration.HasTimeSpan ? NativeVideo.NaturalDuration.TimeSpan : TimeSpan.Zero;
+                if (dur.TotalSeconds > 0) NativeSeek.Value = pos.TotalSeconds / dur.TotalSeconds;
+                NativeTime.Text = $"{Fmt(pos)} / {Fmt(dur)}";
+            };
+            _nativeTimer.Start();
+        }
+
+        private void ShowNativeVideo(string path)
+        {
+            try
+            {
+                _nativeActive = true;
+                NativeVideo.Stop();
+                NativeVideo.Source = new Uri(path);
+                NativeVideo.Visibility = Visibility.Visible;
+                NativeBar.Visibility = Visibility.Visible;
+                NativeVideo.Play();
+                App.Log("原生视频兜底启用: " + path);
+                // 让 web 端暂停它的黑屏视频，避免双声轨
+                PostCast(new { type = "nativePauseWeb" });
+            }
+            catch (Exception ex) { App.Log("原生视频启动失败: " + ex.Message); }
+        }
+
+        private void HideNativeVideo()
+        {
+            try { NativeVideo.Stop(); NativeVideo.Source = null; } catch { }
+            NativeVideo.Visibility = Visibility.Collapsed;
+            NativeBar.Visibility = Visibility.Collapsed;
+            _nativeActive = false;
+            _nativePlaying = false;
+            NativePlayPause.Content = "⏸";
+        }
+
+        private static string Fmt(TimeSpan t)
+        {
+            int s = (int)t.TotalSeconds;
+            int m = s / 60; s %= 60;
+            int h = m / 60; m %= 60;
+            return h > 0 ? $"{h:D2}:{m:D2}:{s:D2}" : $"{m:D2}:{s:D2}";
         }
 
         // ---------- 注册为系统默认媒体播放器 ----------

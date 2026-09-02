@@ -365,7 +365,8 @@ namespace GreenRhino
             lock (_extLock) _external[token] = path;
             return token;
         }
-        public class ExternalEntry { public string name; public string token; public string type; }
+        // path 为本地文件绝对路径，供 C# 原生视频兜底（WebView2 黑屏时直接用 MediaElement 播放）
+        public class ExternalEntry { public string name; public string token; public string type; public string path; }
         public List<ExternalEntry> RegisterExternalFiles(IEnumerable<string> paths)
         {
             var list = new List<ExternalEntry>();
@@ -376,7 +377,7 @@ namespace GreenRhino
                 var name = Path.GetFileName(p);
                 var ext = Path.GetExtension(p).ToLowerInvariant();
                 var type = Mime.TryGetValue(ext, out var m) ? m : "application/octet-stream";
-                list.Add(new ExternalEntry { name = name, token = t, type = type });
+                list.Add(new ExternalEntry { name = name, token = t, type = type, path = p });
             }
             return list;
         }
