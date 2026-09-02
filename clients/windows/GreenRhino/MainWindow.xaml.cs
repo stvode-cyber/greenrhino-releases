@@ -82,11 +82,17 @@ namespace GreenRhino
             App.Log("内嵌服务已启动 port=" + port);
             try
             {
+                // 视频黑屏有声音根因：WebView2 视频用独立 DirectComposition overlay 表面，在 WPF 下常不被提交到窗口。
+                // 默认 --disable-gpu 强制软件合成，视频帧落到页面软件合成层正常显示。
+                // 命令行加 --gpu / --enable-gpu 可切回硬件渲染（极少数机器软件渲染异常时用）。
+                var cli = Environment.GetCommandLineArgs();
+                bool enableGpu = cli.Any(a => a == "--gpu" || a == "--enable-gpu");
+                string gpuArg = enableGpu ? "" : " --disable-gpu";
+                if (enableGpu) App.Log("GPU 模式：用户以 --gpu 显式启用硬件渲染");
+                else App.Log("GPU 模式：默认禁用(--disable-gpu)，软件合成以修复视频黑屏");
                 var opts = new CoreWebView2EnvironmentOptions
                 {
-                    // --disable-gpu：强制软件合成。WebView2 视频用独立 DirectComposition overlay 表面，
-                    // 在 WPF 下该表面常不被提交到窗口 → 黑屏有声音。禁用 GPU 后视频帧落到页面软件合成层正常显示。
-                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required --disable-gpu"
+                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" + gpuArg
                 };
                 var userData = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
