@@ -84,7 +84,9 @@ namespace GreenRhino
             {
                 var opts = new CoreWebView2EnvironmentOptions
                 {
-                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required"
+                    // --disable-gpu：强制软件合成。WebView2 视频用独立 DirectComposition overlay 表面，
+                    // 在 WPF 下该表面常不被提交到窗口 → 黑屏有声音。禁用 GPU 后视频帧落到页面软件合成层正常显示。
+                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required --disable-gpu"
                 };
                 var userData = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
