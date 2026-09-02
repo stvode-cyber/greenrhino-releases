@@ -41,6 +41,11 @@ namespace GreenRhino
         private bool _nativeDragging;
         private DispatcherTimer _nativeTimer;
 
+        // Blob 视频（库内/拖入，无本地路径）兜底：web 把字节分片传来，C# 写入临时文件后交给原生 MediaElement
+        private readonly Dictionary<string, FileStream> _videoBlobWriters = new Dictionary<string, FileStream>();
+        private static string VideoCacheDir() =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GreenRhino", "video-cache");
+
         public MainWindow()
         {
             InitializeComponent();
@@ -405,6 +410,59 @@ namespace GreenRhino
                         PostCast(new { type = "noNative" }); // web 端会自行 reload
                     }
                 }
+                else if (type == "videoBlobChunk")
+                {
+                    // 库内/拖入的 Blob 视频：web 分片传来字节，C# 追加写入临时文件
+                    string id = Str(root, "id");
+                    string ext = Str(root, "ext");
+                    string data = Str(root, "data");
+                    if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(data)) return;
+                    try
+                    {
+                        var dir = VideoCacheDir();
+                        Directory.CreateDirectory(dir);
+                        var safeId = new string(id.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+                        if (string.IsNullOrEmpty(safeId)) safeId = "vid";
+                        var fname = safeId + (string.IsNullOrEmpty(ext) ? ".mp4" : "." + ext.TrimStart('.').ToLowerInvariant());
+                        var path = Path.Combine(dir, fname);
+                        var bytes = Convert.FromBase64String(data);
+                        FileStream fs;
+                        if (!_videoBlobWriters.TryGetValue(id, out fs))
+                        {
+                            fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+                            _videoBlobWriters[id] = fs;
+                        }
+                        fs.Write(bytes, 0, bytes.Length);
+                    }
+                    catch (Exception ex) { App.Log("videoBlobChunk 写入失败: " + ex.Message); }
+                }
+                else if (type == "videoBlobEnd")
+                {
+                    // 字节传完：关闭临时文件，用原生 MediaElement 播放
+                    string id = Str(root, "id");
+                    string ext = Str(root, "ext");
+                    if (string.IsNullOrEmpty(id)) return;
+                    try
+                    {
+                        if (_videoBlobWriters.TryGetValue(id, out var fs))
+                        {
+                            fs.Dispose();
+                            _videoBlobWriters.Remove(id);
+                        }
+                        var dir = VideoCacheDir();
+                        var safeId = new string(id.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+                        if (string.IsNullOrEmpty(safeId)) safeId = "vid";
+                        var fname = safeId + (string.IsNullOrEmpty(ext) ? ".mp4" : "." + ext.TrimStart('.').ToLowerInvariant());
+                        var path = Path.Combine(dir, fname);
+                        if (File.Exists(path) && MediaExts.Contains(Path.GetExtension(path)))
+                        {
+                            Dispatcher.Invoke(() => ShowNativeVideo(path));
+                            PostCast(new { type = "nativeShown" });
+                        }
+                        else PostCast(new { type = "noNative" });
+                    }
+                    catch (Exception ex) { App.Log("videoBlobEnd 处理失败: " + ex.Message); PostCast(new { type = "noNative" }); }
+                }
             }
             catch { /* 忽略无法解析的消息 */ }
         }
@@ -645,6 +703,7 @@ namespace GreenRhino
 
         protected override void OnClosed(EventArgs e)
         {
+            try { foreach (var fs in _videoBlobWriters.Values) { try { fs.Dispose(); } catch { } } } catch { }
             try { _tray?.Dispose(); } catch { }
             _server.Stop();
             base.OnClosed(e);
