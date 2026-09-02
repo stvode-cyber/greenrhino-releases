@@ -397,9 +397,11 @@ namespace GreenRhino
                 }
                 else if (type == "videoNoFrame")
                 {
-                    // WebView2 视频黑屏有声音：web 看门狗确认无帧后通知 C#。
+                    // WebView2 视频黑屏有声音：web 看门狗确认无帧（且非解码错误）后通知 C#。
                     // 若当前视频是本地文件（双击/外部打开），直接用原生 MediaElement 播放，绕开 WebView2 overlay。
                     string p = Str(root, "path");
+                    string diag = Str(root, "diag");
+                    App.Log("视频黑屏(overlay 未提交) 诊断: path=" + p + " diag=" + diag);
                     if (!string.IsNullOrEmpty(p) && File.Exists(p) && MediaExts.Contains(Path.GetExtension(p)))
                     {
                         Dispatcher.Invoke(() => ShowNativeVideo(p));
@@ -409,6 +411,14 @@ namespace GreenRhino
                     {
                         PostCast(new { type = "noNative" }); // web 端会自行 reload
                     }
+                }
+                else if (type == "videoDecodeError")
+                {
+                    // 视频轨解码失败（HEVC/10bit 等编码不支持）：编码问题，C# 原生 MediaElement 同样救不了，
+                    // 不走原生兜底（避免浪费传输/时间），web 端已提示用户转码。这里仅记诊断日志便于定位。
+                    string p = Str(root, "path");
+                    string diag = Str(root, "diag");
+                    App.Log("视频解码失败(编码不支持，跳过原生兜底): path=" + p + " diag=" + diag);
                 }
                 else if (type == "videoBlobChunk")
                 {
