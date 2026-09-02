@@ -25,6 +25,11 @@
 | L9 | 根因分流 + 诊断闭环（判编码不支持直接提示转码，不浪费原生兜底；诊断数据回写日志） | d1188dc |
 | L9+ | HEVC 检测修正（`v.error` 或「videoWidth=0 且音频推进」→ 编码不支持） | build9（web 内嵌，player.js 不进 git） |
 
+**构建与验证状态（2026-09-02）**：
+- 当前交付 = **build9**（文件夹版）。`dist/` 两版就绪：`GreenRhino-portable-runtime.zip` = 471,461,448 B（自带 webview2 运行时开箱即用）、`GreenRhino-portable.zip` = 71,148,936 B（走系统 WebView2）。
+- trust-but-verify 已实测通过：从交付 runtime zip 内嵌 `GreenRhino.dll` 挖出 `wwwroot.zip` 的 `player.js`，确认含 `decodeFailed` / `audioPlaying` / `videoDecodeError` / `_videoDiag` / `localPath` / `videoBlobChunk` **全部 6 个符号** → 用户下载到的即最新代码，无旧代码漂移。
+- 仓库：`git` 工作树干净；治理提交 `bfdc2da`（FD+R0）、`1cffd6f`（CHANGELOG+HANDOFF+R0）已入库。
+
 **待办（关单条件）**：
 - 等真机回传 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 的「视频」相关行，区分 (a)/(b)。
 - 若 (b) HEVC：提示 HandBrake 转 H.264 MP4 或装 Microsoft Store「HEVC 视频扩展」；原生兜底无效（C# MediaElement 同样解不了 HEVC）。

@@ -61,7 +61,7 @@ C# 侧 dll 含 `ShowNativeVideo` / `VideoCacheDir`（UTF-8 方法名）；日志
 - **Write 工具**：写仓库根部分路径（如 `commit_msg.txt`）静默失败 → 用 Bash heredoc。
 
 ## 4. 当前阻塞 / 下一步
-1. 视频黑屏：等用户真机回传 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 的「视频」行。
+1. 视频黑屏（已交付 build9）：等用户真机回传 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 的「视频」行。
    - 出现 `视频解码失败(编码不支持` → 确认 (b) HEVC，给转码方案。
    - 出现 `视频黑屏(overlay 未提交` 或原生兜底日志 → (a) 已接管。
 2. 若用户愿告知黑屏文件来源 / 后缀（.mkv / .hevc？双击还是库内？），可再缩排查范围。
