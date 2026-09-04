@@ -1,10 +1,13 @@
-// video.js — 视频播放页（画面 + 字幕 + 控制选项）
+// video.js — 视频页（视频库 + 播放器：画面 + 字幕 + 控制选项）
 import { h, toast } from './dom.js'
 import { player } from '../player.js'
 import { getSettings, saveTrackPref } from '../store.js'
+import { mediaLibrary } from './library.js'
 
 export function buildVideo(app) {
-  const el = h('div', { class: 'video-view' })
+  // 左侧：视频库（按类型过滤）
+  const lib = mediaLibrary(app, 'video')
+  const el = h('div', { class: 'video-page' })
   const video = h('video', { playsinline: true, preload: 'metadata' })
   const stage = h('div', { class: 'video-stage' }, video,
     h('div', { class: 'empty', id: 'video-hint', style: { position: 'absolute', inset: 0, display: 'flex' } },
@@ -106,7 +109,7 @@ export function buildVideo(app) {
     h('button', { class: 'opt', onclick: () => { player.clearAB(); toast('已清除 AB 循环') } }, '✕ 清除AB')
   )
 
-  el.append(stage, opts)
+  el.append(lib.el, h('div', { class: 'video-player' }, stage, opts))
 
   function screenshot() {
     if (!video.videoWidth) { toast('视频尚未加载', 'err'); return }
@@ -132,6 +135,7 @@ export function buildVideo(app) {
 
   return {
     el,
+    refresh() { lib.refresh() },
     // 视频页显示瞬间立即重建合成层（比开播后再 kick 更靠前，覆盖 WebView2 display:none 黑屏）
     show() {
       const v = video
@@ -141,8 +145,9 @@ export function buildVideo(app) {
       requestAnimationFrame(() => { v.style.display = '' })
       // 通知 C# 宿主强制重绘（二次保险；纯浏览器无 webview 对象时静默忽略）
       try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoKick' })) } catch {}
+      lib.refresh()
     },
     hide() { try { video.pause() } catch {} },
-    cleanup() { offTrack() }
+    cleanup() { offTrack(); lib.cleanup() }
   }
 }

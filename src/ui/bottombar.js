@@ -3,7 +3,11 @@ import { h, formatTime } from './dom.js'
 import { player } from '../player.js'
 import { cast } from '../cast.js'
 
-const PLAYMODE_LABEL = { order: '顺序', loop: '列表', random: '随机', one: '单曲' }
+// 音乐/视频各自独立的播放模式文案（视频用「单集循环」以示区分）
+const PLAYMODE_LABEL = {
+  music: { order: '顺序', loop: '列表循环', random: '随机', one: '单曲循环' },
+  video: { order: '顺序', loop: '列表循环', random: '随机', one: '单集循环' }
+}
 
 export function initBottomBar(app) {
   const bar = document.getElementById('bottombar')
@@ -52,7 +56,7 @@ export function initBottomBar(app) {
 
   const queueBtn = h('button', { class: 'icon-btn', title: '播放队列', onclick: () => app.openQueue() }, '☰')
   const modeMenu = h('div', { class: 'mode-menu', hidden: true })
-  const modeBtn = h('button', { class: 'mode-badge', title: '播放模式（点击选择）', onclick: (e) => { e.stopPropagation(); toggleModeMenu() } }, PLAYMODE_LABEL[player.playMode])
+  const modeBtn = h('button', { class: 'mode-badge', title: '播放模式（点击选择）', onclick: (e) => { e.stopPropagation(); toggleModeMenu() } }, '')
   const modeWrap = h('div', { class: 'mode-wrap' }, modeBtn, modeMenu)
   const sleepBtn = h('button', { class: 'icon-btn', title: '睡眠定时', onclick: () => app.openSleep() }, '🌙')
 
@@ -72,16 +76,27 @@ export function initBottomBar(app) {
       h('div', { class: 'vol-row' }, muteBtn, vol))
   )
 
-  // 播放模式选单
-  const modeBtns = [['order', '顺序'], ['loop', '列表循环'], ['random', '随机'], ['one', '单曲循环']].map(([m, label]) => {
-    const b = h('button', { class: player.playMode === m ? 'active' : '', onclick: (e) => { e.stopPropagation(); player.setPlayMode(m); closeModeMenu() } }, label)
-    modeMenu.appendChild(b)
-    return { m, b }
-  })
-  function toggleModeMenu() { if (modeMenu.hidden) { syncModeMenu(); modeMenu.hidden = false } else modeMenu.hidden = true }
+  // 播放模式选单（音乐/视频各自独立：文案与生效值跟随当前界面）
+  let modeBtns = []
+  function refreshModeBadge() {
+    const mode = app.mode === 'video' ? 'video' : 'music'
+    const cur = player.playModes[mode] || 'order'
+    modeBtn.textContent = PLAYMODE_LABEL[mode][cur]
+    modeMenu.innerHTML = ''
+    modeBtns = Object.keys(PLAYMODE_LABEL[mode]).map((m) => {
+      const b = h('button', {
+        class: cur === m ? 'active' : '',
+        onclick: (e) => { e.stopPropagation(); player.setPlayMode(m, mode); closeModeMenu() }
+      }, PLAYMODE_LABEL[mode][m])
+      modeMenu.appendChild(b)
+      return { m, b }
+    })
+  }
+  function toggleModeMenu() { if (modeMenu.hidden) { refreshModeBadge(); modeMenu.hidden = false } else modeMenu.hidden = true }
   function closeModeMenu() { modeMenu.hidden = true }
-  function syncModeMenu() { modeBtns.forEach(({ m, b }) => b.classList.toggle('active', m === player.playMode)) }
+  app.refreshModeBadge = refreshModeBadge // 供 main.js 切换界面时同步徽章
   document.addEventListener('click', (e) => { if (!modeMenu.hidden && !modeWrap.contains(e.target)) closeModeMenu() })
+  refreshModeBadge()
 
   // ---------- 投屏面板（DLNA，仅 Windows 客户端可用） ----------
   const castPanel = h('div', { class: 'cast-panel' })
@@ -161,6 +176,7 @@ export function initBottomBar(app) {
   player.on('loaded', () => { renderChapters() })
   player.on('volume', (v) => { vol.value = String(Math.round(v * 100)); muteBtn.textContent = v === 0 ? '🔇' : '🔊' })
   player.on('mute', (m) => { muteBtn.textContent = m ? '🔇' : '🔊' })
-  player.on('playmode', (m) => { modeBtn.textContent = PLAYMODE_LABEL[m]; syncModeMenu() })
+  player.on('playmode', () => refreshModeBadge())
   player.on('error', (msg) => app.toast(msg, 'err'))
+  player.on('transcode', (msg) => app.toast(msg, 'info'))
 }

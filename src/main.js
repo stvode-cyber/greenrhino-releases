@@ -6,7 +6,6 @@ import {
 } from './store.js'
 import { parseTags, guessFromFilename } from './metadata.js'
 import { initBottomBar } from './ui/bottombar.js'
-import { buildLibrary } from './ui/library.js'
 import { buildMusic } from './ui/music.js'
 import { buildVideo } from './ui/video.js'
 import { buildFavorites } from './ui/favorites.js'
@@ -20,14 +19,13 @@ import { initGestures } from './ui/gestures.js'
 
 // store.js 事件总线
 const app = {
-  page: 'library',
+  page: 'music',
   mode: 'music',
-  filter: 'all',
   search: '',
   currentList: [],
   onStore,
   toast,
-  refreshCurrent() { [library, favorites, playlists, recent].forEach((p) => p?.refresh?.()) },
+  refreshCurrent() { [music, video, favorites, playlists, recent].forEach((p) => p?.refresh?.()); syncCurrentList() },
   playItem, playList, importFiles, importFilesDialog, importFolderDialog, relocateMedia,
   openQueue: () => queue.open(),
   openSleep: openSleepModal,
@@ -37,19 +35,18 @@ const app = {
 
 // ---------- 构建页面 ----------
 const view = document.getElementById('view')
-const library = buildLibrary(app)
 const music = buildMusic(app)
 const video = buildVideo(app)
 const favorites = buildFavorites(app)
 const playlists = buildPlaylists(app)
 const recent = buildRecent(app)
 const cloud = buildCloud(app)
-const pages = { library, music, video, favorites, playlists, recent, cloud }
+const pages = { music, video, favorites, playlists, recent, cloud }
 for (const p of Object.values(pages)) view.appendChild(p.el)
 
 function showPage(name) {
   app.page = name
-  // 音乐 / 视频 属于「模式」页：切换时同步全局模式，顶栏模式按钮与左导航高亮一起联动
+  // 音乐 / 视频属于「模式」页：切换时同步全局模式并记住
   if (name === 'music' || name === 'video') {
     app.mode = name
     saveLastMode(name)
@@ -61,11 +58,10 @@ function showPage(name) {
     else p.hide?.()
   }
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === name))
-  // 顶栏 音乐/视频 模式开关与当前模式同步；非模式页（媒体库等）保留当前模式高亮
-  const modeView = (name === 'music' || name === 'video') ? name : app.mode
-  document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === modeView))
+  // 底栏播放模式徽章跟随当前界面（音乐/视频各自独立）
+  app.refreshModeBadge?.()
 }
-showPage('library')
+showPage('music')
 
 // 底栏 + 队列 + 手势
 initBottomBar(app)
@@ -80,13 +76,19 @@ document.getElementById('menu-toggle').addEventListener('click', () => sidebar.c
 getSettings().then(async (s) => {
   document.documentElement.setAttribute('data-theme', s.theme || 'dark')
   app.mode = s.lastMode || 'music'
-  player.setPlayMode(s.playMode || 'loop') // 恢复上次播放模式
-  // 再次打开时恢复上次播放的曲目（暂停态，点击播放即续播）
-  if (s.resumeEnabled && s.lastPlayedId) {
+  // 恢复音乐/视频各自的播放模式（旧版只存单一 playMode 时按此迁移）
+  player.setPlayModes(s.playModes || { music: s.playMode || 'loop', video: 'order' })
+  // 打开到上次停留的音乐/视频页；外部打开（双击文件）时保持 __hostOpen 切好的页面
+  if (!window.__hostOpened && pages[app.mode]) showPage(app.mode)
+  // 再次打开时恢复上次播放的曲目（暂停态，点击播放即续播），并切到该媒体所属页面。
+  // 外部打开（双击文件）已由 __hostOpen 接管时跳过恢复，避免旧曲目顶掉用户刚双击的文件。
+  if (s.resumeEnabled && s.lastPlayedId && !window.__hostOpened) {
     const item = await getMedia(s.lastPlayedId)
     if (item) {
       player.setQueue([item], item.id)
       player.playItem(item, { autoplay: false })
+      app.mode = item.type
+      if (pages[item.type]) showPage(item.type)
     }
   }
   // 首次启动引导
@@ -94,8 +96,8 @@ getSettings().then(async (s) => {
 })
 // 记住最后播放的曲目
 player.on('trackchanged', (item) => { if (item) saveSettings({ lastPlayedId: item.id }) })
-// 播放模式变更后持久化
-player.on('playmode', (m) => saveSettings({ playMode: m }))
+// 播放模式变更后持久化（音乐/视频各自独立保存）
+player.on('playmode', () => saveSettings({ playModes: player.playModes }))
 
 // ---------- 导入进度浮层（大量文件时给出反馈，避免误以为卡死） ----------
 const importOverlay = (() => {
@@ -159,7 +161,8 @@ async function doImport(files, folder) {
   const added = await importFiles(files, folder, importOverlay.progress)
   if (added.length) {
     importOverlay.done(`已导入 ${added.length} 个文件`)
-    showPage('library')
+    // 跳到导入内容对应的页面（音乐→音乐页 / 视频→视频页）
+    showPage(added[0].type)
   } else { importOverlay.hide(); toast('没有可导入的音频/视频文件', 'err') }
 }
 async function importFiles(files, folder = '导入', onProgress) {
@@ -285,33 +288,18 @@ document.getElementById('nav').addEventListener('click', (e) => {
   else showPage(v)
   sidebar.classList.remove('open')
 })
-document.querySelectorAll('.mode-btn').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('.mode-btn').forEach((x) => x.classList.toggle('active', x === b))
-  const mode = b.dataset.mode
-  app.mode = mode
-  showPage(mode)
-  saveLastMode(mode)
-}))
+// 音乐/视频切换由左侧导航的 data-view 完成，顶栏不再保留独立模式开关
 document.getElementById('search').addEventListener('input', (e) => {
   app.search = e.target.value.trim()
-  library.refresh()
-})
-document.getElementById('filter-tags').addEventListener('click', (e) => {
-  const b = e.target.closest('.tag'); if (!b) return
-  document.querySelectorAll('#filter-tags .tag').forEach((x) => x.classList.toggle('active', x === b))
-  app.filter = b.dataset.filter
-  library.refresh()
+  music.refresh()
+  video.refresh()
 })
 document.getElementById('import-files').addEventListener('click', importFilesDialog)
 document.getElementById('import-folder').addEventListener('click', importFolderDialog)
 
-// 让媒体库维护 currentList 供队列上下文使用
-const _origRefresh = library.refresh
-library.refresh = async function () {
-  await _origRefresh()
-  app.currentList = await getAllMedia()
-}
-library.refresh()
+// 维护 currentList 供队列上下文使用（音乐/视频各自页内库刷新后同步）
+async function syncCurrentList() { app.currentList = await getAllMedia() }
+syncCurrentList()
 
 function saveLastMode(mode) { saveSettings({ lastMode: mode }) }
 
@@ -428,7 +416,14 @@ console.log('绿角犀播放器 · 离线媒体播放器已就绪')
 // ExecuteScriptAsync 调用本函数：逐文件经 /api/external?t= 取回字节 -> File -> 导入并播放
 window.__hostOpen = async (list) => {
   try {
+    // 外部打开（双击文件）：先立标志，让下方 getSettings 的「恢复上次播放」跳过——
+    // 否则恢复逻辑若在导入播放之后才完成，会用上次的旧曲目顶掉双击的这个文件，
+    // 表现为「双击 MP4 却停在媒体库/播的不是这个视频」。
+    window.__hostOpened = true
     if (!Array.isArray(list) || !list.length) return
+    // 立即切到播放页：大文件读取/入库期间不再长时间停在媒体库
+    app.mode = list[0].type
+    showPage(list[0].type)
     const files = []
     for (const it of list) {
       const r = await fetch('/api/external?t=' + encodeURIComponent(it.token))
@@ -439,7 +434,10 @@ window.__hostOpen = async (list) => {
     if (!files.length) return
     const added = await importFiles(files, '外部打开', importOverlay.progress)
     if (added.length) {
-      importOverlay.done(`已打开 ${added.length} 个文件`)
+      // 把外部文件的本地绝对路径记到媒体项，供视频黑屏时 C# 原生兜底播放
+      added.forEach((it, i) => { if (list[i]) it.localPath = list[i].path })
+      // 立即收起导入遮罩（不再残留 1.3s 挡住刚切好的播放页），随后马上开始播放
+      importOverlay.hide()
       playList(added, added[0])
     } else { importOverlay.hide(); toast('没有可播放的媒体文件', 'err') }
   } catch (e) { console.error('__hostOpen error', e) }

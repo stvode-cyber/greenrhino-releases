@@ -87,6 +87,9 @@ namespace GreenRhino
             { ".lrc", "text/plain; charset=utf-8" }
         };
 
+        /// <summary>实际监听端口（供 C# 组装供 web 端播放的完整 URL）。</summary>
+        public int Port => _port;
+
         public int Start()
         {
             _root = ResolveWebRoot();
@@ -108,22 +111,24 @@ namespace GreenRhino
             var diskRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
             if (Directory.Exists(diskRoot)) return diskRoot;
 
-            // 2) 单文件发布：wwwroot 已作为嵌入资源 wwwroot.zip 打入 exe，解压到临时目录
+            // 2) 单文件发布：wwwroot 已作为嵌入资源 wwwroot.zip 打入 exe，解压到临时目录。
+            //    每次启动都强制重解压：否则上次运行遗留的旧版文件会被直接复用，
+            //    导致 web 端修复（如视频黑屏兜底）无法随新版 exe 生效。
             var extractRoot = Path.Combine(Path.GetTempPath(), "GreenRhino", "wwwroot");
-            if (!Directory.Exists(extractRoot))
+            try
             {
                 var asm = Assembly.GetExecutingAssembly();
                 using var zip = asm.GetManifestResourceStream("GreenRhino.wwwroot.zip");
                 if (zip != null)
                 {
+                    if (Directory.Exists(extractRoot)) Directory.Delete(extractRoot, true);
+                    Directory.CreateDirectory(extractRoot);
                     ZipFile.ExtractToDirectory(zip, extractRoot);
                     return extractRoot;
                 }
             }
-            else
-            {
-                return extractRoot;
-            }
+            catch { /* 重解压失败（如文件被占用）时回退到既有目录，缺失文件由 404 体现 */ }
+            if (Directory.Exists(extractRoot)) return extractRoot;
             // 兜底：仍返回磁盘路径，缺失文件由 Handle 的 404 体现
             return diskRoot;
         }
@@ -220,7 +225,8 @@ namespace GreenRhino
                     return;
                 }
 
-                // 外部打开端点（投屏媒体源）：仅服务于白名单 token，允许来自局域网（电视拉流）
+                // 外部打开端点（投屏媒体源 / 转码后 web 播放源）：仅服务于白名单 token，
+                // 允许来自局域网（电视拉流）与本机 webview。支持 Range（视频 seek / 分块加载必需）。
                 if (urlPath.StartsWith("/api/external", StringComparison.OrdinalIgnoreCase))
                 {
                     string token = "";
@@ -239,8 +245,53 @@ namespace GreenRhino
                     {
                         var fext = Path.GetExtension(fpath).ToLowerInvariant();
                         var fmime = Mime.TryGetValue(fext, out var fm) ? fm : "application/octet-stream";
-                        var fbody = await File.ReadAllBytesAsync(fpath, ct);
-                        await Send(ns, 200, fmime, fbody);
+                        var finfo = new FileInfo(fpath);
+                        long total = finfo.Length;
+                        long start = 0, end = total - 1;
+                        bool isRange = false;
+                        if (headers.TryGetValue("Range", out var range) && range.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isRange = true;
+                            var spec = range.Substring(6).Split(',')[0].Trim(); // 只处理单段
+                            var dash = spec.IndexOf('-');
+                            if (dash >= 0)
+                            {
+                                if (long.TryParse(spec.Substring(0, dash), out var s)) start = s;
+                                var ePart = spec.Substring(dash + 1);
+                                if (long.TryParse(ePart, out var e) && e < total) end = e;
+                                else end = total - 1;
+                            }
+                        }
+                        if (start < 0) start = 0;
+                        if (end >= total) end = total - 1;
+                        if (isRange && (start > end || start >= total))
+                        {
+                            var h416 = $"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{total}\r\nConnection: close\r\n\r\n";
+                            var b416 = Encoding.ASCII.GetBytes(h416);
+                            await ns.WriteAsync(b416, 0, b416.Length, ct);
+                            return;
+                        }
+                        long length = end - start + 1;
+                        App.Log("external served: " + fpath + " " + (isRange ? $"range {start}-{end}/{total}" : "full") + " (" + length + "B)");
+                        var head = isRange
+                            ? $"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{end}/{total}\r\nAccept-Ranges: bytes\r\n"
+                            : "HTTP/1.1 200 OK\r\nAccept-Ranges: bytes\r\n";
+                        head += $"Content-Type: {fmime}\r\nContent-Length: {length}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n";
+                        var hb = Encoding.ASCII.GetBytes(head);
+                        await ns.WriteAsync(hb, 0, hb.Length, ct);
+                        using (var fss = new FileStream(fpath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 64 * 1024, FileOptions.SequentialScan))
+                        {
+                            fss.Seek(start, SeekOrigin.Begin);
+                            var buf = new byte[64 * 1024];
+                            long remaining = length;
+                            while (remaining > 0)
+                            {
+                                int n = await fss.ReadAsync(buf, 0, (int)Math.Min(buf.Length, remaining), ct);
+                                if (n <= 0) break;
+                                await ns.WriteAsync(buf, 0, n, ct);
+                                remaining -= n;
+                            }
+                        }
                     }
                     else
                     {
@@ -366,7 +417,14 @@ namespace GreenRhino
             return token;
         }
         // path 为本地文件绝对路径，供 C# 原生视频兜底（WebView2 黑屏时直接用 MediaElement 播放）
-        public class ExternalEntry { public string name; public string token; public string type; public string path; }
+        // 注意：System.Text.Json 默认只序列化属性（不序列化公开字段），必须用自动属性，否则 __hostOpen 收到 [{}]
+        public class ExternalEntry
+        {
+            public string name { get; set; }
+            public string token { get; set; }
+            public string type { get; set; }
+            public string path { get; set; }
+        }
         public List<ExternalEntry> RegisterExternalFiles(IEnumerable<string> paths)
         {
             var list = new List<ExternalEntry>();

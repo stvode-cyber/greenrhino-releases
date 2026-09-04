@@ -1,12 +1,15 @@
-// music.js — 音乐播放页（专辑图 + 频谱 + 歌词 + EQ/睡眠）
+// music.js — 音乐页（音乐库 + 播放器：专辑图 + 频谱 + 歌词 + EQ/睡眠）
 import { h, toast } from './dom.js'
 import { player } from '../player.js'
 import { Spectrum } from './spectrum.js'
 import { updateMedia } from '../store.js'
 import { parseLRC } from '../lrc.js'
+import { mediaLibrary } from './library.js'
 
 export function buildMusic(app) {
-  const el = h('div', { class: 'music-view' })
+  // 左侧：音乐库（按类型过滤）
+  const lib = mediaLibrary(app, 'music')
+  const el = h('div', { class: 'music-page' })
   const albumArt = h('div', { class: 'album-art' }, '🎵')
   const spectrumCanvas = h('canvas', { id: 'spectrum' })
   const trackTitle = h('div', { class: 't' }, '未在播放')
@@ -73,14 +76,17 @@ export function buildMusic(app) {
   }
 
   el.append(
-    h('div', { class: 'album-wrap' }, albumArt, spectrumCanvas,
-      h('div', { class: 'track-info' }, trackTitle, trackArtist),
-      h('div', { class: 'video-opts', style: { justifyContent: 'center' } }, eqBtn, sleepBtn, lyricBtn, searchBtn),
-      lyricSearchBox,
-      lyricFileInput
-    ),
-    offsetWrap,
-    lyricsBox
+    lib.el,
+    h('div', { class: 'music-player' },
+      h('div', { class: 'album-wrap' }, albumArt, spectrumCanvas,
+        h('div', { class: 'track-info' }, trackTitle, trackArtist),
+        h('div', { class: 'video-opts', style: { justifyContent: 'center' } }, eqBtn, sleepBtn, lyricBtn, searchBtn),
+        lyricSearchBox,
+        lyricFileInput
+      ),
+      offsetWrap,
+      lyricsBox
+    )
   )
 
   function renderLyrics() {
@@ -193,8 +199,9 @@ export function buildMusic(app) {
 
   return {
     el,
-    show() { spectrum.start() },
+    refresh() { lib.refresh() },
+    show() { spectrum.start(); lib.refresh() },
     hide() { spectrum.stop() },
-    cleanup() { offTime(); offTrack() }
+    cleanup() { offTime(); offTrack(); lib.cleanup() }
   }
 }

@@ -220,7 +220,7 @@ const DEFAULT_SETTINGS = {
   defaultVolume: 0.8,
   resumeEnabled: true,
   crossfade: 0,          // 0 = 关闭
-  playMode: 'loop',      // order | loop | random | one
+  playModes: { music: 'loop', video: 'order' }, // 音乐/视频各自独立的播放模式
   eqPreset: 'flat',
   eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 10 段
   sleepTimer: 0,
@@ -254,7 +254,7 @@ export async function exportSyncData() {
   const s = await getSettings()
   const settings = {
     theme: s.theme, defaultVolume: s.defaultVolume, resumeEnabled: s.resumeEnabled,
-    crossfade: s.crossfade, playMode: s.playMode, eqPreset: s.eqPreset, eqBands: s.eqBands,
+    crossfade: s.crossfade, playModes: s.playModes, eqPreset: s.eqPreset, eqBands: s.eqBands,
     lastMode: s.lastMode
   }
   return {

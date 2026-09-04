@@ -1,78 +1,107 @@
-# 工作交接 · 绿角犀播放器 Windows 客户端（GreenRhino）
+# 工作交接 · 绿角犀播放器（GreenRhino）
 
-> 适用：接手视频黑屏修复 / 后续客户端构建的同事或后续会话。
-> 最后更新：2026-09-02。当前状态：视频黑屏修复链 L1–L9 已交付并在 `dist/` 就绪，等真机日志关单。
-> 配套治理：`R0.md`（总入口）/ `FD.md`（功能记录）/ `CHANGELOG.md`（版本史）。
+> 适用：接手本项目的同事 / 后续会话。目标是**一读就懂当前状态、能立刻构建、知道坑在哪**。
+> 最后更新：2026-09-04。当前状态：**视频黑屏已关单（E4）**，内置 ffmpeg 转码链路稳定，音乐/视频已完全分成两个页面，最新 exe 已跑在用户桌面。
+> 配套治理：`R0.md`（总入口/铁律）/ `FD.md`（功能记录，FD-V1~V10）/ `CHANGELOG.md`（版本史）/ `HELP.md`（用户说明）/ `overview.md`（功能总览）/ `UI-design.md`（界面设计）。
 
-## 0. 一句话现状
-视频「黑屏有声音」已堆 9 层防线 + 根因分流，但**沙箱无显示，无法像素验证**；下一步必须靠用户真机日志区分根因 (a) overlay 未提交 / (b) HEVC 编码不支持。
+---
 
-## 1. 关键目录与文件
-| 路径 | 作用 | 备注 |
-|------|------|------|
-| `clients/windows/GreenRhino/wwwroot/src/player.js` | Web 视频引擎：播放 / 看门狗 / 诊断 / 原生兜底触发 | ⚠ **不进 git**，经 `wwwroot.zip` 内嵌 dll |
-| `clients/windows/GreenRhino/wwwroot/src/main.js` | 应用入口：`__hostOpen` 外部文件、`localPath` 落媒体项 | ⚠ 同上 |
-| `clients/windows/GreenRhino/MainWindow.xaml.cs` | C# 宿主：GPU 参数、`videoNoFrame`/`videoBlob*` 消息、原生 MediaElement | ✅ 进 git |
-| `clients/windows/GreenRhino/MainWindow.xaml` | 原生兜底层 `MediaElement` + 控制条 | ✅ 进 git |
-| `clients/windows/GreenRhino/LocalServer.cs` | 外部文件注册（`ExternalEntry.path`） | ✅ 进 git |
-| `clients/zip-wwwroot.py` | 把 wwwroot 打成 `wwwroot.zip`（csproj 内嵌源） | ✅ 进 git，改 web 后**必跑** |
-| `dist/GreenRhino-portable.zip` | 71MB 文件夹版（不含 WebView2 运行时，依赖系统） | 交付物 |
-| `dist/GreenRhino-portable-runtime.zip` | 471MB 含 `webview2-runtime`，开箱即用 | 交付物 |
+## 0. 一句话现状（2026-09-04）
 
-## 2. 构建环境（沙箱专属坑，照做省 90% 时间）
+纯前端 PWA 播放器，Windows 用 WebView2 + .NET 8 WPF 壳封装成自包含 exe。**音乐和视频已完全分成两个独立页面**，视频 HEVC/10bit 由内置 ffmpeg 自动转码 H.264 播放，双击 MP4 直达播放，音乐/视频播放模式各自独立（视频默认不循环）。最新构建 `GreenRhino.exe`（sw v9）已覆盖到 `C:\Users\Administrator\Desktop\GreenRhino\` 并在用户机器上运行验证。
 
-### 2.1 dotnet 不在 PATH
-全路径：`C:/Users/Administrator/.dotnet/dotnet.exe`。别用裸 `dotnet`。
+## 1. 架构总览
 
-### 2.2 wwwroot.zip 必须重生成（最致命，曾翻车一次）
-csproj 内嵌的是**预构建的 `wwwroot.zip`**，不是 wwwroot 文件夹。改了 `player.js` / `main.js` 不重生成 zip → 打出来是旧 web 代码（portable4 教训）。
-```bash
-C:/Users/Administrator/.workbuddy/binaries/python/versions/3.13.12/python.exe clients/zip-wwwroot.py
 ```
-跑完即生成 `clients/windows/GreenRhino/wwwroot.zip`（27 项）。
-
-### 2.3 发布命令（文件夹版，非单文件）
-单文件在本环境「完全没反应」（根因未定位），一律用文件夹版：
-```bash
-C:/Users/Administrator/.dotnet/dotnet.exe publish clients/windows/GreenRhino/GreenRhino.csproj \
-  -c Release -r win-x64 -p:SelfContained=true -p:PublishSingleFile=false \
-  -p:DisableFastUpToDateCheck=true -o <全新输出目录>
+┌─ PWA 内核（离线优先，零构建，纯 ES module）─────────────────────┐
+│ index.html / sw.js(v9 网络优先) / manifest / src/*.js / icons  │
+│   src/main.js      应用装配：路由、导入、外部打开(__hostOpen)   │
+│   src/player.js   音频/视频播放引擎：播放模式、转码触发、看门狗  │
+│   src/store.js     IndexedDB 数据层 + 设置(playModes 分媒体)    │
+│   src/ui/library.js  mediaLibrary(app,type) 按类型拆分媒体库    │
+│   src/ui/music.js   音乐页 = 音乐库 + 播放器(频谱/歌词/EQ/睡眠)  │
+│   src/ui/video.js   视频页 = 视频库 + 播放器(字幕/音轨/章节/AB)  │
+│   src/ui/*.js      bottombar/queue/favorites/playlists/recent/  │
+│                     cloud/settings/gestures/spectrum/dom        │
+└─────────────────────────────────────────────────────────────────┘
+        │ 页面结构：音乐 | 视频 | 最近播放 | 歌单 | 收藏 | 我的云盘 | 设置
+        │ （已无合并「媒体库」页；顶栏无模式开关，只走左侧导航）
+┌─ Windows 原生壳（WebView2 + WPF，clients/windows/GreenRhino/）─┐
+│ MainWindow.xaml.cs  GPU 参数(--disable-gpu)、原生兜底、转码、    │
+│                     外部文件注册、单实例/托盘/投屏               │
+│ LocalServer.cs     内嵌 HTTP 服务(/api/external /api/lyric       │
+│                     云盘 /api/register|login|files /api/cast)   │
+│ wwwroot.zip         内嵌资源：发布时从 wwwroot 重打包，运行时     │
+│                     **每次启动强制重解压**到 %TEMP%\GreenRhino\  │
+│ ffmpeg.exe          内嵌资源(98MB)：HEVC→H.264 转码，懒释放      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.4 每次用全新构建目录
-避免陈旧 obj/bin + 孤儿单实例 Mutex 占锁。复制源码到 `C:/gr_build/buildN` 再 publish。
+## 2. 关键目录与文件
 
-### 2.5 打包 base / runtime 两版
-从 `webview2-runtime` 目录复制 VC++ 运行库（`vcruntime140.dll` / `vcruntime140_1.dll` / `msvcp140.dll` / `concrt140.dll`）进发布目录；
-- **base**：zip 发布目录（不含 `webview2-runtime`）→ `GreenRhino-portable.zip`
-- **runtime**：发布目录副本 + `webview2-runtime` 文件夹 → `GreenRhino-portable-runtime.zip`
-- 跳过 `.pdb`。参考脚本见 `C:/gr_build/package_portable*.py`（需适配新目录名）。
+| 路径 | 作用 | git 状态 |
+|------|------|---------|
+| `src/`（根） | **web 源码（改这里）**：main/player/store/style/dom/ui/* | ✅ 进 git（sw.js 是根，v9） |
+| `sw.js`（根） | Service Worker，**网络优先** + v9 缓存桶，activate 自动清旧桶 | ✅ 进 git |
+| `index.html` | 页面骨架 + 侧边栏导航（音乐/视频/…） | ✅ 进 git |
+| `clients/windows/GreenRhino/wwwroot/` | 构建时 copy-web 生成，**不进 git** | ❌ gitignore |
+| `clients/windows/GreenRhino/wwwroot.zip` | **csproj 内嵌资源，改 web 后必须重生成**（否则内嵌旧代码！） | ❌ gitignore |
+| `clients/windows/GreenRhino/ffmpeg.exe` | 内嵌转码器（98MB，**构建必需，勿删**；未忽略但未跟踪） | ⚠️ 未跟踪 |
+| `clients/windows/GreenRhino/MainWindow.xaml.cs` | C# 宿主：`--disable-gpu`、转码(ffmpeg→H.264)、原生兜底、投屏、外部打开 | ✅ 进 git |
+| `clients/windows/GreenRhino/LocalServer.cs` | 内嵌 HTTP 服务 + 外部文件 token + 歌词代理 + 云盘后端 | ✅ 进 git |
+| `clients/windows/GreenRhino/publish/` | dotnet publish 输出（gitignore） | ❌ gitignore |
+| `C:\Users\Administrator\Desktop\GreenRhino\GreenRhino.exe` | **用户实际运行的 exe（最新交付物）** | 交付物 |
 
-### 2.6 校验（trust-but-verify，必做）
-从 dist zip 的 `GreenRhino.dll` 挖出内嵌 `wwwroot.zip` 的 `player.js`，确认含关键符号：
-`decodeFailed` / `audioPlaying` / `videoDecodeError` / `_videoDiag` / `localPath` / `videoBlobChunk`。
-C# 侧 dll 含 `ShowNativeVideo` / `VideoCacheDir`（UTF-8 方法名）；日志串「视频解码失败(编码不支持」在 `#US` 堆（UTF-16LE）搜。
+## 3. 构建 / 发布流程（照做，坑全在下面）
 
-## 3. 沙箱验证限制（别误判为崩溃）
-- **无显示**：看不到像素，无法确认原生 MediaElement 是否真出画面。
-- **孤儿单实例 Mutex**：之前进程占锁，新实例在 `App..ctor` 后自动退出——非崩溃，是单实例逻辑拦截。
-- **safe-delete 拦截**：`rm -rf` / `rmtree` / `shutil.rmtree` 超阈值被拦 → 用全新暂存目录 + `ZipFile("w")` 覆盖。
-- **git 提交**：`commit -m "多行"` 被安全策略按 LOLBin 拦 → 用 `commit -F 文件`；且有时退出码非零但提交已成功，**以 `git log` 为准**。
-- **Write 工具**：写仓库根部分路径（如 `commit_msg.txt`）静默失败 → 用 Bash heredoc。
+前置：Node（有）+ .NET 8 SDK（**不在 PATH**，用全路径 `C:\Users\Administrator\.dotnet\dotnet.exe`）。
 
-## 4. 当前阻塞 / 下一步
-1. 视频黑屏（已交付 build9）：等用户真机回传 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 的「视频」行。
-   - 出现 `视频解码失败(编码不支持` → 确认 (b) HEVC，给转码方案。
-   - 出现 `视频黑屏(overlay 未提交` 或原生兜底日志 → (a) 已接管。
-2. 若用户愿告知黑屏文件来源 / 后缀（.mkv / .hevc？双击还是库内？），可再缩排查范围。
-3. 若 (b) 且需客户端内转码：需引入 ffmpeg.wasm（约 30MB+，需 COOP/COEP），属大改动，先与用户拍板。
+1. **改 web 源码**（`src/`、`index.html`、`sw.js`）后：
+   - 必须**递增 `sw.js` 版本号**（`const CACHE = 'greenrhino-v9'` → v10…），否则旧 SW 缓存可能锁死旧前端（现为网络优先，兜底更稳但仍按惯例递增）。
+   - 必须**重新生成 `wwwroot.zip`**：`node clients/copy-web.mjs`（同步 wwwroot）→ 压缩 wwwroot 内容为 zip。不重生成 = 内嵌旧代码（历史教训，翻车过）。
+2. **构建**（可用 `clients/build-windows.bat`，或手动）：
+   ```powershell
+   node clients/copy-web.mjs
+   # 删除旧 zip 后：Compress-Archive -Path clients/windows/GreenRhino/wwwroot/* -DestinationPath clients/windows/GreenRhino/wwwroot.zip -Force
+   & "C:\Users\Administrator\.dotnet\dotnet.exe" publish clients/windows/GreenRhino/GreenRhino.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o clients/windows/GreenRhino/publish
+   ```
+   > 注：当前用 `PublishSingleFile=true` 单文件（旁附少量原生 dll），在用户机上工作正常。旧文档「文件夹版」（单文件没反应）是 9/2 沙箱环境的旧教训，**已被 9/3 之后单文件构建取代**，勿再改回文件夹版。
+3. **部署**：把 `publish\GreenRhino.exe` 覆盖到 `C:\Users\Administrator\Desktop\GreenRhino\GreenRhino.exe`（桌面副本必须是**最新版**——双击 MP4 的文件关联指向它）。覆盖前若 exe 在运行需先结束进程。
+4. **验证（trust-but-verify）**：启动 exe 后检查 `%TEMP%\GreenRhino\wwwroot\sw.js` 版本号与 `src/ui/music.js` 含 `music-page` 等新符号，确认内嵌的是新前端（每次启动强制重解压，天然防止旧代码）。
 
-## 5. 根因认知（固化）
-WebView2 黑屏有声音只有两类：
-- (a) **overlay 未提交**（`videoWidth > 0`）→ `--disable-gpu` + 原生兜底
-- (b) **编码不支持** HEVC / 10bit（`videoWidth === 0` 且音频推进）→ 转码 H.264 / 装 HEVC 扩展；原生兜底无效
+## 4. 关键机制（改代码前必读）
 
-## 6. 治理记录索引
-- `R0.md`：子路由含 FD；报错 **E4**；决策 **Dc-V1** / **Dc-V2**；动作 **A**
-- `FD.md`：`FD-V1`~`FD-V6` 覆盖 L1–L9 全链路
-- 视频修复提交链：`f587dd1` → `c3b8d74` → `17a5e81` → `3ab5dae` → `8f059e3` → `f4c0245` → `d1188dc` → `bfdc2da`（治理入库）
+- **音乐/视频页面分离**：`showPage(name)` 驱动（`src/main.js`），`app.mode` 跟随页面（music/video）；媒体库用 `mediaLibrary(app, type)` 复用组件；搜索 `app.search` 同时刷两个库。**删除合并媒体库页后，任何地方不得再引用 `library` 页 / `app.filter` / `buildLibrary`**。
+- **播放模式独立**：`player.playModes = { music:'loop', video:'order' }`（`store.js` 默认值 + `player.js`）。视频默认「顺序」不循环；音乐默认「列表循环」。底栏徽章跟页面显示。
+- **HEVC 转码**：`player.js` 在 `loadedmetadata` 后检测 `videoWidth===0` → 立即 `_startTranscode`（本地文件给路径 / Blob 分片给 C#）→ C# 用 ffmpeg 转 H.264 → `transcodeReady` 回传 URL。同一文件转码去重（字典缓存）。转码产物在 `%TEMP%\GreenRhino\transcode`。
+- **SW 网络优先**：静态资源 `fetch` 成功即缓存、失败回退缓存；导航失败回退 index.html。`/api/*` 永不缓存。activate 清旧桶。
+- **双击文件直达播放**：`__hostOpen`（`main.js`）设 `window.__hostOpened` 跳过启动恢复，按文件类型切页并播。**文件关联 → 桌面最新 exe**，改动 exe 后桌面副本必须同步。
+- **GPU**：WebView2 默认 `--disable-gpu` 纯软件渲染（Intel Arc + 向日葵虚拟显示器下防花屏）；`--gpu` 可切回硬件。
+
+## 5. 构建环境 / 沙箱已知坑（省时间）
+
+- `dotnet` 不在 PATH → 用 `C:\Users\Administrator\.dotnet\dotnet.exe` 全路径。
+- `wwwroot.zip` 重生成是**最致命**的坑：改了 web 不重生成，打出来是旧前端。
+- ffmpeg.exe（98MB）必须留在 `clients/windows/GreenRhino/`；**未 gitignore、未跟踪**——不要 `git add -A` 把它提交，也不要误删。
+- 桌面副本与 publish 输出要同步，否则双击文件仍命中旧 exe。
+- SW 版本号每次发布递增；`src/sw.js` 是孤儿文件（未注册、未引用），可删勿用。
+- 诊断「花屏/黑屏」先抽源帧对比：若源帧就花、ffmpeg 零报错 → 是文件自带内容，不是渲染问题（test-hevc.mp4 曾含棋盘格/彩虹带误导排查）。
+- 播放器窗口最小化到托盘后，SDK 截图会全黑且 UI 树只剩边框——先查 `IsWindowVisible/IsIconic` 再判断是否渲染黑屏。
+
+## 6. 治理文档索引（保持链条）
+
+- `R0.md`：总路由/铁律；报错 **E4（已关单）**；决策 **Dc-V1/V2**；动作记录 A（9/3、9/4 已补）。
+- `FD.md`：`FD-V1~V7` 黑屏修复链 + `FD-V8` 内置转码 + `FD-V9` 双击播放 + `FD-V10` 音乐/视频分离。
+- `CHANGELOG.md`：版本史（09-03/09-04 已补）。
+- `overview.md` / `UI-design.md` / `HELP.md`：功能、界面、用户说明。
+
+## 7. git 现状（重要）
+
+**工作树有未提交变更**（截至 2026-09-04）：`src/main.js`、`src/player.js`、`src/store.js`、`src/ui/{library,music,video,bottombar,gestures}.js`、`src/style.css`、`index.html`、`sw.js`、`FD.md`、`clients/windows/GreenRhino/{csproj,LocalServer.cs,MainWindow.xaml.cs}` 已修改；`clients/windows/GreenRhino/ffmpeg.exe`（98MB，勿提交）、`src/sw.js`（孤儿，建议删）未跟踪。
+**建议交接动作**：① 删除孤儿 `src/sw.js`；② 把 ffmpeg.exe 加入 `.gitignore`（避免误提交大二进制）；③ 将本次改版提交入库（含本 HANDOFF 与 CHANGELOG 更新）。
+
+## 8. 下一步（待办）
+
+1. 用户在本机点开新 exe，实际体验音乐页 / 视频页各自媒体库 + 播放，确认分离效果。
+2. 若后续反馈视频问题：先取 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 的「视频」行判断根因（转码失败 / overlay / 其它）。
+3. 桌面副本与文件关联保持最新 exe 同步（每次发布必做）。

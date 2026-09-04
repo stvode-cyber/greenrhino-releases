@@ -54,6 +54,38 @@
 
 ---
 
+## FD-V7 视频循环重播重复转码修复
+- **说明**：转码后的 HEVC 视频播完循环时，`_playVideo` 会把 `src` 重置回不兼容的 HEVC blob，再次触发「解码失败→转码」，导致每轮循环卡顿重载（8s 短片日志表现为 `vw=0 → decodeFailed → transcode` 循环）。修复：`_playVideo` 在非切换（同一 item）且已有 `_transcodedUrl` 时直接复用转码 URL 从头播，循环零重载。
+- **注释**：仅改 web（`src/player.js`），随 v5 重生成 wwwroot.zip 内嵌；`--disable-gpu` 下实测循环 2 轮全程 `vw=720 vh=1248`、无重复转码。
+- **目标**：↔VG（离线看片）· ↔G（视频本地播放出画面）
+- **关联**：↔E4 · ↔A（循环重播复用转码 URL；greenrhino-v5）
+
+---
+
+## FD-V8 内置 ffmpeg 转码（HEVC/10bit → H.264，E4 关单核心）
+- **说明**：E4 实测根因为 (b) 编码不支持——真实 HEVC（微信视频）转码 H.264 后正常渲染（`vw=720 vh=1248`、FFmpeg 824 帧零错误）。内置 `ffmpeg.exe`（98MB 嵌入资源，首次转码懒释放到 `%TEMP%\GreenRhino\ffmpeg.exe`）把不兼容编码转成 H.264 后由 web `<video>` 播放。
+- **注释**：本地文件直接给路径转码；库内 Blob 走 `videoBlobChunk/End`（带 `transcode:true`）分片传 C# 落盘再转码；完成回 `transcodeReady {url,path}`、失败回 `transcodeFailed` 并提示改用 H.264。转码去重：同一文件并发请求合并（字典缓存），避免每消息启一个 ffmpeg 进程 CPU 拉满。产物缓存 `%TEMP%\GreenRhino\transcode`。**坑**：`test-hevc.mp4` / `clean-test-hevc.mp4` 自带棋盘格/彩虹带/彩条，曾多次误导「花屏=渲染问题」——排查先抽源帧对比 + ffmpeg -v error 解码零报错即证明文件健康。
+- **目标**：↔VG（离线看片）· ↔G（视频本地播放出画面）
+- **关联**：↔E4（关单 2026-09-03）· ↔Dc-V2 · ↔A（csproj 嵌入 ffmpeg.exe；MainWindow.xaml.cs 转码分支）
+
+---
+
+## FD-V9 双击 MP4 直达播放（覆盖旧 exe + 跳过启动恢复）
+- **说明**：修复「双击 MP4 没有直接播放」。根因：文件关联指向桌面 8/31 旧 exe（无双击播放逻辑）+ 前端启动恢复逻辑（`resumeEnabled`）抢先顶掉双击文件。
+- **注释**：`__hostOpen`（`src/main.js`）设 `window.__hostOpened` 跳过启动恢复；按 `list[0].type` 立即切页；导入后 `localPath` 落媒体项、立即 `playList` 播放。桌面副本必须每次发布同步最新 exe（文件关联命中它）。`__hostOpen` 与 `getSettings` 恢复存在竞态，用 `__hostOpened` 标志位仲裁。
+- **目标**：↔VG · ↔G（双击即播）
+- **关联**：↔A（重建 exe 覆盖桌面副本；sw v6→v8）
+
+---
+
+## FD-V10 音乐 / 视频完全分离成两个页面
+- **说明**：删除合并「媒体库」页与顶栏过滤标签，改为**音乐页 = 音乐库 + 播放器**、**视频页 = 视频库 + 播放器**两个独立页面，侧边栏直接切换。
+- **注释**：`src/ui/library.js` 重构为复用组件 `mediaLibrary(app, type)`（按类型过滤 + 多选/查重/拖拽/空态）；`music.js`/`video.js` 各自嵌入一个 `mediaLibrary` 并拼上播放器区（双栏 grid：左库右播）；`main.js` 移除 `library` 页引用，`app.mode` 随页面切换，搜索同时刷两库，导入后跳到导入内容所属页，续播时切到所播媒体页。播放模式独立：`playModes={music:'loop',video:'order'}`。**坑**：任何地方不得再引用 `library` 页 / `app.filter` / `buildLibrary`；sw v8→v9。
+- **目标**：↔VG · ↔G（音乐/视频界面彻底分开）
+- **关联**：↔A（2026-09-04 界面重构）
+
+---
+
 ## 根因认知固化（收口结论）
 WebView2「黑屏有声音」只有两类根因，分别对症：
 ```
@@ -71,5 +103,5 @@ WebView2「黑屏有声音」只有两类根因，分别对症：
 - 沙箱限制：无显示 + 孤儿单实例 Mutex 锁，无法像素级验证原生播放；MediaElement 为标准 WPF 能力，风险低
 
 ## 待办（关单前置）
-- 用户本机回传 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 里「视频」相关行 → 区分 (a)/(b) 根因，E4 关单
-- 若仍黑且日志显示 overlay 未提交但原生兜底未接管 → 评估独立视频 WebView2 表面（最后一招）
+- ✅ **E4 关单（2026-09-03 已收口）**：本机实测日志确认根因 (b) 编码不支持——真实 HEVC 视频（微信 a47c88b….mp4）转码 H.264 后正常渲染（`vw=720 vh=1248`、进度推进、循环零重载）；FFmpeg 完整解码 824 帧零错误证明文件本身健康。前期「花屏/色条」均为**测试文件自带内容**（test-hevc.mp4 含棋盘格/彩虹带；clean-test-hevc.mp4 为 SMPTE 彩条）误导，非渲染问题。
+- 若后续某视频仍黑且日志显示 overlay 未提交但原生兜底未接管 → 评估独立视频 WebView2 表面（最后一招，暂不需）

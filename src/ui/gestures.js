@@ -5,7 +5,7 @@ export function initGestures(app) {
   const view = document.getElementById('view')
   let sx = 0, sy = 0, st = 0, tracking = false, lastTap = 0
   const SWIPE = 45
-  const ignore = 'input,button,select,.card,.q-item,.line,.opt,.tag,.nav-item,.mode-btn,.seek,.vol,.lyrics'
+  const ignore = 'input,button,select,.card,.q-item,.line,.opt,.tag,.nav-item,.seek,.vol,.lyrics'
 
   view.addEventListener('touchstart', (e) => {
     if (app.page !== 'music' && app.page !== 'video') return

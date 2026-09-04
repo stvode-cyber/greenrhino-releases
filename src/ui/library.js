@@ -1,19 +1,21 @@
-// library.js — 媒体库网格（音乐/视频）+ 多选与批量操作
+// library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
 import { h, openModal } from './dom.js'
 import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
 import { player } from '../player.js'
 
 const TYPE_ICON = { music: '🎵', video: '🎬' }
+const TYPE_NAME = { music: '音乐', video: '视频' }
 
-export function buildLibrary(app) {
-  const el = h('div', { class: 'page' })
+// 构建一个「只显示指定类型」的媒体库网格，供音乐页 / 视频页各自嵌入
+export function mediaLibrary(app, type) {
+  const el = h('div', { class: 'media-lib' })
   let unsub = []
   let importMode = 'manual' // manual | scan（设计文档 §7）
   let selMode = false
   const selected = new Set()
 
   function matches(item) {
-    if (app.filter !== 'all' && item.type !== app.filter) return false
+    if (item.type !== type) return false
     if (app.search) {
       const q = app.search.toLowerCase()
       const hay = `${item.title || ''} ${item.artist || ''} ${item.name}`.toLowerCase()
@@ -30,30 +32,28 @@ export function buildLibrary(app) {
       'data-m': mode
     }, label)
     seg.append(mk('manual', '手动'), mk('scan', '扫描'))
-    const btn = h('button', { class: 'ghost-btn', style: { padding: '6px 14px' }, onclick: () => importMode === 'scan' ? app.importFolderDialog() : app.importFilesDialog() }, '＋ 导入')
-    const selBtn = h('button', { class: 'ghost-btn' + (selMode ? ' active' : ''), style: { padding: '6px 14px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, selMode ? '✓ 退出选择' : '☑ 多选')
-    const dupBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 14px' }, onclick: () => openDuplicates(), title: '查找媒体库中重复的文件' }, '🔁 查重复')
-    return h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' } }, seg, btn, selBtn, dupBtn)
+    const btn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => importMode === 'scan' ? app.importFolderDialog() : app.importFilesDialog() }, '＋ 导入')
+    const selBtn = h('button', { class: 'ghost-btn' + (selMode ? ' active' : ''), style: { padding: '6px 12px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, selMode ? '✓ 退出选择' : '☑ 多选')
+    const dupBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => openDuplicates(), title: '查找媒体库中重复的文件' }, '🔁 查重复')
+    return h('div', { class: 'lib-toolbar' }, seg, btn, selBtn, dupBtn)
   }
 
   async function refresh() {
     const all = await getAllMedia()
     el.innerHTML = ''
     const list = all.filter(matches)
-    const title = app.filter === 'music' ? '音乐' : app.filter === 'video' ? '视频' : '媒体库'
-    const titleRow = h('div', { class: 'section-title', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-      h('span', {}, `${title} · ${list.length} 项`),
-      importBar()
-    )
-    el.appendChild(titleRow)
+    const title = TYPE_NAME[type] || '媒体'
+    el.appendChild(h('div', { class: 'lib-head' },
+      h('div', { class: 'section-title', style: { margin: '4px 0 0' } }, `${title} · ${list.length} 项`),
+      importBar()))
 
     if (!all.length) {
-      el.appendChild(emptyState(app))
+      el.appendChild(emptyState(app, type))
       el.appendChild(selbar)
       return
     }
     if (!list.length) {
-      el.appendChild(h('div', { class: 'empty' }, h('div', {}, '没有匹配的内容')))
+      el.appendChild(h('div', { class: 'empty' }, h('div', {}, `还没有${title}，点「导入」或直接拖进来`)))
       el.appendChild(selbar)
       return
     }
@@ -194,10 +194,10 @@ export function buildLibrary(app) {
     app.onStore('media:updated', refresh),
     app.onStore('favorites:changed', refresh)
   )
-  el._cleanup = () => unsub.forEach((u) => u())
+  const cleanup = () => unsub.forEach((u) => u())
 
   refresh()
-  return { el, refresh }
+  return { el, refresh, cleanup }
 }
 
 export function mediaCard(item, app, opts = {}) {
@@ -252,11 +252,12 @@ export function mediaCard(item, app, opts = {}) {
   return node
 }
 
-function emptyState(app) {
+function emptyState(app, type) {
+  const isMusic = type === 'music'
   return h('div', { class: 'empty' },
-    h('div', { class: 'big' }, '🎧'),
-    h('div', {}, '媒体库还是空的'),
-    h('div', { style: { marginTop: '6px', color: 'var(--text-3)' } }, '把音乐或视频拖进来，或点击下方按钮导入'),
+    h('div', { class: 'big' }, isMusic ? '🎧' : '🎬'),
+    h('div', {}, isMusic ? '还没有音乐' : '还没有视频'),
+    h('div', { style: { marginTop: '6px', color: 'var(--text-3)' } }, `把${isMusic ? '音乐' : '视频'}拖进来，或点击下方按钮导入`),
     h('button', { class: 'cta', onclick: () => app.importFilesDialog() }, '导入媒体')
   )
 }

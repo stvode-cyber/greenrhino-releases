@@ -98,16 +98,23 @@ namespace GreenRhino
             try
             {
                 // 视频黑屏有声音根因：WebView2 视频用独立 DirectComposition overlay 表面，在 WPF 下常不被提交到窗口。
-                // 默认 --disable-gpu 强制软件合成，视频帧落到页面软件合成层正常显示。
-                // 命令行加 --gpu / --enable-gpu 可切回硬件渲染（极少数机器软件渲染异常时用）。
-                var cli = Environment.GetCommandLineArgs();
-                bool enableGpu = cli.Any(a => a == "--gpu" || a == "--enable-gpu");
-                string gpuArg = enableGpu ? "" : " --disable-gpu";
-                if (enableGpu) App.Log("GPU 模式：用户以 --gpu 显式启用硬件渲染");
-                else App.Log("GPU 模式：默认禁用(--disable-gpu)，软件合成以修复视频黑屏");
+                // 默认启用硬件渲染（Intel Arc 等真显卡 + 现代 WebView2 下最可靠）；
+                // 命令行加 --disable-gpu / --no-gpu 可退回软件合成（个别无 GPU / 虚拟机环境渲染异常时用）。
+                // 另禁用 CalculateNativeWinOcclusion：该特性在窗口被遮挡（如远程/虚拟显示器）时
+                // 会错误停用视频合成层，是「有声音无画面」的已知元凶。
+                // 视频「花屏」修复：默认加 --disable-accelerated-video-decode 禁用硬件视频解码。
+                // Intel Arc + Oray 虚拟显示器（向日葵等远程）组合下，GPU 硬解的视频帧经虚拟显示
+                // 合成会渲染成花屏/花屏噪点；改用软件解码（FFmpeg）稳定，1080p 解码开销可忽略。
+                // 视频花屏最终兜底：本机为 Intel Arc + Oray 虚拟显示器（向日葵等远程）组合，
+                // GPU 硬件合成与硬解都会花屏，整体禁用 GPU（--disable-gpu）退回纯软件渲染最可靠。
+                // （软件渲染 1080p 视频无压力，代价仅是合成略耗 CPU。）
+                string gpuArg = " --disable-gpu";
+                string featArg = " --disable-features=CalculateNativeWinOcclusion";
+                string vdecArg = " --disable-accelerated-video-decode";
+                App.Log("GPU 模式：禁用 GPU 纯软件渲染（Intel Arc + 虚拟显示器花屏兜底）");
                 var opts = new CoreWebView2EnvironmentOptions
                 {
-                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" + gpuArg
+                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" + gpuArg + featArg + vdecArg
                 };
                 var userData = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -154,9 +161,26 @@ namespace GreenRhino
             webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
             // web -> 原生 消息（如「设为默认播放器」）
             webView.CoreWebView2.WebMessageReceived += OnWebMessage;
-            // 让 web 端「我的云盘」指向内嵌本机服务（同源，零 CORS）；GR_HOST 标记原生壳
+            // 让 web 端「我的云盘」指向内嵌本机服务（同源，零 CORS）；GR_HOST 标记原生壳。
+            // 诊断脚本只安装一次（window.__grDbg 守卫，幂等）：console 转发 + onerror/unhandledrejection 上报。
+            // 注意：绝不能在此之后再覆盖 console（双重包裹在某些 WebView2 下会引发
+            // "Maximum call stack size exceeded"，导致 ES module 全部加载失败、界面黑屏）。
             _ = webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
-                "window.GR_CLOUD_BASE='http://127.0.0.1:" + port + "';window.GR_HOST=true;");
+                "window.GR_CLOUD_BASE='http://127.0.0.1:" + port + "';window.GR_HOST=true;" +
+                "(function(){if(window.__grDbg)return;window.__grDbg=1;" +
+                // 关键：必须在覆盖前把原始方法 bind 出来快照。不能用 var _c=console——
+                // console 是可变对象，覆盖后 _c.log 指向的还是新函数，会无限递归自调用，
+                // 每个调用栈层都 catch 后 postMessage 一次，日志被刷爆（几十万行）。
+                "var _log=console.log.bind(console);var _warn=console.warn.bind(console);var _err=console.error.bind(console);" +
+                "var _s=function(m){try{if(window.chrome&&window.chrome.webview)window.chrome.webview.postMessage(JSON.stringify({type:'__dbg',msg:m}))}catch(e){}};" +
+                "console.log=function(){try{_log.apply(null,arguments)}catch(e){}_s(Array.prototype.slice.call(arguments).join(' '))};" +
+                "console.warn=function(){try{_warn.apply(null,arguments)}catch(e){}_s('WARN:'+Array.prototype.slice.call(arguments).join(' '))};" +
+                "console.error=function(){try{_err.apply(null,arguments)}catch(e){}_s('ERR:'+Array.prototype.slice.call(arguments).join(' '))};" +
+                "window.addEventListener('error',function(e){_s('WINDOWERR:'+(e.message||'')+' @ '+(e.filename||'')+':'+(e.lineno||''))},true);" +
+                "window.addEventListener('unhandledrejection',function(e){_s('REJECT:'+String((e.reason&&e.reason.stack)||e.reason||''))},true);" +
+                "setTimeout(function(){_s('hostOpen@3s: '+(typeof window.__hostOpen))},3000);" +
+                "setTimeout(function(){_s('hostOpen@8s: '+(typeof window.__hostOpen))},8000);" +
+                "_s('__hostOpen defined: ' + (typeof window.__hostOpen) + ', GR_HOST: ' + (typeof window.GR_HOST));})();");
             // 页面加载完成后，把双击传入的文件交给 web 层打开并播放
             webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
             webView.Source = new Uri($"http://127.0.0.1:{port}/");
@@ -211,6 +235,8 @@ namespace GreenRhino
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             _pageReady = true;
+            // 诊断：console 转发 / onerror / hostOpen 状态已在 AddScriptToExecuteOnDocumentCreatedAsync 安装一次，
+            // 这里【不再覆盖 console】（重复包裹会导致 "Maximum call stack size exceeded"，令 ES module 加载失败）。
             FlushPendingFiles();
             // 首次运行就自动注册为默认播放器（用户要求"装好即默认"），只尝试一次
             if (!_autoRegisterChecked)
@@ -252,7 +278,20 @@ namespace GreenRhino
                 var items = _server.RegisterExternalFiles(files);
                 if (items.Count == 0) return;
                 var json = System.Text.Json.JsonSerializer.Serialize(items);
-                _ = webView.CoreWebView2.ExecuteScriptAsync("window.__hostOpen && window.__hostOpen(" + json + ")");
+                App.Log("FlushPendingFiles: " + items.Count + " 个文件 -> " + json);
+                // 页面为 ES module，NavigationCompleted 时模块脚本可能尚未执行完毕，
+                // window.__hostOpen 可能还没定义。轮询等待其就绪后再调用（最长 10s），
+                // 避免因竞态导致双击文件被静默丢弃（界面全黑、什么都不播）。
+                // json 由 System.Text.Json 生成：非 ASCII 已转义为 \uXXXX、路径反斜杠已转义为 \\，
+                // 二者均为合法 JS 字符串字面量转义，直接内嵌即可。
+                // 【不要】再手动 Replace 转义：那会把 C:\ 变成字面 C:\\、把 \uXXXX 变成字面文本，
+                // 导致 web 端拿到损坏路径，File.Exists 判定失败、转码永远不启动。
+                var data = json;
+                var script = "(function(){var data=" + data + ";var n=0;(function poll(){"
+                    + "if(typeof window.__hostOpen==='function'){try{window.__hostOpen(data)}catch(e){console.error('hostOpen:',e)}}"
+                    + "else if(++n<50){setTimeout(poll,200)}"
+                    + "else{console.warn('__hostOpen 10s 内未就绪，文件被丢弃');}})()})()";
+                _ = webView.CoreWebView2.ExecuteScriptAsync(script);
             }
             catch { /* 页面尚未就绪等异常不应拖垮主窗口 */ }
         }
@@ -295,7 +334,12 @@ namespace GreenRhino
                 if (!root.TryGetProperty("type", out var t)) return;
                 var type = t.GetString();
 
-                if (type == "setDefault")
+                if (type == "__dbg")
+                {
+                    // 页面 console 诊断转发
+                    App.Log("web> " + Str(root, "msg"));
+                }
+                else if (type == "setDefault")
                 {
                     var (ok, err) = SetAsDefaultPlayer();
                     PostCast(new
@@ -412,13 +456,19 @@ namespace GreenRhino
                         PostCast(new { type = "noNative" }); // web 端会自行 reload
                     }
                 }
-                else if (type == "videoDecodeError")
+                else if (type == "videoDecodeError" || type == "videoTranscode")
                 {
                     // 视频轨解码失败（HEVC/10bit 等编码不支持）：编码问题，C# 原生 MediaElement 同样救不了，
-                    // 不走原生兜底（避免浪费传输/时间），web 端已提示用户转码。这里仅记诊断日志便于定位。
+                    // 用内置 ffmpeg 转码为 H.264 后原生播放；库内 Blob 无本地路径时走 videoBlobEnd 的转码分支。
                     string p = Str(root, "path");
                     string diag = Str(root, "diag");
-                    App.Log("视频解码失败(编码不支持，跳过原生兜底): path=" + p + " diag=" + diag);
+                    App.Log("视频解码失败(编码不支持，转码兜底): path=" + p + " diag=" + diag);
+                    if (!string.IsNullOrEmpty(p) && File.Exists(p) && MediaExts.Contains(Path.GetExtension(p)))
+                    {
+                        PostCast(new { type = "nativePauseWeb" }); // 立即暂停 web 黑屏视频的音频，避免转码期间双声轨
+                        _ = Task.Run(() => TranscodeAndPlay(p));
+                    }
+                    else { App.Log("转码兜底无法定位源文件: exists=" + File.Exists(p) + " ext=" + Path.GetExtension(p) + " p=" + p); PostCast(new { type = "transcodeFailed", reason = "视频编码不支持且无法定位源文件转码，请改用 H.264 编码的 MP4。" }); }
                 }
                 else if (type == "videoBlobChunk")
                 {
@@ -448,9 +498,11 @@ namespace GreenRhino
                 }
                 else if (type == "videoBlobEnd")
                 {
-                    // 字节传完：关闭临时文件，用原生 MediaElement 播放
+                    // 字节传完：关闭临时文件；带转码标志则先转 H.264 再原生播放，否则直接原生播放
                     string id = Str(root, "id");
                     string ext = Str(root, "ext");
+                    string tr = Str(root, "transcode");
+                    bool wantTranscode = tr == "true" || tr == "1";
                     if (string.IsNullOrEmpty(id)) return;
                     try
                     {
@@ -466,8 +518,16 @@ namespace GreenRhino
                         var path = Path.Combine(dir, fname);
                         if (File.Exists(path) && MediaExts.Contains(Path.GetExtension(path)))
                         {
-                            Dispatcher.Invoke(() => ShowNativeVideo(path));
-                            PostCast(new { type = "nativeShown" });
+                            if (wantTranscode)
+                            {
+                                PostCast(new { type = "nativePauseWeb" });
+                                _ = Task.Run(() => TranscodeAndPlay(path));
+                            }
+                            else
+                            {
+                                Dispatcher.Invoke(() => ShowNativeVideo(path));
+                                PostCast(new { type = "nativeShown" });
+                            }
                         }
                         else PostCast(new { type = "noNative" });
                     }
@@ -560,6 +620,144 @@ namespace GreenRhino
             int m = s / 60; s %= 60;
             int h = m / 60; m %= 60;
             return h > 0 ? $"{h:D2}:{m:D2}:{s:D2}" : $"{m:D2}:{s:D2}";
+        }
+
+        // ---------- HEVC/10bit 等不兼容编码自动转码（内置 ffmpeg → H.264） ----------
+        // 在后台线程转码，完成后切到 UI 线程用原生 MediaElement 播放；成功/失败都回传 web 端。
+        // 同一源文件并发去重：web 端黑屏看门狗可能在转码期间反复上报 videoTranscode，
+        // 若每个消息都启动一个 ffmpeg 进程，同一文件会同时转码几十遍，CPU 直接被拉满。
+        private static readonly HashSet<string> _transcoding = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly object _transLock = new object();
+
+        private void TranscodeAndPlay(string src)
+        {
+            lock (_transLock)
+            {
+                if (_transcoding.Contains(src)) return; // 已在转码中（或刚完成），忽略并发重复请求
+                _transcoding.Add(src);
+            }
+            try
+            {
+                var dst = TranscodeToH264(src);
+                Dispatcher.Invoke(() =>
+                {
+                    if (string.IsNullOrEmpty(dst))
+                    {
+                        PostCast(new { type = "transcodeFailed", reason = "视频转码失败，请改用 H.264 编码的 MP4。" });
+                        return;
+                    }
+                    // 转码成功：把 H.264 文件登记进内嵌服务，交由 web 端 <video> 直接播放。
+                    // 【不再用原生 MediaElement】：WebView2 的 HWND 永远盖在 WPF 控件之上（airspace），
+                    // 原生视频即使打开也会被遮挡，表现为「有声音、无画面」；而转码后的 H.264
+                    // WebView2 原生可解码，在页面内播放即可正常出图。
+                    var token = _server.RegisterExternalFile(dst);
+                    if (!string.IsNullOrEmpty(token))
+                    {
+                        var url = $"http://127.0.0.1:{_server.Port}/api/external?t={token}";
+                        App.Log("转码完成，交由 web 播放: " + url);
+                        PostCast(new { type = "transcodeReady", url, path = dst });
+                    }
+                    else
+                    {
+                        App.Log("转码完成但登记失败: " + dst);
+                        PostCast(new { type = "transcodeFailed", reason = "视频转码后无法登记播放，请改用 H.264 编码的 MP4。" });
+                    }
+                });
+            }
+            finally
+            {
+                lock (_transLock) _transcoding.Remove(src);
+            }
+        }
+
+        private string TranscodeToH264(string src)
+        {
+            try
+            {
+                var ff = EnsureFfmpeg();
+                if (string.IsNullOrEmpty(ff)) { App.Log("转码跳过：未找到内置 ffmpeg"); return null; }
+                var dir = Path.Combine(Path.GetTempPath(), "GreenRhino", "transcode");
+                Directory.CreateDirectory(dir);
+                var dst = Path.Combine(dir, HashName(src) + ".h264.mp4");
+                if (File.Exists(dst) && new FileInfo(dst).Length > 0) { App.Log("转码命中缓存: " + dst); return dst; }
+                var psi = new System.Diagnostics.ProcessStartInfo(ff)
+                {
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+                // ArgumentList 自动处理含空格/中文路径的引号
+                psi.ArgumentList.Add("-y");
+                psi.ArgumentList.Add("-hide_banner");
+                psi.ArgumentList.Add("-loglevel");
+                psi.ArgumentList.Add("error");
+                psi.ArgumentList.Add("-i");
+                psi.ArgumentList.Add(src);
+                psi.ArgumentList.Add("-c:v");
+                psi.ArgumentList.Add("libx264");
+                psi.ArgumentList.Add("-preset");
+                psi.ArgumentList.Add("veryfast");
+                psi.ArgumentList.Add("-crf");
+                psi.ArgumentList.Add("23");
+                psi.ArgumentList.Add("-pix_fmt");
+                psi.ArgumentList.Add("yuv420p");
+                psi.ArgumentList.Add("-c:a");
+                psi.ArgumentList.Add("aac");
+                psi.ArgumentList.Add("-movflags");
+                psi.ArgumentList.Add("+faststart");
+                psi.ArgumentList.Add(dst);
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc == null) return null;
+                var errTask = proc.StandardError.ReadToEndAsync();
+                if (!proc.WaitForExit(300000))
+                {
+                    try { proc.Kill(); } catch { }
+                    App.Log("ffmpeg 转码超时: " + src);
+                    return null;
+                }
+                var err = errTask.Result;
+                if (proc.ExitCode == 0 && File.Exists(dst) && new FileInfo(dst).Length > 0)
+                {
+                    App.Log("转码完成: " + dst);
+                    return dst;
+                }
+                App.Log("ffmpeg 转码失败(" + proc.ExitCode + "): " + (err ?? "").Trim());
+                return null;
+            }
+            catch (Exception ex) { App.Log("转码异常: " + ex.Message); return null; }
+        }
+
+        private static string HashName(string src)
+        {
+            try
+            {
+                var fi = new FileInfo(src);
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(src + "|" + fi.Length + "|" + fi.LastWriteTimeUtc.Ticks));
+                return Convert.ToHexString(bytes).Substring(0, 24).ToLowerInvariant();
+            }
+            catch { return Guid.NewGuid().ToString("N").Substring(0, 16); }
+        }
+
+        // 内置 ffmpeg.exe 从嵌入资源懒释放到临时目录（首次转码时执行）
+        private static string EnsureFfmpeg()
+        {
+            try
+            {
+                var dir = Path.Combine(Path.GetTempPath(), "GreenRhino");
+                Directory.CreateDirectory(dir);
+                var dst = Path.Combine(dir, "ffmpeg.exe");
+                if (File.Exists(dst) && new FileInfo(dst).Length > 100000) return dst;
+                var asm = System.Reflection.Assembly.GetExecutingAssembly();
+                using var s = asm.GetManifestResourceStream("GreenRhino.ffmpeg.exe");
+                if (s == null) { App.Log("内嵌 ffmpeg 资源缺失"); return null; }
+                using var f = new FileStream(dst, FileMode.Create, FileAccess.Write);
+                s.CopyTo(f);
+                App.Log("已释放内置 ffmpeg: " + dst);
+                return dst;
+            }
+            catch (Exception ex) { App.Log("ffmpeg 释放失败: " + ex.Message); return null; }
         }
 
         // ---------- 注册为系统默认媒体播放器 ----------

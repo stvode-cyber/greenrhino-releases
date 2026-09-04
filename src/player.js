@@ -53,6 +53,19 @@ function guessMime(name, type) {
   return type === 'video' ? 'video/mp4' : 'audio/mpeg'
 }
 
+// 通用原生兜底工具：把库内/拖入的 Blob 视频交给 C# 原生播放器时用到
+function _extOf(item) {
+  const m = /\.([a-z0-9]+)$/i.exec((item && item.name) || '')
+  return m ? m[1].toLowerCase() : 'mp4'
+}
+function _bufToB64(buf) {
+  let binary = ''
+  const bytes = new Uint8Array(buf)
+  const CH = 0x8000
+  for (let i = 0; i < bytes.length; i += CH) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CH))
+  return btoa(binary)
+}
+
 class AudioEngine {
   constructor() {
     this.el = new Audio()
@@ -78,7 +91,9 @@ class PlayerEngine {
     this.index = -1
     this.current = null
     this.mode = 'music'
-    this.playMode = 'loop' // order | loop | random | one
+    // 音乐/视频各自独立的播放模式：音乐默认列表循环，视频默认顺序播完即停（不自动重复）
+    this.playModes = { music: 'loop', video: 'order' }
+    this.playMode = this.playModes.music
     this.volume = 0.8
     this.muted = false
     this.speed = 1
@@ -191,11 +206,13 @@ class PlayerEngine {
     if (item.type === 'video') {
     this.mode = 'video'
     this.emit('mode', 'video')
+    this._syncPlayMode() // 视频用自己的播放模式（默认顺序，不自动重复）
     this.engines.forEach((e) => { try { e.el.pause(); e.gain.gain.value = 0 } catch {} })
     return this._playVideo(item, autoplay)
     }
     this.mode = 'music'
     this.emit('mode', 'music')
+    this._syncPlayMode() // 音乐用自己的播放模式（默认列表循环）
     if (this.videoEl && !this.videoEl.paused) { try { this.videoEl.pause() } catch {} }
 
     let targetIdx, useCross = false
@@ -243,6 +260,22 @@ class PlayerEngine {
     if (!this.videoEl) { this.emit('error', '视频播放器未就绪'); return }
     this._videoErrShown = false
     const switching = !this.current || item.id !== this.current.id
+    // 同一视频循环重播且已转码：直接复用转码 URL 从头播。
+    // 否则会重新把 src 设回不兼容的 HEVC blob，再次触发解码失败→转码（8s 测试片每轮循环都卡顿重载）。
+    if (!switching && this._transcodedUrl) {
+      this.current = item
+      this._videoResumeTo = 0
+      this.videoEl.src = this._transcodedUrl
+      this.videoEl.load()
+      this.videoEl.playbackRate = this.speed
+      if (autoplay) { try { await this.videoEl.play() } catch {} }
+      this._kickVideoLayer()
+      this.emit('trackchanged', item)
+      if (autoplay) this.emit('play')
+      return
+    }
+    this._transcodeStarted = false
+    this._transcodedUrl = null
     const url = this._urlFor(item)
     this.current = item
     this.videoEl.src = url
@@ -259,6 +292,21 @@ class PlayerEngine {
     this.emit('trackchanged', item)
     this.emit('chapters', this._chapters)
     if (autoplay) this.emit('play')
+  }
+
+  // C# 内置 ffmpeg 把不兼容编码（HEVC/10bit）转成 H.264 后，回传一个可由 web <video> 直接播放的 URL。
+  // 转码产物是 H.264，WebView2 原生可解码出图，因此直接换源播放即可，
+  // 绕开「原生 MediaElement 被 WebView2 HWND 遮挡（airspace）」导致的有声无画问题。
+  _playTranscodedUrl(url) {
+    const v = this.videoEl
+    if (!v) return
+    this._transcodedUrl = url
+    // _videoResumeTo 由 loadedmetadata 处理器统一消费做续播，这里只换源
+    v.src = url
+    v.load()
+    v.playbackRate = this.speed
+    v.play().catch(() => {})
+    this._kickVideoLayer() // 新源同样重建一次合成层，防 WebView2 黑屏
   }
 
   play() {
@@ -339,7 +387,25 @@ class PlayerEngine {
     this.index = currentId ? items.findIndex((i) => i.id === currentId) : (items.length ? 0 : -1)
     this.emit('queue:changed', this.queue)
   }
-  setPlayMode(m) { this.playMode = m; this.emit('playmode', m) }
+  setPlayMode(m, target) {
+    // target 指定作用于哪种媒体（music/video），默认作用于当前正在播放的媒体类型
+    const t = (target === 'music' || target === 'video') ? target : this.mode
+    this.playModes[t] = m
+    if (t === this.mode) this.playMode = m
+    this.emit('playmode', m)
+  }
+  setPlayModes(modes) { // 启动恢复：合并保存的音乐/视频各自播放模式
+    if (modes && typeof modes === 'object') {
+      if (modes.music) this.playModes.music = modes.music
+      if (modes.video) this.playModes.video = modes.video
+    }
+    this.playMode = this.playModes[this.mode] || this.playMode
+    this.emit('playmode', this.playMode)
+  }
+  _syncPlayMode() { // 切换到某类媒体时，生效该类自己保存的播放模式
+    const m = this.playModes[this.mode] || (this.mode === 'video' ? 'order' : 'loop')
+    if (this.playMode !== m) { this.playMode = m; this.emit('playmode', m) }
+  }
   _nextIndex(userTriggered) {
     const len = this.queue.length
     if (!len) return null
@@ -383,17 +449,35 @@ class PlayerEngine {
     el.addEventListener('timeupdate', () => this._onVideoTime())
     el.addEventListener('ended', () => this._onVideoEnded())
     // WebView2/Chromium 合成 bug：video 在 display:none 子树中创建、切到视频页显示后，
-    // 视频帧可能不提交（黑屏有声音）。播放真正开始时强制「隐藏→重排→显示」重建合成层。
-    el.addEventListener('playing', () => this._kickVideoLayer())
+    // 视频帧可能不提交（黑屏有声音）。黑屏 kick 在换源（_playVideo/_playTranscodedUrl）与
+    // 视频页 show() 时各做一次即可；【绝不能】在这里反复 _kickVideoLayer()——
+    // display:none→显示 会打断视频再次触发 playing，形成无限 playing 风暴，视频永远卡在开头。
+    el.addEventListener('playing', () => { this._startBlackWatchdog() })
     el.addEventListener('loadedmetadata', () => {
       if (this._videoResumeTo) { try { el.currentTime = this._videoResumeTo } catch {} ; this._videoResumeTo = 0 }
       this.emit('loaded', this.current); this._saveProgressThrottled()
+      // HEVC/不兼容编码快速判定：metadata 已加载但视频轨解不出（videoWidth=0）。
+      // 此时 audio 轨可解（有声音、currentTime 推进），Chromium 不触发 error，只能靠轮询。
+      // 这里立即复查一次，省掉 2.5s 的 playing 看门狗等待——否则双击 HEVC 视频会
+      // 「声音已在播、画面/页面要缓一会才出来」。
+      const cur = this.current
+      if (cur && cur.type === 'video' && el.videoWidth === 0 && !this._transcodedUrl && !this._transcodeStarted && !el.error) {
+        setTimeout(() => {
+          const v = this.videoEl
+          if (!v || v !== el || !this.current || this.current.type !== 'video') return
+          if (el.videoWidth === 0 && !this._transcodedUrl && !this._transcodeStarted && !el.error) {
+            console.log('[gr] loadedmetadata but videoWidth=0 -> transcode (HEVC?)')
+            this._startTranscode(this.current, this._videoDiag())
+          }
+        }, 500)
+      }
     })
     el.addEventListener('error', () => {
+      console.log('[gr] video error fired, code=' + (this.videoEl && this.videoEl.error ? this.videoEl.error.code : '?'))
       if (this._videoErrShown) return
       this._videoErrShown = true
-      const it = this.current
-      this.emit('error', `「${it?.name || '该视频'}」解码失败：很可能是 H.265/HEVC 等浏览器不支持的编码（MP4 容器但非 H.264）。请用 HandBrake / 格式工厂转码为 H.264 的 MP4，或等待绿角犀内置转码。`, it)
+      // 直接报错（如 MEDIA_ERR_SRC_NOT_SUPPORTED）多半是 HEVC/10bit 编码：交给内置转码
+      this._startTranscode(this.current, this._videoDiag())
     })
     el.volume = this.volume
     el.muted = this.muted
@@ -409,11 +493,171 @@ class PlayerEngine {
   _kickVideoLayer() {
     const v = this.videoEl
     if (!v) return
+    // 同一视频源只 kick 一次：反复 display 切换会打断播放、再次触发 playing（风暴），
+    // 视频永远卡在开头附近不动（症状：currentTime 恒定、paused=false）。换源后 currentSrc 变化可再 kick。
+    const src = v.currentSrc || v.src || ''
+    if (this._kickSrc === src) return
+    this._kickSrc = src
+    // 3 秒内只允许重建一次合成层，从源头掐断循环（双保险）。
+    const now = Date.now()
+    if (this._kickTs && now - this._kickTs < 3000) return
+    this._kickTs = now
     v.style.display = 'none'
     void v.offsetWidth // 强制同步重排
     requestAnimationFrame(() => { v.style.display = '' })
     // 通知 C# 宿主强制重绘（WebView2 黑屏二次保险；纯浏览器环境无 webview 对象，静默忽略）
     try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoKick' })) } catch {}
+  }
+  // 视频黑屏根因诊断：把视频元素的关键状态一次性收集，经 webview 消息回传 C# 写日志。
+  // 用于区分「overlay 未提交」（videoWidth=0 但无 error、音频推进）与「解码失败」（v.error 有值）。
+  _videoDiag() {
+    const v = this.videoEl
+    if (!v) return null
+    let canPlay = 'maybe'
+    try { canPlay = (this.current && this.current.mime) ? (PROBE_V.canPlayType(this.current.mime) || 'maybe') : 'maybe' } catch {}
+    return {
+      readyState: v.readyState,            // 0..4（HAVE_NOTHING..HAVE_ENOUGH_DATA）
+      networkState: v.networkState,        // 0..3
+      videoWidth: v.videoWidth,
+      videoHeight: v.videoHeight,
+      currentTime: +(v.currentTime || 0).toFixed(2),
+      duration: isNaN(v.duration) ? 0 : +v.duration.toFixed(2),
+      paused: v.paused,
+      errorCode: v.error ? v.error.code : 0,   // 1=ABORTED 2=NETWORK 3=DECODE 4=SRC_NOT_SUPPORTED
+      canPlay
+    }
+  }
+  // 第三道防线：黑屏有声音兜底。L1(视频不接 WebAudio 图) + L2(kick 重建合成层) + L3(C# 宿主微抖重绘)
+  // 都没兜住时：播放 2.5s 仍确认「解码正常但画面未渲染」→ 交给 C# 原生 MediaElement 兜底播放。
+  // 根因分流：
+  //   1) 编码不支持（H.265/HEVC/10bit）：视频轨静默解不出 → videoWidth=0 且音频推进 → 原生同样救不了，直接提示转码。
+  //   2) 解码正常但画面黑（overlay 未提交 / 软件合成异常 / 远程虚拟显示器）：videoWidth>0 但采样帧全黑 → 原生兜底。
+  // 仅 reload 一次（sessionStorage 守卫），避免编码不支持导致的无限刷新循环。
+  _startBlackWatchdog() {
+    const v = this.videoEl
+    if (!v) return
+    // 同一曲目只启动一次看门狗：playing 可能因各类原因重复触发，避免无限重启定时器、
+    // 无限输出日志、反复判定。换曲（item.id 变化）后再重新武装。
+    const id = this.current && this.current.id
+    if (this._watchItemId === id) return
+    this._watchItemId = id
+    clearTimeout(this._blackTimer)
+    this._blackTimer = setTimeout(() => {
+      console.log('[gr] watchdog check: t=' + (v ? v.currentTime : '?') + ' vw=' + (v ? v.videoWidth : '?') + ' vh=' + (v ? v.videoHeight : '?') + ' paused=' + (v ? v.paused : '?') + ' err=' + (v && v.error ? v.error.code : '0'))
+      try {
+        if (!v || v.paused) return
+        if ((v.currentTime || 0) < 0.5) return   // 还没真正开始播放，不判定
+        const item = this.current
+        const diag = this._videoDiag()
+        const audioPlaying = (v.currentTime || 0) > 0.5
+        const noVideoSize = v.videoWidth === 0 && v.videoHeight === 0
+        // 1) 编码类失败：明确 error，或「视频尺寸为 0 且音频已在推进」
+        const decodeFailed = !!v.error || (noVideoSize && audioPlaying)
+        if (decodeFailed) {
+          console.log('[gr] decodeFailed -> transcode')
+          // 编码不支持（HEVC/10bit）：交给内置转码（C# ffmpeg 转 H.264 后原生播放）
+          this._startTranscode(item, diag)
+          return
+        }
+        // 2) 解码正常但画面未渲染：采样当前帧近乎纯黑 → 判定黑屏（软件渲染/虚拟显示器下 videoWidth 往往正常）。
+        //    有尺寸且帧非黑 → 画面正常，不干预。
+        const sampledBlack = this._sampleVideoIsBlack(v)
+        if (!noVideoSize && !sampledBlack) return
+        // 已切到转码后的 H.264（web 内播放）时不走原生兜底：
+        // 原生 MediaElement 会被 WebView2 HWND 遮挡（airspace），接管反而会暂停掉可见的画面。
+        if (this._transcodedUrl) return
+        const path = item && item.localPath
+        if (path) {
+          // 本地文件（双击/外部打开）：通知 C# 用原生 MediaElement 播放，绕开 WebView2 overlay
+          try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoNoFrame', path, diag })) } catch {}
+          // 给 C# 1.5s 接管；收到 nativeShown → 取消 reload；收到 noNative 或超时 → reload 一次自救
+          this._nativeTaken = false
+          this._blackWait = setTimeout(() => {
+            if (this._nativeTaken) return
+            if (!sessionStorage.getItem('__grBlackReload')) {
+              sessionStorage.setItem('__grBlackReload', '1')
+              location.reload()
+            }
+          }, 1500)
+        } else {
+          // 库内/拖入的 Blob 视频（无本地路径）：把字节传给 C#，由原生播放器接管
+          this._startBlobFallback(item)
+        }
+      } catch {}
+    }, 2500)
+  }
+  // 把当前视频帧画到离屏 canvas 采样亮度，全黑则判定画面未渲染。
+  // 覆盖「解码正常(videoWidth>0)但合成层黑屏」的场景（软件渲染 / 远程虚拟显示器常见）。
+  _sampleVideoIsBlack(v) {
+    try {
+      if (!v || v.videoWidth === 0 || v.readyState < 2) return false
+      const c = document.createElement('canvas')
+      c.width = 48; c.height = 27
+      const ctx = c.getContext('2d', { willReadFrequently: true })
+      ctx.drawImage(v, 0, 0, 48, 27)
+      const d = ctx.getImageData(0, 0, 48, 27).data
+      let sum = 0, n = d.length / 4
+      for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2]
+      return (sum / n) < 6   // 平均 RGB 亮度和 < 6/255 视为纯黑
+    } catch { return false }
+  }
+  // 通用原生兜底：库内/拖入的 Blob 视频没有本地路径，先把字节分片传给 C#，
+  // 由其写入临时文件并用原生 MediaElement 播放，覆盖「无 localPath」的视频源。
+  async _startBlobFallback(item, opts = {}) {
+    if (!item || !item.blob) { this._scheduleBlackReload(15000); return }
+    if (!window.chrome || !window.chrome.webview) { this._scheduleBlackReload(15000); return }
+    this._nativeTaken = false
+    try {
+      console.log('[gr] 原生兜底：无本地路径，开始向 C# 传输视频字节')
+      await this._sendBlobToNative(item)
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'videoBlobEnd', id: item.id, ext: _extOf(item), transcode: !!opts.transcode }))
+    } catch (e) { console.error('[gr] 原生兜底传输失败', e) }
+    // C# 接管后回 nativeShown → 取消 reload；超时（转码 300s / 直播 120s）仍未接管 → reload 一次自救
+    this._blackWait = setTimeout(() => {
+      if (this._nativeTaken) return
+      if (!sessionStorage.getItem('__grBlackReload')) { sessionStorage.setItem('__grBlackReload', '1'); location.reload() }
+    }, opts.transcode ? 300000 : 120000)
+  }
+  async _sendBlobToNative(item) {
+    const blob = item.blob
+    const ext = _extOf(item)
+    const CHUNK = 256 * 1024
+    const total = Math.max(1, Math.ceil(blob.size / CHUNK))
+    for (let i = 0; i < total; i++) {
+      const slice = blob.slice(i * CHUNK, (i + 1) * CHUNK)
+      const buf = await slice.arrayBuffer()
+      const b64 = _bufToB64(buf)
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'videoBlobChunk', id: item.id, ext, index: i, total, data: b64 }))
+      if (i % 16 === 0) await new Promise((r) => setTimeout(r, 0)) // 让出事件循环，避免卡死 UI
+    }
+  }
+  _scheduleBlackReload(ms) {
+    if (sessionStorage.getItem('__grBlackReload')) return
+    sessionStorage.setItem('__grBlackReload', '1')
+    setTimeout(() => location.reload(), ms)
+  }
+  // 编码不支持（HEVC/10bit）自动转码：WebView2 与原生 MediaElement 都解不了该视频轨，
+  // 交给 C# 用内置 ffmpeg 转成 H.264 再原生播放。本地文件直接给路径；库内 Blob 走分片传输。
+  _startTranscode(item, diag) {
+    if (!item || this._transcodeStarted) return
+    this._transcodeStarted = true
+    // 立即暂停 web 端黑屏视频：停止双声轨，也停止可能存在的 playing 事件风暴
+    try { if (this.videoEl && !this.videoEl.paused) this.videoEl.pause() } catch {}
+    const path = item.localPath
+    const name = item.name || '该视频'
+    this.emit('transcode', `检测到不兼容编码，正在转码「${name}」为 H.264，请稍候…`)
+    if (path) {
+      try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoTranscode', path, diag })) } catch {}
+      this._nativeTaken = false
+      this._blackWait = setTimeout(() => {
+        if (this._nativeTaken) return
+        if (!sessionStorage.getItem('__grBlackReload')) { sessionStorage.setItem('__grBlackReload', '1'); location.reload() }
+      }, 300000)
+    } else if (item.blob) {
+      this._startBlobFallback(item, { transcode: true })
+    } else {
+      this.emit('error', `「${name}」视频轨解码失败（很可能是 H.265/HEVC 编码），且无法定位源文件转码。请改用 H.264 编码的 MP4。`, item)
+    }
   }
   _onVideoEnded() { this._advance(true) }
   setAB(a, b) { this._ab = { a, b } }
@@ -512,6 +756,30 @@ class PlayerEngine {
 }
 
 export const player = new PlayerEngine()
+
+// 原生视频兜底桥接：接收 C# 回传（WebView2 视频黑屏时由 C# 用 MediaElement 直接播放本地文件）
+if (window.chrome && window.chrome.webview && typeof window.chrome.webview.addEventListener === 'function') {
+  window.chrome.webview.addEventListener('message', (e) => {
+    let msg
+    try { const d = typeof e.data === 'string' ? e.data : (e.data && e.data.data) || ''; msg = JSON.parse(d) } catch { return }
+    if (!msg || !msg.type) return
+    if (msg.type === 'nativeShown') { player._nativeTaken = true; clearTimeout(player._blackWait) }
+    else if (msg.type === 'noNative') {
+      player._nativeTaken = true; clearTimeout(player._blackWait)
+      if (!sessionStorage.getItem('__grBlackReload')) { sessionStorage.setItem('__grBlackReload', '1'); location.reload() }
+    } else if (msg.type === 'nativePauseWeb') { try { player.pause() } catch {} }
+    else if (msg.type === 'transcodeReady') {
+      // C# 已用内置 ffmpeg 把 HEVC/10bit 转成 H.264，回传可由 web <video> 直接播放的 URL
+      player._nativeTaken = true; clearTimeout(player._blackWait)
+      if (msg.url) player._playTranscodedUrl(msg.url)
+    }
+    else if (msg.type === 'transcodeFailed') {
+      player._nativeTaken = true; clearTimeout(player._blackWait)
+      player.emit('error', msg.reason || '视频转码失败，请改用 H.264 编码的 MP4。')
+    }
+  })
+}
+
 // 同步设置
 getSettings().then((s) => {
   player.volume = s.defaultVolume

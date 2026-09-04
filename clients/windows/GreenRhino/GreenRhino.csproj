@@ -28,6 +28,9 @@
     <!-- wwwroot 由 build-windows.bat 在 copy-web 后压缩为 wwwroot.zip，
          作为嵌入资源打进 exe，运行时自动解压到临时目录（真正单文件自包含） -->
     <EmbeddedResource Include="wwwroot.zip" />
+    <!-- 内置 ffmpeg.exe：HEVC/10bit 等不兼容编码自动转码为 H.264（懒释放到临时目录），
+         体积大（约几十 MB），仅在需要转码时取出，不占启动开销 -->
+    <EmbeddedResource Include="ffmpeg.exe" />
   </ItemGroup>
 
 </Project>

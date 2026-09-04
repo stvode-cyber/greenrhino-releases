@@ -12,6 +12,9 @@ clients/**/bin/
 clients/**/obj/
 clients/**/wwwroot/
 clients/**/wwwroot.zip
+
+# 内置 ffmpeg 转码器（98MB 大二进制，构建必需但严禁入库；缺失会导致转码链路失效）
+clients/windows/GreenRhino/ffmpeg.exe
 clients/ios/*.xcodeproj
 clients/ios/build/
 
