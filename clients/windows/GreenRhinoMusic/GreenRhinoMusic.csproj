@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <!-- 托盘（NotifyIcon）需要 WinForms 运行时，与本项目的 WPF 可共存 -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>GreenRhino</RootNamespace>
+    <AssemblyName>GreenRhinoMusic</AssemblyName>
+    <AssemblyTitle>绿角犀音乐 · 离线音乐播放器</AssemblyTitle>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Version>1.1.0.0</Version>
+    <!-- 自包含发布：用户无需安装 .NET -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- wwwroot 由 build-windows.bat 在 copy-web 后压缩为 wwwroot.zip，
+         作为嵌入资源打进 exe，运行时自动解压到临时目录（真正单文件自包含） -->
+    <EmbeddedResource Include="wwwroot.zip" />
+  </ItemGroup>
+
+</Project>

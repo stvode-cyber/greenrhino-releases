@@ -21,7 +21,10 @@ clients/ios/build/
 # 签名与本地配置（含密钥，严禁入库）
 *.keystore
 *.jks
-clients/android/local.properties
+.secrets.env
+clients/android-*/local.properties
+# 旧单 App 目录（已拆分为 android-music / android-player，待删除）
+# clients/android/local.properties
 clients/ios/ExportOptions.plist
 cert.p12
 profile.mobileprovision

@@ -1,44 +1,55 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-REM GreenRhino Windows build (WebView2 self-contained exe)
-REM Requires: Node.js + npm, .NET 8 SDK
+REM ============================================================
+REM GreenRhino Windows v16 build (dual independent apps)
+REM   GreenRhinoMusic  (Kugou green, ~164 MB)
+REM   GreenRhinoPlayer (amber orange, ~262 MB, bundles ffmpeg)
+REM
+REM Prereq:
+REM   Node.js 20+   (build-assets.mjs SVG rasterization)
+REM   .NET 8 SDK    (dotnet publish)
+REM   JDK 17, Android SDK  -- optional, not needed here
+REM
+REM NOTE: Old merged shell clients/windows/GreenRhino/ is deprecated
+REM       and NO LONGER PUBLISHED. Manually delete if not needed.
+REM ============================================================
 
-echo [1/5] Checking dependencies (node / dotnet)...
-where node >nul 2>nul || (echo ERROR: node not found. Install Node.js first. && pause && exit /b 1)
-where dotnet >nul 2>nul || (echo ERROR: dotnet not found. Install .NET 8 SDK first. && pause && exit /b 1)
-dotnet --version | findstr /R "8\." >nul 2>nul || (echo WARN: .NET 8 SDK recommended; current version shown above)
+echo [1/5] Checking dependencies ...
+where node >nul 2>nul || (echo ERROR: node not found && pause && exit /b 1)
+where dotnet >nul 2>nul || (echo ERROR: dotnet not found && pause && exit /b 1)
+dotnet --version | findstr /R "8\." >nul 2>nul || (echo WARN: .NET 8 SDK recommended)
 
-echo [2/5] Installing playwright (for SVG icon rasterization)...
+echo [2/5] Installing playwright ...
 call npm i
 if errorlevel 1 (echo npm i failed && pause && exit /b 1)
 
-echo [3/5] Installing playwright chromium (first run only, ~150MB)...
-call npx playwright install chromium
-if errorlevel 1 (echo WARN: playwright install chromium failed (ignore if using system Edge, see below))
-
-echo [4/5] Generating icons/assets + copying web app to windows/wwwroot...
+echo [3/5] Generating icons/assets + copying web to wwwroot ...
 node build-assets.mjs
 if errorlevel 1 (echo build-assets.mjs failed && pause && exit /b 1)
 node copy-web.mjs
 if errorlevel 1 (echo copy-web.mjs failed && pause && exit /b 1)
+REM copy-web.mjs already handles:
+REM   release/pwa-site-music  -> windows\GreenRhinoMusic\wwwroot (+wwwroot.zip)
+REM   release/pwa-site-player -> windows\GreenRhinoPlayer\wwwroot (+wwwroot.zip)
 
-REM Bundle wwwroot into wwwroot.zip (embedded resource, makes exe truly self-contained)
-powershell -NoProfile -Command "Compress-Archive -Path 'windows\GreenRhino\wwwroot\*' -DestinationPath 'windows\GreenRhino\wwwroot.zip' -Force"
-if errorlevel 1 (echo FAILED to create wwwroot.zip && pause && exit /b 1)
+echo [4/5] Publishing self-contained exes (win-x64, single file) ...
+dotnet publish windows\GreenRhinoMusic\GreenRhinoMusic.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o windows\GreenRhinoMusic\publish
+if errorlevel 1 (echo GreenRhinoMusic publish FAILED && pause && exit /b 1)
 
-echo [5/5] Publishing self-contained Windows exe (win-x64, single file)...
-dotnet publish windows\GreenRhino\GreenRhino.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o windows\GreenRhino\publish
-if errorlevel 1 (echo dotnet publish failed && pause && exit /b 1)
+dotnet publish windows\GreenRhinoPlayer\GreenRhinoPlayer.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o windows\GreenRhinoPlayer\publish
+if errorlevel 1 (echo GreenRhinoPlayer publish FAILED && pause && exit /b 1)
 
 echo.
-echo ===================================================
-echo  DONE. exe at: windows\GreenRhino\publish\GreenRhino.exe
-echo  Double-click to play offline (no .NET install needed).
-echo ===================================================
+echo =======================================================
+echo  DONE. Single-file self-contained exes:
+echo    windows\GreenRhinoMusic\publish\GreenRhinoMusic.exe
+echo    windows\GreenRhinoPlayer\publish\GreenRhinoPlayer.exe
 echo.
-echo  Note: if step 3 (chromium) failed, use system Edge instead:
-echo    set PW_CHANNEL=msedge
-echo  then re-run this script.
-echo.
+echo  Optional: Inno Setup installers
+echo    Install Inno Setup 6, then run:
+echo      ISCC windows\GreenRhinoMusic\installer-music.iss
+echo      ISCC windows\GreenRhinoPlayer\installer-player.iss
+echo =======================================================
+
 pause

@@ -57,7 +57,8 @@ echo    Settings - Secrets and variables - Actions - New repository secret
 echo.
 echo  (Android TWA)
 echo    ANDROID_PWA_URL           e.g. https://lujax.fun
-echo    ANDROID_KEYSTORE_BASE64   base64 of clients/android/app/upload-keystore.jks
+echo    ANDROID_KEYSTORE_BASE64   base64 of clients/android-music/app/upload-keystore.jks
+echo                              (same keystore also used by android-player)
 echo    ANDROID_KEYSTORE_PASSWORD
 echo    ANDROID_KEY_ALIAS         (e.g. upload)
 echo    ANDROID_KEY_PASSWORD

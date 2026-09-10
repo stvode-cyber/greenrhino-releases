@@ -2,7 +2,9 @@ name: Build Windows EXE
 
 # 推 tag（如 v1.2.3）即自动出包 Windows 单文件 exe，并作为 artifact / release 资产上传。
 # 用法：git tag v1.0.0 && git push origin v1.0.0
+# 矩阵并行构建双独立 App（绿角犀音乐 / 绿角犀播放器）。
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -10,6 +12,18 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        role:
+          - key: music
+            csproj: clients/windows/GreenRhinoMusic/GreenRhinoMusic.csproj
+            exe: GreenRhinoMusic.exe
+            artifact: GreenRhinoMusic-win-x64
+          - key: player
+            csproj: clients/windows/GreenRhinoPlayer/GreenRhinoPlayer.csproj
+            exe: GreenRhinoPlayer.exe
+            artifact: GreenRhinoPlayer-win-x64
     steps:
       - uses: actions/checkout@v4
 
@@ -23,27 +37,28 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Copy web + pack zip
-        shell: bash
+      - name: Build PWA sites + assets + copy web
         run: |
+          npm i --prefix clients
+          node scripts/build-web.mjs
+          node clients/build-assets.mjs
           node clients/copy-web.mjs
-          python clients/zip-wwwroot.py
 
       - name: Publish self-contained single-file exe
         shell: bash
         run: |
-          dotnet publish clients/windows/GreenRhino/GreenRhino.csproj \
+          dotnet publish ${{ matrix.csproj }} \
             -c Release -r win-x64 --self-contained \
             -p:PublishSingleFile=true -o publish
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GreenRhino-windows
-          path: publish/GreenRhino.exe
+          name: ${{ matrix.artifact }}
+          path: publish/${{ matrix.exe }}
 
       - name: Release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: publish/GreenRhino.exe
+          files: publish/${{ matrix.exe }}

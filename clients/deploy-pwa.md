@@ -1,7 +1,8 @@
 # 绿角犀 PWA 部署指南（建议①）
 
-> 目标：把 `dist/` 部署到 https 域名（lujax.fun），使 PWA 可安装、并可作为 Android TWA / 华为快应用 / iOS  Safari「添加到主屏」的基础。
-> 沙箱无外网，本文件只提供步骤，**真实部署需在本机/服务器执行**。
+> 目标：把 `release/pwa-site/` 部署到 https 域名，使 PWA 可安装、并可作为 Android TWA / 华为快应用 / iOS  Safari「添加到主屏」的基础。
+> ✅ **已上线（2026-09-08）**：**https://greenrhino.pages.dev**（Cloudflare Pages 直接上传部署，`release/pwa-site/` 全量内容，含 `.well-known/assetlinks.json`）。`manifest / sw.js / src / icons` 已 curl 验证正确。
+> 后续更新站点：Cloudflare 控制台 → Workers & Pages → Pages → `greenrhino` → Create deployment → 拖入 zip（或 `release/pwa-site/` 文件夹）→ Save and deploy；有 Node 环境也可 `wrangler pages deploy release/pwa-site --project-name greenrhino`。以下为本机/自建服务器部署参考（未备案域名走 Cloudflare Pages 即可，无需自建）。
 
 ## 0. 前置
 - 域名已解析到目标服务器（lujax.fun 已注册，Aliyun 个人实名）。
@@ -16,10 +17,11 @@ python -m http.server 8080
 # 检查：能播放、歌词三来源、控制台无报错、Lighthouse PWA 项通过
 ```
 
-## 2. 上传 dist/ 到服务器
-把 `dist/` 下**全部内容**（index.html / sw.js / manifest.webmanifest / src/ / icons/）上传到站点根或子目录。
-- 根部署：直接传 `dist/*` → `https://lujax.fun/`
+## 2. 上传站点到服务器
+把 `release/pwa-site/` 下**全部内容**（index.html / sw.js / manifest.webmanifest / src/ / icons/ / .well-known/）上传到站点根或子目录。
+- 根部署：直接传 `release/pwa-site/*` → `https://lujax.fun/`
 - 子目录部署：传到 `https://lujax.fun/player/`，**必须同步改** `manifest.webmanifest` 的 `start_url` / `scope` 为 `/player/`，并把 `sw.js` 里缓存前缀改为 `/player/`（否则 scope 不匹配，PWA 不安装）。
+- ⚠️ 不要直接上传 `dist/`（含 500MB Windows 安装包，无需上站）。
 
 ## 3. nginx 配置示例（根部署）
 ```nginx

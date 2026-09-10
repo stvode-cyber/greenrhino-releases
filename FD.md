@@ -80,9 +80,41 @@
 
 ## FD-V10 音乐 / 视频完全分离成两个页面
 - **说明**：删除合并「媒体库」页与顶栏过滤标签，改为**音乐页 = 音乐库 + 播放器**、**视频页 = 视频库 + 播放器**两个独立页面，侧边栏直接切换。
-- **注释**：`src/ui/library.js` 重构为复用组件 `mediaLibrary(app, type)`（按类型过滤 + 多选/查重/拖拽/空态）；`music.js`/`video.js` 各自嵌入一个 `mediaLibrary` 并拼上播放器区（双栏 grid：左库右播）；`main.js` 移除 `library` 页引用，`app.mode` 随页面切换，搜索同时刷两库，导入后跳到导入内容所属页，续播时切到所播媒体页。播放模式独立：`playModes={music:'loop',video:'order'}`。**坑**：任何地方不得再引用 `library` 页 / `app.filter` / `buildLibrary`；sw v8→v9。
+- **注释**：`src/ui/library.js` 重构为复用组件 `mediaLibrary(app, type)`（按类型过滤 + 多选/查重/拖拽/空态）；`music.js`/`videoPlayer.js` 各自嵌入一个 `mediaLibrary` 并拼上播放器区；`main.js` 移除 `library` 页引用，`app.mode` 随页面切换，搜索同时刷两库，导入后跳到导入内容所属页，续播时切到所播媒体页。播放模式独立：`playModes={music:'loop',video:'order'}`。**坑**：任何地方不得再引用 `library` 页 / `app.filter` / `buildLibrary`；sw v8→v9。
 - **目标**：↔VG · ↔G（音乐/视频界面彻底分开）
 - **关联**：↔A（2026-09-04 界面重构）
+
+---
+
+## FD-V11 视频封面自动抽帧（缩略图）
+- **说明**：无封面的本地视频在后台自动 seek 到前段抽一帧做缩略图，缓存进 IndexedDB `thumbnails` store，网格即时刷新；音乐仍用 ID3 内嵌封面，视频封面**完全离线**（不需要联网）。
+- **注释**：`src/videoThumb.js`：`queueVideoThumbs(list)` 把缺图且带 blob 的视频排进串行队列（逐条抽帧避免一次全量卡 UI）；`getThumbsMap()` 读取全部缩略图合并到卡片；抽帧成功 emit `thumb:updated` 触发库刷新，失败（HEVC 等无法解码 / 10s 超时）静默标记 `failed` 不再重试。**坑**：① 只对 `it.blob`（库内/拖入）抽帧，外部打开（localPath）视频跳过；② `src/sw.js` CORE 预缓存必须包含 `videoThumb.js`（v12 曾漏，v13 补上）；③ 抽帧画布限宽 320px（`scale=min(1,320/max(w,h))`），JPEG 0.8 控制体积。
+- **目标**：↔VG · ↔G（视频库有画面感封面，不靠图标）
+- **关联**：↔A（2026-09-05 视频网格缩略图；sw v12→v13）
+
+---
+
+## FD-V12 视频页播放器重构（空态网格 + 增强控制条 + 窗口角色化）
+- **说明**：`src/ui/video.js` 重构为 `src/ui/videoPlayer.js`（死代码 video.js 已删）：**空态**用视频库网格铺满整个主区域（不再是一块留白黑屏）；**播放态**画面铺满整屏（`object-fit:cover` 不留黑边）+ 增强控制条；新增**生成片段**（C# ffmpeg 按 A/B 点剪辑并保存）。
+- **注释**：控制条能力 = 倍速 0.5~2x / 音轨切换 / 字幕轨切换 / 载入字幕(.srt/.vtt) / 载入章节(.txt/.lrc/.csv) / 画中画 / 旋转 / 画面比例(cover/contain) / 截图 / AB 循环 / 生成片段；音轨/字幕轨选择按 `trackPrefs` 记忆（同一视频下次自动套用）。窗口角色化：C# 注入 `__winRole = 'hub'|'music'|'video'`，`main.js` 按角色只构建本窗页面，`openRoleWindow` 走 C# 开独立窗口；`win-video` 类藏侧栏做纯黑三段式播放器。转码进度面板（`transcode-progress`）随 `transcode/transcodeProgress/transcodeDone` 事件显示/收起。**坑**：生成片段仅支持本地文件（`item.localPath`，双击/外部打开场景）；`clip`→C# `MakeClip`→`clipResult` 消息链路两端必须同时部署。
+- **目标**：↔VG · ↔G（视频页更好用、可剪辑）
+- **关联**：↔FD-V8（复用 ffmpeg 做片段剪辑）· ↔FD-V10（mediaLibrary 复用）· ↔A（2026-09-05 播放器重构；sw v12）
+
+---
+
+## FD-V13 播放队列增强（搜索过滤 + 保存为歌单）
+- **说明**：队列抽屉顶部新增**筛选输入框**（按标题/艺术家/文件名即时过滤，只影响显示、不动队列本身）与**保存为歌单**按钮（把当前队列一键存为歌单，复用 `savePlaylist`）。条目计数实时显示「匹配 n / 总数」。
+- **注释**：`src/ui/queue.js` 重构为**静态骨架 + 列表区**两段：头部（标题/保存/关闭）、搜索框、计数在 `buildQueue` 时一次性构建，队列变化（`queue:changed`/`trackchanged`）只重建 `dlist` 列表区——避免每次敲键重建输入框导致焦点丢失。过滤后点击行按 `id` 反查真实队列索引再播放（不直接用行序号）；拖拽重排/移除仍按 `id` 操作，过滤态下也安全。关闭抽屉时清空关键词。样式 `src/style.css` 新增 `.q-search`/`.q-count`。
+- **目标**：↔G（队列更易用）
+- **关联**：↔FD-V10（playlists 保存队列链路复用）· ↔A（2026-09-08 队列增强）
+
+---
+
+## FD-V14 续播竞态修复（音乐/视频通用）
+- **说明**：续播点（`getProgress` 异步 IndexedDB 读取）原在 `set src`/`load()` **之后**才读取，而 `loadedmetadata` 是异步回调——本地文件元数据加载快于/不慢于 IndexedDB 时，会**错过 loadedmetadata 导致不续播**（独立视频窗口/快盘尤为明显）。修复：**先算好续播点再换源**，由 `loadedmetadata`/`_onMeta` 统一消费。
+- **注释**：`_playVideo` 与 `_setEngineSource`（音乐）均改为「先 `getProgress` → 再 `src/load`」；在线预览分支提前 `return`（不写进度、不续播，行为不变）；视频转码换源场景 `_videoResumeTo` 在首次 `loadedmetadata` 前保留，转码产物同样续播（与 FD-V8 链路兼容）。纯 web 改动，随 sw v14 重生成 wwwroot.zip 内嵌。
+- **目标**：↔VG · ↔G（续播可靠，各窗口一致）
+- **关联**：↔FD-V12（独立视频窗口）· ↔FD-V8（转码换源续播）· ↔A（2026-09-08；sw v14）
 
 ---
 

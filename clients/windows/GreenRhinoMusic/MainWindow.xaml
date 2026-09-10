@@ -1,0 +1,41 @@
+<Window x:Class="GreenRhino.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="绿角犀音乐"
+        Width="1180" Height="760"
+        MinWidth="820" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        Background="#0E1116">
+    <Grid>
+        <wv2:WebView2 x:Name="webView" />
+
+        <!-- 原生视频兜底层：WebView2 视频黑屏（有声音无画面）时由 C# 启用，
+             走 WPF 自带 MediaElement（独立 D3D 表面），彻底绕开 WebView2 的 overlay 合成坑 -->
+        <MediaElement x:Name="NativeVideo" Visibility="Collapsed"
+                      LoadedBehavior="Manual" UnloadedBehavior="Manual"
+                      Stretch="Uniform" />
+
+        <!-- 原生兜底控制条 -->
+        <Border x:Name="NativeBar" Visibility="Collapsed"
+                Background="#1B1F27" Opacity="0.92"
+                VerticalAlignment="Bottom" Height="56">
+            <Grid Margin="12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="NativePlayPause" Grid.Column="0" Content="⏸"
+                        Width="40" Height="34" Margin="0,0,10,0" />
+                <Slider x:Name="NativeSeek" Grid.Column="1" VerticalAlignment="Center"
+                        Minimum="0" Maximum="1" Value="0" />
+                <TextBlock x:Name="NativeTime" Grid.Column="2" Foreground="#C8D0DA"
+                           VerticalAlignment="Center" Margin="10,0" Text="00:00 / 00:00" />
+                <Button x:Name="NativeClose" Grid.Column="3" Content="✕ 关闭"
+                        Width="64" Height="34" Margin="10,0,0,0" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

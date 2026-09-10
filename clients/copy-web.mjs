@@ -18,8 +18,7 @@ const OUT = process.env.OUT_ROOT
 
 const SRC = PROJ
 const targets = [
-  path.join(OUT, 'clients', 'windows', 'GreenRhino', 'wwwroot'),
-  path.join(OUT, 'clients', 'ios', 'GreenRhino', 'wwwroot')
+  path.join(OUT, 'clients', 'windows', 'GreenRhino', 'wwwroot')
 ]
 
 const items = [
@@ -47,4 +46,42 @@ for (const t of targets) {
   }
   console.log('复制 web 应用到', path.relative(OUT, t))
 }
+
+// 双独立 App（Windows 双 exe）：把角色化 web 站点复制到各自 wwwroot 并压制 wwwroot.zip。
+// release/pwa-site-music -> GreenRhinoMusic/wwwroot(+wwwroot.zip)；player 同理。
+// 压缩必须让 index.html 等位于 zip 顶层（嵌入资源解压路径依赖于此）。
+function buildRoleSite(srcDir, wwwrootDir) {
+  const src = path.resolve(OUT, 'release', srcDir)
+  if (!fs.existsSync(src)) { console.log('跳过（目录不存在）:', src); return }
+  try { fs.rmSync(wwwrootDir, { recursive: true, force: true }) } catch (e) { }
+  fs.mkdirSync(wwwrootDir, { recursive: true })
+  for (const name of fs.readdirSync(src)) copyPath(path.join(src, name), path.join(wwwrootDir, name))
+  console.log('复制角色站点到', path.relative(OUT, wwwrootDir))
+}
+
+const roleApps = [
+  { site: 'pwa-site-music', wwwroot: path.join(OUT, 'clients', 'windows', 'GreenRhinoMusic', 'wwwroot') },
+  { site: 'pwa-site-player', wwwroot: path.join(OUT, 'clients', 'windows', 'GreenRhinoPlayer', 'wwwroot') }
+]
+for (const r of roleApps) buildRoleSite(r.site, r.wwwroot)
+
+// iOS 双独立 App（Music / Player）：仅将角色化 web 站点复制到各自 wwwroot，不压制 zip。
+// 每个 target 的 bundle 内 wwwroot 位于顶层，LocalServer.locateRoot() 的 `base/wwwroot` 即可命中。
+// Windows 的 Compress-Archive 仅针对上方 roleApps（Windows 双 wwwroot），不波及 iOS。
+const iosApps = [
+  { site: 'pwa-site-music', wwwroot: path.join(OUT, 'clients', 'ios', 'Music', 'wwwroot') },
+  { site: 'pwa-site-player', wwwroot: path.join(OUT, 'clients', 'ios', 'Player', 'wwwroot') }
+]
+for (const r of iosApps) buildRoleSite(r.site, r.wwwroot)
+
+if (process.platform === 'win32') {
+  const { execSync } = await import('node:child_process')
+  for (const r of roleApps) {
+    const zip = r.wwwroot + '.zip'
+    try { fs.rmSync(zip, { force: true }) } catch (e) { }
+    execSync(`powershell -NoProfile -Command "Compress-Archive -Path '${r.wwwroot}/*' -DestinationPath '${zip}' -Force"`)
+    console.log('压缩角色站点 ->', path.relative(OUT, zip))
+  }
+}
+
 console.log('\n✅ 完成。每个 wwwroot 含 index.html / sw.js / src / public / icons 等。')

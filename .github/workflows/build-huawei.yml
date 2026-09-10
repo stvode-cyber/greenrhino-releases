@@ -1,44 +1,66 @@
 name: Build Huawei PWA assets
 
+# 双独立 App 的华为 AppGallery 上架前检查工作流。
+# 华为走 PWA 上架（不走 TWA，因为缺 GMS）：
+#   - 音乐  → greenrhino-music.pages.dev
+#   - 播放器 → greenrhino-player.pages.dev
+# 每个 App 独立一份 deploy 包，含 PWA 静态资源 + .well-known/assetlinks.json。
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
 
 jobs:
-  build-huawei:
+  huawei:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        role:
+          - key: music
+            pwa: release/pwa-site-music
+            huawei_dir: clients/huawei-music
+            artifact: GreenRhinoMusic-huawei-pwa
+          - key: player
+            pwa: release/pwa-site-player
+            huawei_dir: clients/huawei-player
+            artifact: GreenRhinoPlayer-huawei-pwa
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Install web asset deps
+      - name: Install deps
         working-directory: clients
         run: |
           npm i
           npx playwright install --with-deps chromium
 
-      - name: Build assets (icons + assetlinks.json)
+      - name: Build dual PWA sites
+        run: node scripts/build-web.mjs
+
+      - name: Generate icons + assetlinks.json
         working-directory: clients
         run: node build-assets.mjs
 
       - name: Assemble deployable web package
+        shell: bash
         run: |
           mkdir -p deploy/.well-known
-          cp index.html sw.js manifest.webmanifest favicon.svg deploy/ 2>/dev/null || true
-          cp -r src icons deploy/ 2>/dev/null || true
-          cp clients/huawei/assetlinks.json deploy/.well-known/assetlinks.json
+          cp -r ${{ matrix.pwa }}/* deploy/
+          cp ${{ matrix.huawei_dir }}/assetlinks.json deploy/.well-known/assetlinks.json
+          echo "--- deploy contents ---"
+          find deploy -maxdepth 3 | head -30
 
       - name: Verify assetlinks reachable path
         run: test -f deploy/.well-known/assetlinks.json && echo "OK: /.well-known/assetlinks.json present"
 
-      - name: Upload web artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GreenRhino-Web
+          name: ${{ matrix.artifact }}
           path: deploy/*
           if-no-files-found: error

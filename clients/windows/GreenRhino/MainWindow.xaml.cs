@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -16,12 +17,19 @@ namespace GreenRhino
 {
     public partial class MainWindow : Window
     {
-        private readonly LocalServer _server = new LocalServer();
-        private readonly DlnaCaster _caster = new DlnaCaster();
+        private readonly WindowRole _role;
+        // 影像窗全屏：记录进入全屏前的窗口样式/尺寸，退出时还原
+        private bool _videoFullscreen;
+        private WindowStyle _fsPrevStyle;
+        private ResizeMode _fsPrevResize;
+        private WindowState _fsPrevState;
+        private double _fsPrevLeft, _fsPrevTop, _fsPrevWidth, _fsPrevHeight;
 
-        // 系统托盘图标（关闭窗口时最小化到后台，只有托盘菜单「退出」才真正关闭）
-        private System.Windows.Forms.NotifyIcon _tray;
-        private bool _forceClose;
+        /// <summary>窗口是否已真正关闭（仅托盘「退出」时变 true）。隐藏到托盘不算关闭。</summary>
+        public bool IsClosed { get; private set; }
+
+        // 系统托盘/服务/WebView2 环境由进程级 WindowHost 集中持有：多窗口共享一份，
+        // 同进程对同一 user-data-folder 只能创建一个 WebView2 环境（否则各窗一套 IndexedDB）。
 
         // 支持双击/默认打开的音频与视频扩展名
         private static readonly HashSet<string> MediaExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
@@ -41,20 +49,73 @@ namespace GreenRhino
         private bool _nativeDragging;
         private DispatcherTimer _nativeTimer;
 
-        // Blob 视频（库内/拖入，无本地路径）兜底：web 把字节分片传来，C# 写入临时文件后交给原生 MediaElement
-        private readonly Dictionary<string, FileStream> _videoBlobWriters = new Dictionary<string, FileStream>();
+        // Blob 视频（库内/拖入，无本地路径）兜底：web 把字节分片传来，C# 写入临时文件后交给原生 MediaElement。
+        // 每次传输都写唯一文件名，避免复用被前一个（MediaElement 持锁的）文件导致 "being used by another process"。
+        private class VideoBlobWrite { public string Path = ""; public FileStream Fs = null; }
+        private readonly Dictionary<string, VideoBlobWrite> _videoBlobWriters = new Dictionary<string, VideoBlobWrite>();
         private static string VideoCacheDir() =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GreenRhino", "video-cache");
-
-        public MainWindow()
+        // 清理过期的 blob 临时视频文件（>24h 的 blob_*），避免唯一文件名方案下缓存无限累积
+        private static void CleanVideoCache()
         {
+            try
+            {
+                var dir = VideoCacheDir();
+                if (!Directory.Exists(dir)) return;
+                var cutoff = DateTime.Now.AddHours(-24);
+                foreach (var f in Directory.GetFiles(dir, "blob_*"))
+                    try { if (System.IO.File.GetLastWriteTime(f) < cutoff) System.IO.File.Delete(f); } catch { }
+            }
+            catch { /* 清理失败不影响播放 */ }
+        }
+
+        public MainWindow(WindowRole role)
+        {
+            _role = role;
             InitializeComponent();
-            // 解析命令行参数：系统双击文件会以 "GreenRhino.exe \"路径\"" 启动
-            EnqueuePaths(Environment.GetCommandLineArgs().Skip(1));
-            // 初始化系统托盘（关闭 -> 最小化到后台）
-            SetupTray();
-            // 原生视频兜底层控制条接线
+            Title = role == WindowRole.Hub ? "影音先锋"
+                : role == WindowRole.Music ? "绿角犀播放器 · 音乐"
+                : "绿角犀播放器 · 视频";
+            // 托盘/服务/WebView2 环境均已迁到进程级 WindowHost，由首个窗口（通常是 Hub）统一初始化。
+            // 注意：命令行媒体文件在 App.OnStartup 已按类型 RouteExternalFiles 直开对应窗口，
+            // 这里【不再】读命令行为启动窗口入队，避免文件被重复添加。
+            // 原生视频兜底层控制条接线（各窗独立，只处理本窗 WebView2 的画面兜底）
             WireNativeVideo();
+            if (role == WindowRole.Video)
+            {
+                // 影像窗：普通窗口即可，内容在页面内铺满；双击画面/按 Esc 进入或退出全屏（用户主动触发，非默认全屏）
+                KeyDown += (s, e) =>
+                {
+                    if (e.Key == System.Windows.Input.Key.Escape && _role == WindowRole.Video)
+                        ToggleVideoFullscreen();
+                };
+            }
+        }
+
+        // 进入/退出影像窗全屏（无边框、铺满全屏；退出后还原此前窗口态）
+        private void EnterVideoFullscreen()
+        {
+            if (_role != WindowRole.Video || _videoFullscreen) return;
+            _fsPrevStyle = WindowStyle; _fsPrevResize = ResizeMode; _fsPrevState = WindowState;
+            _fsPrevLeft = Left; _fsPrevTop = Top; _fsPrevWidth = Width; _fsPrevHeight = Height;
+            _videoFullscreen = true;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Normal;
+            Left = SystemParameters.VirtualScreenLeft;
+            Top = SystemParameters.VirtualScreenTop;
+            Width = SystemParameters.FullPrimaryScreenWidth;
+            Height = SystemParameters.FullPrimaryScreenHeight;
+        }
+        private void ToggleVideoFullscreen()
+        {
+            if (!_videoFullscreen) { EnterVideoFullscreen(); }
+            else
+            {
+                _videoFullscreen = false;
+                WindowStyle = _fsPrevStyle; ResizeMode = _fsPrevResize; WindowState = _fsPrevState;
+                Left = _fsPrevLeft; Top = _fsPrevTop; Width = _fsPrevWidth; Height = _fsPrevHeight;
+            }
         }
 
         /// <summary>把路径过滤成可播放的媒体文件（并带上同名 .lrc）后入队。</summary>
@@ -80,72 +141,18 @@ namespace GreenRhino
         {
             base.OnSourceInitialized(e);
 
-            // 单文件发布下，WebView2Loader.dll 位于 runtimes/win-x64/native 或根目录，
-            // 需加入 PATH 才能被 WebView2 控件加载（否则静默失败、窗口空白）
-            var baseDir = (AppContext.BaseDirectory ?? ".").TrimEnd('\\');
-            var nativeDir = Path.Combine(baseDir, "runtimes", "win-x64", "native");
-            var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-            var add = "";
-            if (Directory.Exists(nativeDir) && !pathEnv.Contains(nativeDir, StringComparison.OrdinalIgnoreCase))
-                add += nativeDir + ";";
-            if (Directory.Exists(baseDir) && !pathEnv.Contains(baseDir, StringComparison.OrdinalIgnoreCase))
-                add += baseDir + ";";
-            if (add.Length > 0)
-                Environment.SetEnvironmentVariable("PATH", add + pathEnv);
-
-            int port = _server.Start();                 // 启动内嵌本地服务（托管 wwwroot 中的 PWA）
-            App.Log("内嵌服务已启动 port=" + port);
+            // 内嵌服务 / WebView2 环境由进程级 WindowHost 懒加载且只建一次（各窗共享）。
+            int port = WindowHost.EnsureServer();
+            App.Log(Title + " 内嵌服务已启动 port=" + port);
             try
             {
-                // 视频黑屏有声音根因：WebView2 视频用独立 DirectComposition overlay 表面，在 WPF 下常不被提交到窗口。
-                // 默认启用硬件渲染（Intel Arc 等真显卡 + 现代 WebView2 下最可靠）；
-                // 命令行加 --disable-gpu / --no-gpu 可退回软件合成（个别无 GPU / 虚拟机环境渲染异常时用）。
-                // 另禁用 CalculateNativeWinOcclusion：该特性在窗口被遮挡（如远程/虚拟显示器）时
-                // 会错误停用视频合成层，是「有声音无画面」的已知元凶。
-                // 视频「花屏」修复：默认加 --disable-accelerated-video-decode 禁用硬件视频解码。
-                // Intel Arc + Oray 虚拟显示器（向日葵等远程）组合下，GPU 硬解的视频帧经虚拟显示
-                // 合成会渲染成花屏/花屏噪点；改用软件解码（FFmpeg）稳定，1080p 解码开销可忽略。
-                // 视频花屏最终兜底：本机为 Intel Arc + Oray 虚拟显示器（向日葵等远程）组合，
-                // GPU 硬件合成与硬解都会花屏，整体禁用 GPU（--disable-gpu）退回纯软件渲染最可靠。
-                // （软件渲染 1080p 视频无压力，代价仅是合成略耗 CPU。）
-                string gpuArg = " --disable-gpu";
-                string featArg = " --disable-features=CalculateNativeWinOcclusion";
-                string vdecArg = " --disable-accelerated-video-decode";
-                App.Log("GPU 模式：禁用 GPU 纯软件渲染（Intel Arc + 虚拟显示器花屏兜底）");
-                var opts = new CoreWebView2EnvironmentOptions
-                {
-                    AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" + gpuArg + featArg + vdecArg
-                };
-                var userData = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "GreenRhino", "wv2data");
-                CoreWebView2Environment env = null;
-
-                // 优先用随附的 webview2-runtime 文件夹（文件夹版发布时一并发放，彻底不依赖系统 WebView2）；
-                // 没有就从内嵌资源解压；再没有就用系统 WebView2。
-                var rt = ExtractWebView2Runtime();
-                if (rt != null)
-                {
-                    try
-                    {
-                        env = await CoreWebView2Environment.CreateAsync(rt, userData, opts);
-                        App.Log("WebView2 环境：使用随附/内嵌运行时 " + rt);
-                    }
-                    catch (Exception ex) { App.Log("随附运行时创建失败: " + ex.Message); env = null; }
-                }
-                if (env == null)
-                {
-                    try
-                    {
-                        env = await CoreWebView2Environment.CreateAsync(null, userData, opts);
-                        App.Log("WebView2 环境：使用系统运行时");
-                    }
-                    catch (Exception ex) { App.Log("系统 WebView2 创建失败: " + ex.Message); env = null; }
-                }
-
+                // 共享同一个 CoreWebView2Environment（唯一）→ 同 user-data-folder → 各窗读写同一套
+                // IndexedDB / localStorage / Service Worker。GPU/视频解码参数（如 --disable-gpu 花屏兜底）
+                // 已在 WindowHost.BuildEnvAsync 统一配置，这里直接复用，不再逐窗重复创建。
+                var env = await WindowHost.GuaranteeEnvAsync();
                 if (env != null) await webView.EnsureCoreWebView2Async(env);
                 else await webView.EnsureCoreWebView2Async();
-                App.Log("CoreWebView2 初始化完成");
+                App.Log(Title + " CoreWebView2 初始化完成");
             }
             catch (Exception ex)
             {
@@ -167,6 +174,7 @@ namespace GreenRhino
             // "Maximum call stack size exceeded"，导致 ES module 全部加载失败、界面黑屏）。
             _ = webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
                 "window.GR_CLOUD_BASE='http://127.0.0.1:" + port + "';window.GR_HOST=true;" +
+                "window.__winRole='" + (_role == WindowRole.Hub ? "hub" : _role == WindowRole.Music ? "music" : "video") + "';" +
                 "(function(){if(window.__grDbg)return;window.__grDbg=1;" +
                 // 关键：必须在覆盖前把原始方法 bind 出来快照。不能用 var _c=console——
                 // console 是可变对象，覆盖后 _c.log 指向的还是新函数，会无限递归自调用，
@@ -186,62 +194,15 @@ namespace GreenRhino
             webView.Source = new Uri($"http://127.0.0.1:{port}/");
         }
 
-        /// <summary>
-        /// 解析 WebView2 运行时目录：
-        /// 1) 优先用 exe 同级的 webview2-runtime 文件夹（文件夹版发布随附，最稳）；
-        /// 2) 否则从内嵌 webview2rt.zip 解压到本地缓存（单文件版）；
-        /// 3) 都没有返回 null（调用方退回系统 WebView2）。
-        /// </summary>
-        private static string ExtractWebView2Runtime()
-        {
-            try
-            {
-                // 1) 同级文件夹
-                var sibling = Path.Combine(AppContext.BaseDirectory, "webview2-runtime");
-                if (Directory.Exists(sibling) && File.Exists(Path.Combine(sibling, "msedge.exe")))
-                {
-                    App.Log("wvrt: 使用同级文件夹 " + sibling);
-                    return sibling;
-                }
-                // 2) 内嵌资源解压（单文件版）
-                var baseDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "GreenRhino", "wvrt");
-                var marker = Path.Combine(baseDir, "version.txt");
-                var asm = System.Reflection.Assembly.GetExecutingAssembly();
-                var resName = asm.GetManifestResourceNames()
-                    .FirstOrDefault(n => n.EndsWith("webview2rt.zip", StringComparison.OrdinalIgnoreCase));
-                if (resName == null) { App.Log("wvrt: 无内嵌运行时资源，退回系统"); return null; }
-                if (File.Exists(marker))
-                {
-                    App.Log("wvrt: 已解压，复用 " + baseDir);
-                    return baseDir;
-                }
-                App.Log("wvrt: 首次解压内嵌运行时 -> " + baseDir);
-                Directory.CreateDirectory(baseDir);
-                using var stream = asm.GetManifestResourceStream(resName);
-                if (stream == null) { App.Log("wvrt: 资源流为空"); return null; }
-                using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-                archive.ExtractToDirectory(baseDir);
-                File.WriteAllText(marker, "151.0.4129.107");
-                App.Log("wvrt: 解压完成");
-                return baseDir;
-            }
-            catch (Exception ex) { App.Log("wvrt 解析失败: " + ex.Message); return null; }
-        }
-
-        private bool _autoRegisterChecked;
-
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             _pageReady = true;
             // 诊断：console 转发 / onerror / hostOpen 状态已在 AddScriptToExecuteOnDocumentCreatedAsync 安装一次，
             // 这里【不再覆盖 console】（重复包裹会导致 "Maximum call stack size exceeded"，令 ES module 加载失败）。
             FlushPendingFiles();
-            // 首次运行就自动注册为默认播放器（用户要求"装好即默认"），只尝试一次
-            if (!_autoRegisterChecked)
+            // 首次运行就自动注册为默认播放器（用户要求"装好即默认"），只尝试一次（进程级，多窗不重复）
+            if (WindowHost.AutoCheckedTestAndSet())
             {
-                _autoRegisterChecked = true;
                 AutoRegisterDefaultOnce();
             }
         }
@@ -275,7 +236,7 @@ namespace GreenRhino
             _pendingFiles.Clear();
             try
             {
-                var items = _server.RegisterExternalFiles(files);
+                var items = WindowHost.Server.RegisterExternalFiles(files);
                 if (items.Count == 0) return;
                 var json = System.Text.Json.JsonSerializer.Serialize(items);
                 App.Log("FlushPendingFiles: " + items.Count + " 个文件 -> " + json);
@@ -339,6 +300,20 @@ namespace GreenRhino
                     // 页面 console 诊断转发
                     App.Log("web> " + Str(root, "msg"));
                 }
+                else if (type == "openWindow")
+                {
+                    // 前端「打开音乐/视频弹窗」「回主窗」：打开对应角色窗口（已存在则聚焦）
+                    var roleStr = Str(root, "role");
+                    var target = roleStr == "music" ? WindowRole.Music
+                        : roleStr == "video" ? WindowRole.Video
+                        : WindowRole.Hub;
+                    WindowHost.OpenOrFocus(target);
+                }
+                else if (type == "fullscreen")
+                {
+                    // 影像窗全屏/退出全屏（web 端双击画面或按 Esc 触发）
+                    ToggleVideoFullscreen();
+                }
                 else if (type == "setDefault")
                 {
                     var (ok, err) = SetAsDefaultPlayer();
@@ -353,7 +328,7 @@ namespace GreenRhino
                 {
                     _ = Task.Run(async () =>
                     {
-                        var devs = await _caster.DiscoverAsync(4000);
+                        var devs = await WindowHost.Caster.DiscoverAsync(4000);
                         PostCast(new
                         {
                             type = "cast:devices",
@@ -367,7 +342,7 @@ namespace GreenRhino
                     string deviceId = Str(root, "deviceId");
                     _ = Task.Run(async () =>
                     {
-                        await _caster.Play(deviceId, uri);
+                        await WindowHost.Caster.Play(deviceId, uri);
                         PostCast(new { type = "cast:status", deviceId, state = "playing" });
                     });
                 }
@@ -376,7 +351,7 @@ namespace GreenRhino
                     string deviceId = Str(root, "deviceId");
                     _ = Task.Run(async () =>
                     {
-                        await _caster.Stop(deviceId);
+                        await WindowHost.Caster.Stop(deviceId);
                         PostCast(new { type = "cast:status", deviceId, state = "stopped" });
                     });
                 }
@@ -385,7 +360,7 @@ namespace GreenRhino
                     string deviceId = Str(root, "deviceId");
                     _ = Task.Run(async () =>
                     {
-                        await _caster.Pause(deviceId);
+                        await WindowHost.Caster.Pause(deviceId);
                         PostCast(new { type = "cast:status", deviceId, state = "paused" });
                     });
                 }
@@ -395,7 +370,7 @@ namespace GreenRhino
                     string pos = Str(root, "pos");
                     _ = Task.Run(async () =>
                     {
-                        await _caster.Seek(deviceId, pos);
+                        await WindowHost.Caster.Seek(deviceId, pos);
                         PostCast(new { type = "cast:status", deviceId, state = "seeked" });
                     });
                 }
@@ -481,18 +456,18 @@ namespace GreenRhino
                     {
                         var dir = VideoCacheDir();
                         Directory.CreateDirectory(dir);
-                        var safeId = new string(id.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
-                        if (string.IsNullOrEmpty(safeId)) safeId = "vid";
-                        var fname = safeId + (string.IsNullOrEmpty(ext) ? ".mp4" : "." + ext.TrimStart('.').ToLowerInvariant());
-                        var path = Path.Combine(dir, fname);
+                        CleanVideoCache();
+                        var blobExt = string.IsNullOrEmpty(Str(root, "ext")) ? ".mp4" : "." + Str(root, "ext").TrimStart('.').ToLowerInvariant();
                         var bytes = Convert.FromBase64String(data);
-                        FileStream fs;
-                        if (!_videoBlobWriters.TryGetValue(id, out fs))
+                        if (!_videoBlobWriters.TryGetValue(id, out var w))
                         {
-                            fs = new FileStream(path, FileMode.Create, FileAccess.Write);
-                            _videoBlobWriters[id] = fs;
+                            // 唯一临时文件名：即使上一次同 id 的视频仍被原生 MediaElement 持锁，也不会覆盖冲突
+                            var fname = $"blob_{DateTime.Now:HHmmssfff}_{Guid.NewGuid():N}{blobExt}";
+                            w = new VideoBlobWrite { Path = Path.Combine(dir, fname) };
+                            w.Fs = new FileStream(w.Path, FileMode.Create, FileAccess.Write);
+                            _videoBlobWriters[id] = w;
                         }
-                        fs.Write(bytes, 0, bytes.Length);
+                        w.Fs.Write(bytes, 0, bytes.Length);
                     }
                     catch (Exception ex) { App.Log("videoBlobChunk 写入失败: " + ex.Message); }
                 }
@@ -506,17 +481,14 @@ namespace GreenRhino
                     if (string.IsNullOrEmpty(id)) return;
                     try
                     {
-                        if (_videoBlobWriters.TryGetValue(id, out var fs))
+                        string path = "";
+                        if (_videoBlobWriters.TryGetValue(id, out var w))
                         {
-                            fs.Dispose();
+                            try { w.Fs.Dispose(); } catch { }
+                            path = w.Path;
                             _videoBlobWriters.Remove(id);
                         }
-                        var dir = VideoCacheDir();
-                        var safeId = new string(id.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
-                        if (string.IsNullOrEmpty(safeId)) safeId = "vid";
-                        var fname = safeId + (string.IsNullOrEmpty(ext) ? ".mp4" : "." + ext.TrimStart('.').ToLowerInvariant());
-                        var path = Path.Combine(dir, fname);
-                        if (File.Exists(path) && MediaExts.Contains(Path.GetExtension(path)))
+                        if (!string.IsNullOrEmpty(path) && File.Exists(path) && MediaExts.Contains(Path.GetExtension(path)))
                         {
                             if (wantTranscode)
                             {
@@ -533,13 +505,31 @@ namespace GreenRhino
                     }
                     catch (Exception ex) { App.Log("videoBlobEnd 处理失败: " + ex.Message); PostCast(new { type = "noNative" }); }
                 }
+                else if (type == "clip")
+                {
+                    // 视频片段剪辑：用内置 ffmpeg 从本地视频切出 [start,end) 片段，重编码为 H.264 保证可播。
+                    // 仅支持带本地路径的视频（双击/外部打开）；库内 Blob/在线预览无本地文件，前端已禁用。
+                    string p = Str(root, "path");
+                    string start = Str(root, "start");
+                    string end = Str(root, "end");
+                    _ = Task.Run(() => MakeClip(p, start, end));
+                }
             }
             catch { /* 忽略无法解析的消息 */ }
         }
 
         private static string Str(System.Text.Json.JsonElement root, string name)
         {
-            if (root.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String) return v.GetString();
+            if (root.TryGetProperty(name, out var v))
+            {
+                switch (v.ValueKind)
+                {
+                    case System.Text.Json.JsonValueKind.String: return v.GetString() ?? "";
+                    case System.Text.Json.JsonValueKind.True: return "true";
+                    case System.Text.Json.JsonValueKind.False: return "false";
+                    case System.Text.Json.JsonValueKind.Number: return v.GetRawText();
+                }
+            }
             return "";
         }
 
@@ -592,7 +582,10 @@ namespace GreenRhino
             try
             {
                 _nativeActive = true;
-                NativeVideo.Stop();
+                // 先彻底停止并置空 Source，释放旧文件句柄，避免新/旧视频用同一缓存文件时被锁
+                try { NativeVideo.Stop(); } catch { }
+                try { NativeVideo.Source = null; } catch { }
+                NativeVideo.ClearValue(MediaElement.SourceProperty);
                 NativeVideo.Source = new Uri(path);
                 NativeVideo.Visibility = Visibility.Visible;
                 NativeBar.Visibility = Visibility.Visible;
@@ -624,21 +617,26 @@ namespace GreenRhino
 
         // ---------- HEVC/10bit 等不兼容编码自动转码（内置 ffmpeg → H.264） ----------
         // 在后台线程转码，完成后切到 UI 线程用原生 MediaElement 播放；成功/失败都回传 web 端。
-        // 同一源文件并发去重：web 端黑屏看门狗可能在转码期间反复上报 videoTranscode，
-        // 若每个消息都启动一个 ffmpeg 进程，同一文件会同时转码几十遍，CPU 直接被拉满。
-        private static readonly HashSet<string> _transcoding = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private static readonly object _transLock = new object();
-
+        // 同一源文件并发去重（进程级，多窗亦不重复）：web 端黑屏看门狗可能在转码期间反复上报
+        // videoTranscode，若每个消息都启动一个 ffmpeg 进程，同一文件会同时转码几十遍，CPU 拉满。
         private void TranscodeAndPlay(string src)
         {
-            lock (_transLock)
-            {
-                if (_transcoding.Contains(src)) return; // 已在转码中（或刚完成），忽略并发重复请求
-                _transcoding.Add(src);
-            }
+            if (!WindowHost.BeginTranscode(src)) return; // 已在转码中（进程级去重），忽略并发重复请求
+            // 边转边播：转码到首个进度（约1%）就回传 ready，前端立刻播放已转好的片段，
+            // 后续进度继续累加，真正 100% 完成时再发 transcodeDone 隐藏进度提示。
+            int readySent = 0;
             try
             {
-                var dst = TranscodeToH264(src);
+                var dst = TranscodeToH264(src, url =>
+                {
+                    try
+                    {
+                        // stdout 线程回调；跨到 UI 线程回传，避免 PostCast 跨线程
+                        Dispatcher.Invoke(() => PostCast(new { type = "transcodeReady", url = url, path = src }));
+                        System.Threading.Volatile.Write(ref readySent, 1);
+                    }
+                    catch { }
+                });
                 Dispatcher.Invoke(() =>
                 {
                     if (string.IsNullOrEmpty(dst))
@@ -646,31 +644,36 @@ namespace GreenRhino
                         PostCast(new { type = "transcodeFailed", reason = "视频转码失败，请改用 H.264 编码的 MP4。" });
                         return;
                     }
-                    // 转码成功：把 H.264 文件登记进内嵌服务，交由 web 端 <video> 直接播放。
-                    // 【不再用原生 MediaElement】：WebView2 的 HWND 永远盖在 WPF 控件之上（airspace），
-                    // 原生视频即使打开也会被遮挡，表现为「有声音、无画面」；而转码后的 H.264
-                    // WebView2 原生可解码，在页面内播放即可正常出图。
-                    var token = _server.RegisterExternalFile(dst);
-                    if (!string.IsNullOrEmpty(token))
+                    if (System.Threading.Volatile.Read(ref readySent) == 0)
                     {
-                        var url = $"http://127.0.0.1:{_server.Port}/api/external?t={token}";
-                        App.Log("转码完成，交由 web 播放: " + url);
-                        PostCast(new { type = "transcodeReady", url, path = dst });
+                        // 极小的文件可能还没走到首个进度回调就转完了：这里补发 ready
+                        var url = RegisterTranscodedUrl(dst);
+                        if (string.IsNullOrEmpty(url))
+                        {
+                            PostCast(new { type = "transcodeFailed", reason = "视频转码后无法登记播放，请改用 H.264 编码的 MP4。" });
+                            return;
+                        }
+                        PostCast(new { type = "transcodeReady", url = url, path = dst });
                     }
-                    else
-                    {
-                        App.Log("转码完成但登记失败: " + dst);
-                        PostCast(new { type = "transcodeFailed", reason = "视频转码后无法登记播放，请改用 H.264 编码的 MP4。" });
-                    }
+                    // 转码真正完成：让前端收起「正在转码」进度提示
+                    PostCast(new { type = "transcodeDone", ok = true });
                 });
             }
             finally
             {
-                lock (_transLock) _transcoding.Remove(src);
+                WindowHost.EndTranscode(src);
             }
         }
 
-        private string TranscodeToH264(string src)
+        // 把转码产物登记进内嵌服务，返回可由 web <video> 播放的完整 URL
+        private string RegisterTranscodedUrl(string dst)
+        {
+            var token = WindowHost.Server?.RegisterExternalFile(dst);
+            if (string.IsNullOrEmpty(token)) return null;
+            return $"http://127.0.0.1:{WindowHost.Server.Port}/api/external?t={token}";
+        }
+
+        private string TranscodeToH264(string src, Action<string> onReady = null)
         {
             try
             {
@@ -691,7 +694,7 @@ namespace GreenRhino
                 psi.ArgumentList.Add("-y");
                 psi.ArgumentList.Add("-hide_banner");
                 psi.ArgumentList.Add("-loglevel");
-                psi.ArgumentList.Add("error");
+                psi.ArgumentList.Add("info");   // info 才能在 stderr 拿到 Duration: 与 time= 用于进度
                 psi.ArgumentList.Add("-i");
                 psi.ArgumentList.Add(src);
                 psi.ArgumentList.Add("-c:v");
@@ -704,22 +707,79 @@ namespace GreenRhino
                 psi.ArgumentList.Add("yuv420p");
                 psi.ArgumentList.Add("-c:a");
                 psi.ArgumentList.Add("aac");
+                // 分片 MP4（moov 前置 + 逐段 moof）：文件边写边可被 <video> 解析播放。
+                // 结合「边转边播」让大文件在首段转完即可开播，不必等全量 100%。
                 psi.ArgumentList.Add("-movflags");
-                psi.ArgumentList.Add("+faststart");
+                psi.ArgumentList.Add("+frag_keyframe+empty_moov+default_base_moof");
+                psi.ArgumentList.Add("-progress");
+                psi.ArgumentList.Add("pipe:1");   // 以换行键值对输出进度（out_time_*），可实时解析
                 psi.ArgumentList.Add(dst);
                 using var proc = System.Diagnostics.Process.Start(psi);
                 if (proc == null) return null;
-                var errTask = proc.StandardError.ReadToEndAsync();
+                double dur = 0;
+                int lastPct = -1;
+                int readyFlag = 0; // 边转边播：首个进度已回传 ready 的标记（进程并发安全）
+                var log = new System.Text.StringBuilder();
+
+                // stdout：-progress pipe:1 输出以换行分隔的键值对 → 实时解析 out_time_* 折算百分比
+                // 不能依赖 stderr 的 time=（ffmpeg 用 \r 刷新不换行，ReadLine 读不到中间进度）
+                proc.OutputDataReceived += (s, ev) =>
+                {
+                    string line = ev?.Data;
+                    if (string.IsNullOrEmpty(line)) return;
+                    if (line.StartsWith("progress=end")) { SendTranscodeProgress(100); return; }
+                    double cur = -1;
+                    var cm = System.Text.RegularExpressions.Regex.Match(line,
+                        @"out_time_ms=(\d+)|out_time_us=(\d+)|out_time=(\d+):(\d+):(\d+(?:\.\d+)?)");
+                    if (cm.Success)
+                    {
+                        try
+                        {
+                            var ci = System.Globalization.CultureInfo.InvariantCulture;
+                            if (cm.Groups[1].Success) cur = double.Parse(cm.Groups[1].Value, ci) / 1000.0;            // 毫秒→秒
+                            else if (cm.Groups[2].Success) cur = double.Parse(cm.Groups[2].Value, ci) / 1000000.0;    // 微秒→秒
+                            else cur = double.Parse(cm.Groups[3].Value, ci) * 3600 + double.Parse(cm.Groups[4].Value, ci) * 60 + double.Parse(cm.Groups[5].Value, ci);
+                        }
+                        catch { cur = -1; }
+                    }
+                    if (dur > 0 && cur >= 0)
+                    {
+                        var pct = (int)Math.Min(99, cur / dur * 100);
+                        if (pct > lastPct) { lastPct = pct; SendTranscodeProgress(pct); }
+                        // 边转边播：首个进度且文件已落盘 → 回传 ready，前端立刻播放已转好的分片
+                        if (pct >= 1 && File.Exists(dst) && new FileInfo(dst).Length > 0 &&
+                            System.Threading.Interlocked.CompareExchange(ref readyFlag, 1, 0) == 0)
+                        {
+                            try
+                            {
+                                var url = RegisterTranscodedUrl(dst);
+                                if (!string.IsNullOrEmpty(url)) { App.Log("边转边播 ready @ " + pct + "% : " + url); onReady?.Invoke(url); }
+                            }
+                            catch (Exception ex) { App.Log("边转边播 ready 异常: " + ex.Message); }
+                        }
+                    }
+                };
+                proc.BeginOutputReadLine();
+
+                // stderr：读取 Duration 作为总时长，并收集完整 stderr 供失败诊断
+                string e;
+                while ((e = proc.StandardError.ReadLine()) != null)
+                {
+                    var dm = System.Text.RegularExpressions.Regex.Match(e, @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)");
+                    if (dm.Success) { dur = ParseHms(dm); continue; }
+                    if (!string.IsNullOrEmpty(e)) log.AppendLine(e);
+                }
                 if (!proc.WaitForExit(300000))
                 {
                     try { proc.Kill(); } catch { }
                     App.Log("ffmpeg 转码超时: " + src);
                     return null;
                 }
-                var err = errTask.Result;
+                var err = log.ToString();
                 if (proc.ExitCode == 0 && File.Exists(dst) && new FileInfo(dst).Length > 0)
                 {
                     App.Log("转码完成: " + dst);
+                    SendTranscodeProgress(100); // 真正成功才推满
                     return dst;
                 }
                 App.Log("ffmpeg 转码失败(" + proc.ExitCode + "): " + (err ?? "").Trim());
@@ -740,6 +800,27 @@ namespace GreenRhino
             catch { return Guid.NewGuid().ToString("N").Substring(0, 16); }
         }
 
+        // 把 "HH:MM:SS(.cc)" 时间组解析成秒；失败返回 0
+        private static double ParseHms(System.Text.RegularExpressions.Match m)
+        {
+            try
+            {
+                var ci = System.Globalization.CultureInfo.InvariantCulture;
+                double h = double.Parse(m.Groups[1].Value, ci);
+                double mm = double.Parse(m.Groups[2].Value, ci);
+                double s = double.Parse(m.Groups[3].Value, ci);
+                return h * 3600 + mm * 60 + s;
+            }
+            catch { return 0; }
+        }
+
+        // 回传转码进度（跨到 UI 线程调用 PostCast）
+        private void SendTranscodeProgress(int pct)
+        {
+            try { Dispatcher.Invoke(() => PostCast(new { type = "transcodeProgress", pct })); }
+            catch { /* 线程竞态等忽略，进度非关键路径 */ }
+        }
+
         // 内置 ffmpeg.exe 从嵌入资源懒释放到临时目录（首次转码时执行）
         private static string EnsureFfmpeg()
         {
@@ -758,6 +839,66 @@ namespace GreenRhino
                 return dst;
             }
             catch (Exception ex) { App.Log("ffmpeg 释放失败: " + ex.Message); return null; }
+        }
+
+        // ---------- 视频片段剪辑（前端「生成片段」） ----------
+        // 用内置 ffmpeg 从本地视频按 [start,end) 秒重编码切段，保存到「视频/影音先锋剪辑」，成功后回传路径。
+        private void MakeClip(string src, string start, string end)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(src) || !File.Exists(src))
+                {
+                    PostCast(new { type = "clipResult", ok = false, msg = "无法定位源文件，仅支持本地视频生成片段" });
+                    return;
+                }
+                var ci = CultureInfo.InvariantCulture;
+                if (!double.TryParse(start, NumberStyles.Float, ci, out var a) ||
+                    !double.TryParse(end, NumberStyles.Float, ci, out var b) || b <= a)
+                {
+                    PostCast(new { type = "clipResult", ok = false, msg = "请先设置有效的 A/B 点" });
+                    return;
+                }
+                var ff = EnsureFfmpeg();
+                if (string.IsNullOrEmpty(ff)) { PostCast(new { type = "clipResult", ok = false, msg = "未找到内置 ffmpeg" }); return; }
+
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "影音先锋剪辑");
+                Directory.CreateDirectory(dir);
+                var outPath = Path.Combine(dir,
+                    $"片段_{Path.GetFileNameWithoutExtension(src)}_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
+
+                var args = $"-y -ss {a.ToString("0.###", ci)} -to {b.ToString("0.###", ci)} -i \"{src}\" " +
+                           $"-c:v libx264 -preset veryfast -crf 23 -c:a aac -movflags +faststart \"{outPath}\"";
+                App.Log("clip: " + args);
+                var psi = new System.Diagnostics.ProcessStartInfo(ff, args)
+                {
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var proc = System.Diagnostics.Process.Start(psi);
+                proc.BeginOutputReadLine(); // 排空 stdout，避免管道缓冲填满阻塞
+                var err = proc.StandardError.ReadToEnd();
+                if (!proc.WaitForExit(120000))
+                {
+                    try { proc.Kill(); } catch { }
+                    PostCast(new { type = "clipResult", ok = false, msg = "片段生成超时" });
+                    return;
+                }
+                if (proc.ExitCode != 0 || !File.Exists(outPath))
+                {
+                    App.Log("clip 失败: " + (err ?? "").Trim());
+                    PostCast(new { type = "clipResult", ok = false, msg = "片段生成失败，请检查视频是否损坏" });
+                    return;
+                }
+                PostCast(new { type = "clipResult", ok = true, path = outPath, size = new FileInfo(outPath).Length });
+            }
+            catch (Exception ex)
+            {
+                App.Log("clip 异常: " + ex.Message);
+                PostCast(new { type = "clipResult", ok = false, msg = "片段生成异常: " + ex.Message });
+            }
         }
 
         // ---------- 注册为系统默认媒体播放器 ----------
@@ -861,49 +1002,25 @@ namespace GreenRhino
             try { SHChangeNotify(0x08000000 /*SHCNE_ASSOCCHANGED*/, 0, IntPtr.Zero, IntPtr.Zero); } catch { }
         }
 
-        // ---------- 系统托盘：关闭窗口 -> 最小化到后台 ----------
-        private void SetupTray()
-        {
-            try
-            {
-                var exe = Environment.ProcessPath ?? (AppContext.BaseDirectory.TrimEnd('\\') + "\\GreenRhino.exe");
-                System.Drawing.Icon icon = null;
-                try { icon = System.Drawing.Icon.ExtractAssociatedIcon(exe); } catch { icon = null; }
-
-                _tray = new System.Windows.Forms.NotifyIcon
-                {
-                    Icon = icon,
-                    Text = "绿角犀播放器",
-                    Visible = true
-                };
-
-                var menu = new System.Windows.Forms.ContextMenuStrip();
-                var showItem = new System.Windows.Forms.ToolStripMenuItem("显示窗口");
-                showItem.Click += (s, e) => Dispatcher.Invoke(BringToFront);
-                var exitItem = new System.Windows.Forms.ToolStripMenuItem("退出");
-                exitItem.Click += (s, e) => { _forceClose = true; Close(); };
-                menu.Items.Add(showItem);
-                menu.Items.Add(exitItem);
-                _tray.ContextMenuStrip = menu;
-
-                // 左键 / 双击托盘图标：恢复窗口
-                _tray.MouseClick += (s, e) =>
-                {
-                    if (e.Button == System.Windows.Forms.MouseButtons.Left) Dispatcher.Invoke(BringToFront);
-                };
-                _tray.DoubleClick += (s, e) => Dispatcher.Invoke(BringToFront);
-            }
-            catch { /* 托盘创建失败不应影响主功能 */ }
-        }
-
+        // ---------- 窗口关闭语义 ----------
+        // 任一窗点 ✕ 只最小化到托盘（后台继续放歌/放片）；只有托盘「退出」经 WindowHost.ExitAll
+        // 置 ForceClose 后才真正逐窗关闭、进程退出。
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            // 非真正退出：取消关闭，隐藏到后台（任务栏按钮也消失，只留托盘图标）
-            if (!_forceClose)
+            if (!WindowHost.ForceClose)
             {
                 e.Cancel = true;
                 Hide();
-                try { _tray?.ShowBalloonTip(3000, "绿角犀播放器", "已最小化到后台，点击托盘图标可恢复", System.Windows.Forms.ToolTipIcon.Info); } catch { }
+                // 只由 Hub 提示一次托盘即将常驻，避免多个窗口同时弹气球条
+                if (_role == WindowRole.Hub)
+                {
+                    try
+                    {
+                        WindowHost.Tray?.ShowBalloonTip(3000, "绿角犀播放器",
+                            "已最小化到后台，点击托盘图标可恢复窗口", System.Windows.Forms.ToolTipIcon.Info);
+                    }
+                    catch { }
+                }
                 return;
             }
             base.OnClosing(e);
@@ -911,9 +1028,15 @@ namespace GreenRhino
 
         protected override void OnClosed(EventArgs e)
         {
-            try { foreach (var fs in _videoBlobWriters.Values) { try { fs.Dispose(); } catch { } } } catch { }
-            try { _tray?.Dispose(); } catch { }
-            _server.Stop();
+            IsClosed = true;
+            // 仅清理本窗口自身的资源：blob 写入器、原生视频、WebView2、注册表登记。
+            // 共享的 LocalServer / 托盘 / WebView2 环境由进程级 WindowHost 统一持有，
+            // 在 App.OnExit 一次性收尾（最后一个窗口关闭前绝不能停，否则其它窗口立刻失效）。
+            try { foreach (var w in _videoBlobWriters.Values) { try { w.Fs?.Dispose(); } catch { } } } catch { }
+            _videoBlobWriters.Clear();
+            try { NativeVideo.Stop(); NativeVideo.Source = null; } catch { }
+            try { webView.Dispose(); } catch { }
+            WindowHost.Unregister(_role, this);
             base.OnClosed(e);
         }
     }

@@ -44,15 +44,23 @@ namespace GreenRhino
             }
 
             Instance = si;
-            si.StartServer(paths =>
-            {
-                var win = MainWindow as MainWindow;
-                if (win == null) return;
-                win.OpenExternalFiles(paths);
-                win.BringToFront();
-            });
+            // 后续实例（再次双击文件/再次启动）经管道转发；按扩展名分流到音乐/视频窗口。
+            si.StartServer(paths => WindowHost.RouteExternalFiles(paths));
 
             base.OnStartup(e);
+
+            // 进程级托盘只建一次（任一窗 ✕ 缩托盘；托盘「退出」才全部关闭）
+            WindowHost.SetupTray();
+
+            // 启动即根据命令行参数分流：带媒体文件则直开对应窗口；否则打开 Hub 主窗。
+            if (args.Length > 0)
+            {
+                WindowHost.RouteExternalFiles(args);
+            }
+            else
+            {
+                WindowHost.OpenOrFocus(WindowRole.Hub);
+            }
         }
 
         internal static SingleInstance Instance { get; private set; }
@@ -74,6 +82,8 @@ namespace GreenRhino
         protected override void OnExit(ExitEventArgs e)
         {
             Instance?.Dispose();
+            WindowHost.StopServer();
+            try { WindowHost.Tray?.Dispose(); } catch { }
             base.OnExit(e);
         }
 

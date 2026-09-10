@@ -1,12 +1,26 @@
 name: Build iOS (.ipa)
 
+# 双独立 App 的 iOS App Store 打包工作流：
+#   - GreenRhinoMusic  → com.greenrhino.music  (绿角犀音乐, bundle)
+#   - GreenRhinoPlayer → com.greenrhino.player (绿角犀播放器, bundle)
+#
+# 两个 App 在同一个 XcodeGen project.yml 里定义为两个 target/scheme，
+# 顺序 archive + export，最终上传两份 .ipa。
+# App 版本号从 scripts/build-web.mjs 的 APP_VERSION 读取并注入，
+# 与 Web/Android/Windows 保持一致的版本基线。
+#
+# 前置 GitHub Secrets:
+#   IOS_TEAM_ID            — Apple Developer Team ID (例如 ABC123DEF4)
+#   IOS_CERT_P12_BASE64    — .p12 签名证书 base64
+#   IOS_CERT_PASSWORD      — .p12 密码
+#   IOS_PROVISIONING_BASE64 — .mobileprovision base64
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
 
 jobs:
-  build-ios:
+  ios:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,7 +28,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -25,11 +39,30 @@ jobs:
           npm i
           npx playwright install chromium
 
+      - name: Build dual PWA sites
+        run: node scripts/build-web.mjs
+
       - name: Build assets + copy web into wwwroot
         working-directory: clients
         run: |
           node build-assets.mjs
           node copy-web.mjs
+
+      - name: Inject APP_VERSION into project.yml
+        shell: bash
+        run: |
+          # 从 build-web.mjs 读 APP_VERSION (格式 v16 -> 提取 16)
+          APP_VER_RAW=$(grep -oP "const APP_VERSION = '\K[^']+" scripts/build-web.mjs | head -1)
+          APP_VER_NUM=$(echo "$APP_VER_RAW" | sed 's/^v//')
+          echo "APP_VERSION raw = $APP_VER_RAW, numeric = $APP_VER_NUM"
+
+          # MARKETING_VERSION: 16 -> 16.0.0 (Apple 要求 X.Y.Z)
+          sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: ${APP_VER_NUM}.0.0/" clients/ios/project.yml
+          # CURRENT_PROJECT_VERSION -> 16 (整数 build number)
+          sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: ${APP_VER_NUM}/" clients/ios/project.yml
+
+          echo "--- project.yml versions after inject ---"
+          grep -E "MARKETING_VERSION|CURRENT_PROJECT_VERSION" clients/ios/project.yml
 
       - name: Set DEVELOPMENT_TEAM in project.yml
         if: ${{ secrets.IOS_TEAM_ID != '' }}
@@ -56,9 +89,17 @@ jobs:
         working-directory: clients/ios
         run: xcodegen generate
 
-      - name: Archive
+      - name: Archive (Music + Player)
         working-directory: clients/ios
-        run: xcodebuild -scheme GreenRhino -archivePath build/GreenRhino.xcarchive archive -configuration Release -allowProvisioningUpdates
+        run: |
+          set -e
+          for spec in \
+            "GreenRhinoMusic build/Music.xcarchive" \
+            "GreenRhinoPlayer build/Player.xcarchive" ; do
+            set -- $spec
+            echo "=== Archiving $1 ==="
+            xcodebuild -scheme "$1" -archivePath "$2" archive -configuration Release -allowProvisioningUpdates
+          done
 
       - name: Export IPA
         working-directory: clients/ios
@@ -71,11 +112,19 @@ jobs:
             <key>signingStyle</key><string>automatic</string>
           </dict></plist>
           EOF
-          xcodebuild -exportArchive -archivePath build/GreenRhino.xcarchive -exportPath build/ipa -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
+          xcodebuild -exportArchive -archivePath "build/Music.xcarchive" -exportPath "build/ipa-music" -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
+          xcodebuild -exportArchive -archivePath "build/Player.xcarchive" -exportPath "build/ipa-player" -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
 
-      - name: Upload IPA
+      - name: Upload IPA artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GreenRhino-iOS
-          path: clients/ios/build/ipa/*.ipa
+          name: GreenRhinoMusic-iOS
+          path: clients/ios/build/ipa-music/*.ipa
+          if-no-files-found: error
+
+      - name: Upload IPA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GreenRhinoPlayer-iOS
+          path: clients/ios/build/ipa-player/*.ipa
           if-no-files-found: error

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">绿角犀播放器</string>
+
+    <!-- 视频版 PWA 地址：托管于 Cloudflare Pages，且已在站点根部署 /.well-known/assetlinks.json -->
+    <string name="app_url">https://greenrhino-player.pages.dev/</string>
+    <string name="app_host">greenrhino-player.pages.dev</string>
+
+    <!-- 数字资产委托（与站点 /.well-known/assetlinks.json 对应；证书 SHA256 0fec2838848aceb04bdbd4f6dd46c4ae5436b36a9d547af9a856d0a86bb0c77e） -->
+    <string name="asset_statements">[{&quot;relation&quot;:[&quot;delegate_permission/common.handle_all_urls&quot;],&quot;target&quot;:{&quot;namespace&quot;:&quot;web&quot;,&quot;site&quot;:&quot;https://greenrhino-player.pages.dev&quot;}}]</string>
+
+    <string name="twa_service">@string/app_name</string>
+</resources>

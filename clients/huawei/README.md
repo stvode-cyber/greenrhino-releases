@@ -23,7 +23,7 @@
    - 一句话简介：离线优先的本地音乐/视频播放器
    - 详细描述：`listing/description-zh.txt`
    - 隐私政策：`listing/privacy.txt`（或粘贴到 AppGallery 隐私栏）
-   - 特性图：`listing/feature-graphic.svg`（导出为 1024×500 PNG）
+   - 特性图：`listing/feature-graphic-1024x500.png`（已生成，1024×500）
    - 截图：从 `audit-*.png` 中选 3–5 张（手机竖屏 + 平板横屏各至少 1 张）
 
 4. **AppGallery 控制台**

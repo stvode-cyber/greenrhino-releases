@@ -1,14 +1,14 @@
 # 工作交接 · 绿角犀播放器（GreenRhino）
 
 > 适用：接手本项目的同事 / 后续会话。目标是**一读就懂当前状态、能立刻构建、知道坑在哪**。
-> 最后更新：2026-09-04。当前状态：**视频黑屏已关单（E4）**，内置 ffmpeg 转码链路稳定，音乐/视频已完全分成两个页面，最新 exe 已跑在用户桌面。
-> 配套治理：`R0.md`（总入口/铁律）/ `FD.md`（功能记录，FD-V1~V10）/ `CHANGELOG.md`（版本史）/ `HELP.md`（用户说明）/ `overview.md`（功能总览）/ `UI-design.md`（界面设计）。
+> 最后更新：2026-09-08。当前状态：**视频黑屏已关单（E4）**，内置 ffmpeg 转码链路稳定；音乐/视频已分成独立页面；视频页已重构（空态网格 + 增强控制条 + 生成片段 + 缩略图）；最新源码 sw v13（publish 尚有 v12 旧 exe，待重建部署）。
+> 配套治理：`R0.md`（总入口/铁律）/ `FD.md`（功能记录，FD-V1~V12）/ `CHANGELOG.md`（版本史）/ `HELP.md`（用户说明）/ `overview.md`（功能总览）/ `UI-design.md`（界面设计）。
 
 ---
 
-## 0. 一句话现状（2026-09-04）
+## 0. 一句话现状（2026-09-08）
 
-纯前端 PWA 播放器，Windows 用 WebView2 + .NET 8 WPF 壳封装成自包含 exe。**音乐和视频已完全分成两个独立页面**，视频 HEVC/10bit 由内置 ffmpeg 自动转码 H.264 播放，双击 MP4 直达播放，音乐/视频播放模式各自独立（视频默认不循环）。最新构建 `GreenRhino.exe`（sw v9）已覆盖到 `C:\Users\Administrator\Desktop\GreenRhino\` 并在用户机器上运行验证。
+纯前端 PWA 播放器，Windows 用 WebView2 + .NET 8 WPF 壳封装成自包含 exe。**音乐和视频已完全分成两个独立页面**，视频 HEVC/10bit 由内置 ffmpeg 自动转码 H.264 播放，双击 MP4 直达播放，音乐/视频播放模式各自独立（视频默认不循环）。9/5 起视频页升级：**空态视频库网格铺满 + 封面自动抽帧 + 增强控制条（倍速/音轨/字幕/章节/PiP/旋转/截图/AB/生成片段）+ 音轨字幕偏好记忆 + 窗口角色化**。当前源码 sw v13（9/8 修正 CORE 预缓存）；**publish 里还是 9/5 的 v12 exe，桌面副本已不存在，需重建后部署**。
 
 ## 1. 架构总览
 
@@ -16,11 +16,13 @@
 ┌─ PWA 内核（离线优先，零构建，纯 ES module）─────────────────────┐
 │ index.html / sw.js(v9 网络优先) / manifest / src/*.js / icons  │
 │   src/main.js      应用装配：路由、导入、外部打开(__hostOpen)   │
-│   src/player.js   音频/视频播放引擎：播放模式、转码触发、看门狗  │
-│   src/store.js     IndexedDB 数据层 + 设置(playModes 分媒体)    │
-│   src/ui/library.js  mediaLibrary(app,type) 按类型拆分媒体库    │
-│   src/ui/music.js   音乐页 = 音乐库 + 播放器(频谱/歌词/EQ/睡眠)  │
-│   src/ui/video.js   视频页 = 视频库 + 播放器(字幕/音轨/章节/AB)  │
+│ src/player.js   音频/视频播放引擎：播放模式、转码触发、看门狗、clip 消息│
+│ src/videoThumb.js  视频封面自动抽帧（缩略图，thumbnails store）         │
+│ src/store.js     IndexedDB 数据层 + 设置(playModes 分媒体/trackPrefs)   │
+│ src/ui/library.js  mediaLibrary(app,type) 按类型拆分媒体库 + 缩略图合并  │
+│ src/ui/music.js   音乐页 = 音乐库 + 播放器(频谱/歌词/EQ/睡眠)  │
+│ src/ui/videoPlayer.js  视频页 = 内容网格 + 播放器(空态网格/cover铺满/    │
+│                          倍速/音轨/字幕/章节/AB/截图/生成片段/轨道记忆) │
 │   src/ui/*.js      bottombar/queue/favorites/playlists/recent/  │
 │                     cloud/settings/gestures/spectrum/dom        │
 └─────────────────────────────────────────────────────────────────┘
@@ -41,9 +43,12 @@
 
 | 路径 | 作用 | git 状态 |
 |------|------|---------|
-| `src/`（根） | **web 源码（改这里）**：main/player/store/style/dom/ui/* | ✅ 进 git（sw.js 是根，v9） |
-| `sw.js`（根） | Service Worker，**网络优先** + v9 缓存桶，activate 自动清旧桶 | ✅ 进 git |
+| `src/`（根） | **web 源码（改这里）**：main/player/store/style/dom/ui/* + videoThumb.js | ✅ 进 git（sw.js 是根，v13） |
+| `sw.js`（根） | Service Worker，**网络优先** + v13 缓存桶，activate 自动清旧桶 | ✅ 进 git |
 | `index.html` | 页面骨架 + 侧边栏导航（音乐/视频/…） | ✅ 进 git |
+| `src/ui/videoPlayer.js` | **视频页播放器**（9/5 起替代 video.js）：空态网格 + cover 铺满 + 增强控制条 + 生成片段 | ✅ 进 git |
+| `src/videoThumb.js` | **视频封面自动抽帧**（thumbnails store，串行队列，仅 blob 视频） | ✅ 进 git |
+| `src/ui/video.js` | ~~旧视频页~~ **已删除（9/8，死代码）**，勿再引用 | ✅ 进 git（历史） |
 | `clients/windows/GreenRhino/wwwroot/` | 构建时 copy-web 生成，**不进 git** | ❌ gitignore |
 | `clients/windows/GreenRhino/wwwroot.zip` | **csproj 内嵌资源，改 web 后必须重生成**（否则内嵌旧代码！） | ❌ gitignore |
 | `clients/windows/GreenRhino/ffmpeg.exe` | 内嵌转码器（98MB，**构建必需，勿删**；未忽略但未跟踪） | ⚠️ 未跟踪 |
@@ -71,10 +76,13 @@
 
 ## 4. 关键机制（改代码前必读）
 
-- **音乐/视频页面分离**：`showPage(name)` 驱动（`src/main.js`），`app.mode` 跟随页面（music/video）；媒体库用 `mediaLibrary(app, type)` 复用组件；搜索 `app.search` 同时刷两个库。**删除合并媒体库页后，任何地方不得再引用 `library` 页 / `app.filter` / `buildLibrary`**。
+- **音乐/视频页面分离**：`showPage(name)` 驱动（`src/main.js`），`app.mode` 跟随页面（music/video）；媒体库用 `mediaLibrary(app, type)` 复用组件；搜索 `app.search` 同时刷两个库。**删除合并媒体库页后，任何地方不得再引用 `library` 页 / `app.filter` / `buildLibrary`；video 页组件是 `videoPlayer.js`（旧的 `video.js` 已删）**。
+- **窗口角色化**：C# 注入 `window.__winRole = 'hub'|'music'|'video'`，`main.js` 只构建本窗所需页面（`ROLE` 常量）；侧栏按角色隐藏无关项；`openRoleWindow(role)` 经 webview 消息交给 C# 开/聚焦独立窗口，纯浏览器退回页内切换。`win-video` body 类做纯黑三段式播放器。
 - **播放模式独立**：`player.playModes = { music:'loop', video:'order' }`（`store.js` 默认值 + `player.js`）。视频默认「顺序」不循环；音乐默认「列表循环」。底栏徽章跟页面显示。
 - **HEVC 转码**：`player.js` 在 `loadedmetadata` 后检测 `videoWidth===0` → 立即 `_startTranscode`（本地文件给路径 / Blob 分片给 C#）→ C# 用 ffmpeg 转 H.264 → `transcodeReady` 回传 URL。同一文件转码去重（字典缓存）。转码产物在 `%TEMP%\GreenRhino\transcode`。
-- **SW 网络优先**：静态资源 `fetch` 成功即缓存、失败回退缓存；导航失败回退 index.html。`/api/*` 永不缓存。activate 清旧桶。
+- **视频缩略图**（`src/videoThumb.js`）：`library.js` refresh 时 `queueVideoThumbs(list)` 把缺图且有 blob 的视频排串行队列，后台 seek 抽帧（宽 ≤320px JPEG）写 IndexedDB `thumbnails`；成功 `emit('thumb:updated')` 刷新网格，失败（HEVC 解不了 / 10s 超时）写 `failed` 不再重试。**只对 blob 视频**，外部打开（localPath）跳过。
+- **生成片段**：`videoPlayer.js` 设 A/B 点 → `postMessage({type:'clip', path, start, end})` → C# `MakeClip`（内置 ffmpeg 按 -ss/-to 剪辑）→ 回 `clipResult`（成功带保存路径）。仅支持 `item.localPath`（双击/外部打开）。
+- **SW 网络优先**：静态资源 `fetch` 成功即缓存、失败回退缓存；导航失败回退 index.html。`/api/*` 永不缓存。activate 清旧桶。**CORE 预缓存列表必须与实际模块对齐**（v12 曾漏 videoThumb/videoPlayer，v13 修复；删模块时同步删 CORE 项，否则 addAll 失败吞掉整个预缓存）。
 - **双击文件直达播放**：`__hostOpen`（`main.js`）设 `window.__hostOpened` 跳过启动恢复，按文件类型切页并播。**文件关联 → 桌面最新 exe**，改动 exe 后桌面副本必须同步。
 - **GPU**：WebView2 默认 `--disable-gpu` 纯软件渲染（Intel Arc + 向日葵虚拟显示器下防花屏）；`--gpu` 可切回硬件。
 
@@ -90,18 +98,19 @@
 
 ## 6. 治理文档索引（保持链条）
 
-- `R0.md`：总路由/铁律；报错 **E4（已关单）**；决策 **Dc-V1/V2**；动作记录 A（9/3、9/4 已补）。
-- `FD.md`：`FD-V1~V7` 黑屏修复链 + `FD-V8` 内置转码 + `FD-V9` 双击播放 + `FD-V10` 音乐/视频分离。
-- `CHANGELOG.md`：版本史（09-03/09-04 已补）。
+- `R0.md`：总路由/铁律；报错 **E4（已关单）**；决策 **Dc-V1/V2**；动作记录 A（9/3、9/4、9/5、9/8 已补）。
+- `FD.md`：`FD-V1~V7` 黑屏修复链 + `FD-V8` 内置转码 + `FD-V9` 双击播放 + `FD-V10` 音乐/视频分离 + `FD-V11` 视频缩略图 + `FD-V12` 播放器重构。
+- `CHANGELOG.md`：版本史（09-03~09-08 已补）。
 - `overview.md` / `UI-design.md` / `HELP.md`：功能、界面、用户说明。
 
 ## 7. git 现状（重要）
 
-**工作树有未提交变更**（截至 2026-09-04）：`src/main.js`、`src/player.js`、`src/store.js`、`src/ui/{library,music,video,bottombar,gestures}.js`、`src/style.css`、`index.html`、`sw.js`、`FD.md`、`clients/windows/GreenRhino/{csproj,LocalServer.cs,MainWindow.xaml.cs}` 已修改；`clients/windows/GreenRhino/ffmpeg.exe`（98MB，勿提交）、`src/sw.js`（孤儿，建议删）未跟踪。
-**建议交接动作**：① 删除孤儿 `src/sw.js`；② 把 ffmpeg.exe 加入 `.gitignore`（避免误提交大二进制）；③ 将本次改版提交入库（含本 HANDOFF 与 CHANGELOG 更新）。
+**工作树有未提交变更**（截至 2026-09-08）：9/5 的 `src/main.js`、`src/player.js`、`src/store.js`、`src/ui/{library,music,videoPlayer}.js`、`src/videoThumb.js`、`src/style.css`、`index.html`、`sw.js` 与 9/8 的 `sw.js`(v13)、`src/player.js`（注释）、删除的 `src/ui/video.js`，以及治理文档 `FD.md` / `CHANGELOG.md` / `HANDOFF.md` / `R0.md` 均未提交；`clients/windows/GreenRhino/wwwroot.zip`（构建产物，gitignore）也需重生成后重新 publish。
+**建议交接动作**：① 将 9/5 + 9/8 的 web 改动与治理文档提交入库；② 重生成 `wwwroot.zip` + dotnet publish（sw v13）；③ 部署桌面副本 + 更新 dist；④ ffmpeg.exe（98MB）勿提交。
 
 ## 8. 下一步（待办）
 
-1. 用户在本机点开新 exe，实际体验音乐页 / 视频页各自媒体库 + 播放，确认分离效果。
-2. 若后续反馈视频问题：先取 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 的「视频」行判断根因（转码失败 / overlay / 其它）。
-3. 桌面副本与文件关联保持最新 exe 同步（每次发布必做）。
+1. 重生成 `wwwroot.zip` + dotnet publish（sw v13），覆盖部署桌面副本，更新 `dist/` 交付包（当前 publish 是 v12，桌面副本已不存在）。
+2. 用户在本机体验视频页新版（空态网格 / 缩略图 / 增强控制条 / 生成片段 / 轨道记忆），反馈异常即处理。
+3. 若后续反馈视频问题：先取 `%LOCALAPPDATA%\GreenRhino\greenrhino.log` 的「视频」行判断根因（转码失败 / overlay / 其它）。
+4. 桌面副本与文件关联保持最新 exe 同步（每次发布必做）。

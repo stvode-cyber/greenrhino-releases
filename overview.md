@@ -49,7 +49,7 @@ C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2\node.exe serve.
 | 平台 | 封装 | 离线能力 | 工程 |
 |------|------|----------|------|
 | Windows | WebView2 (C# / .NET 8) + 内嵌本地 HTTP 服务 | ✅ 保留 Service Worker | `clients/windows/` |
-| Android | Trusted Web Activity (TWA) | ✅ 站点 PWA（需部署 https） | `clients/android/` |
+| Android | Trusted Web Activity (TWA) × 2 | ✅ 站点 PWA（需部署 https） | `clients/android-music/`、`clients/android-player/` |
 | iOS | WKWebView + 内嵌本地 HTTP 服务（XcodeGen） | ✅ 保留 Service Worker | `clients/ios/` |
 | 华为 | AppGallery 上架 PWA（无 GMS，TWA 不可用） | ✅ 站点 PWA | `clients/huawei/` |
 
