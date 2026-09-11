@@ -1,4 +1,4 @@
-name: Build iOS (.ipa)
+﻿name: Build iOS (.ipa)
 
 # 双独立 App 的 iOS App Store 打包工作流：
 #   - GreenRhinoMusic  → com.greenrhino.music  (绿角犀音乐, bundle)
