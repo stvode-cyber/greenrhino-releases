@@ -55,7 +55,10 @@ jobs:
       - name: Decode upload keystore
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$KS_B64" | base64 -d > ${{ matrix.gradle }}/app/upload-keystore.jks
+        run: |
+          mkdir -p ${{ matrix.gradle }}/app
+          echo "$KS_B64" | base64 -d > ${{ matrix.gradle }}/app/upload-keystore.jks
+          ls -la ${{ matrix.gradle }}/app/upload-keystore.jks
 
       - name: Write local.properties (signing)
         env:
