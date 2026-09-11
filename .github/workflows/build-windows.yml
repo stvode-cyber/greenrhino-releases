@@ -45,11 +45,7 @@ jobs:
           node clients/copy-web.mjs
 
       - name: Publish self-contained single-file exe
-        shell: bash
-        run: |
-          dotnet publish ${{ matrix.csproj }} \
-            -c Release -r win-x64 --self-contained \
-            -p:PublishSingleFile=true -o publish
+        run: dotnet publish "${{ matrix.csproj }}" -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
