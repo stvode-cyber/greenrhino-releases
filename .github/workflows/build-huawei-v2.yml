@@ -1,0 +1,51 @@
+name: Build Huawei PWA assets
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+# Huawei PWA packaging workflow for AppGallery submission
+jobs:
+  huawei:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: music
+            pwa: release/pwa-site-music
+            huawei_dir: clients/huawei-music
+            artifact: GreenRhinoMusic-huawei-pwa
+          - role: player
+            pwa: release/pwa-site-player
+            huawei_dir: clients/huawei-player
+            artifact: GreenRhinoPlayer-huawei-pwa
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps
+        working-directory: clients
+        run: |
+          npm i
+          npx playwright install --with-deps chromium
+      - name: Build PWA
+        run: node scripts/build-web.mjs
+      - name: Generate assets
+        working-directory: clients
+        run: node build-assets.mjs
+      - name: Assemble deploy
+        shell: bash
+        run: |
+          mkdir -p deploy/.well-known
+          cp -r ${{ matrix.pwa }}/* deploy/
+          cp ${{ matrix.huawei_dir }}/assetlinks.json deploy/.well-known/assetlinks.json
+          find deploy -maxdepth 3 | head -30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: deploy/*
+          if-no-files-found: error
