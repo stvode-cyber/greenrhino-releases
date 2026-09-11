@@ -15,12 +15,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role:
-          - key: music
+        include:
+          - role: music
             csproj: clients/windows/GreenRhinoMusic/GreenRhinoMusic.csproj
             exe: GreenRhinoMusic.exe
             artifact: GreenRhinoMusic-win-x64
-          - key: player
+          - role: player
             csproj: clients/windows/GreenRhinoPlayer/GreenRhinoPlayer.csproj
             exe: GreenRhinoPlayer.exe
             artifact: GreenRhinoPlayer-win-x64

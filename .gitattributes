@@ -1,0 +1,5 @@
+# GitHub Actions workflows must be LF
+.github/workflows/*.yml text eol=lf
+# Force all yml/yaml to LF
+*.yml text eol=lf
+*.yaml text eol=lf

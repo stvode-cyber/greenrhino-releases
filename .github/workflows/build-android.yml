@@ -11,15 +11,14 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     strategy:
-      # 矩阵并行，一次同时构建 music / player 两个角色
       fail-fast: false
       matrix:
-        role:
-          - key: music
+        include:
+          - role: music
             gradle: clients/android-music
             app_name: GreenRhinoMusic
             artifact: android-music-release
-          - key: player
+          - role: player
             gradle: clients/android-player
             app_name: GreenRhinoPlayer
             artifact: android-player-release

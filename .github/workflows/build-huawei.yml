@@ -16,12 +16,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role:
-          - key: music
+        include:
+          - role: music
             pwa: release/pwa-site-music
             huawei_dir: clients/huawei-music
             artifact: GreenRhinoMusic-huawei-pwa
-          - key: player
+          - role: player
             pwa: release/pwa-site-player
             huawei_dir: clients/huawei-player
             artifact: GreenRhinoPlayer-huawei-pwa
