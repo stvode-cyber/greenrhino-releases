@@ -1,15 +1,15 @@
 name: Build Huawei PWA assets
 
-# 双独立 App 的华为 AppGallery 上架前检查工作流。
-# 华为走 PWA 上架（不走 TWA，因为缺 GMS）：
-#   - 音乐  → greenrhino-music.pages.dev
-#   - 播放器 → greenrhino-player.pages.dev
-# 每个 App 独立一份 deploy 包，含 PWA 静态资源 + .well-known/assetlinks.json。
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
 
+# 双独立 App 的华为 AppGallery 上架前检查工作流。
+# 华为走 PWA 上架（不走 TWA，因为缺 GMS）：
+#   - 音乐  → greenrhino-music.pages.dev
+#   - 播放器 → greenrhino-player.pages.dev
+# 每个 App 独立一份 deploy 包，含 PWA 静态资源 + .well-known/assetlinks.json。
 jobs:
   huawei:
     runs-on: ubuntu-latest
