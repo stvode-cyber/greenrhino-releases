@@ -42,7 +42,10 @@ icons/                   icon-music.svg / icon-player.svg（角色专属图标�
 2. **androidPackage 唯一**：两个 App 的 `package_name`（`com.greenrhino.music` / `com.greenrhino.player`）和 `assetlinks.json` 的包名/指纹必须严格对应
 3. **siteUrl 唯一**：`assetlinks.json` 的 `target` 域名必须与 Cloudflare Pages 域名匹配
 4. **manifest 主题色绑定**：`manifest.theme_color` 和 `<meta theme-color>` 必须与角色图标颜色一致（音乐绿 `#00D8A6` / 播放器琥珀 `#FFB03A`）
-5. **SW cache 桶隔离**：两个 App 用不同 cache 名（`gr-music-v16` vs `gr-player-v16`），避免跨应用缓存污染
+5. **SW cache 桶隔离**：两个 App 用不同 cache 名（`gr-music-v16` vs `gr-player-v16`），避免跨应用缓存污染。
+   - **源码占位符**：`sw.js` 里 `const CACHE = '__SW_CACHE__'` 是显式占位符，**禁止改成硬编码版本号**（如 `'greenrhino-v14'`）
+   - **替换逻辑**：`scripts/build-web.mjs` 用精确正则 `replace(/'__SW_CACHE__'/, cfg.cache)` 替换，不再依赖隐式的 `greenrhino-v\d+` 格式
+   - **测试覆盖**：改 sw.js 或 build-web.mjs 后必须跑 `npm run test:all`（单元 6 条 + E2E 4 条，全绿才安全）
 6. **源码零构建**：`src/` 目录在运行时由浏览器原生 ES Module 加载。不要引入 bundler 除非明确批准
 
 ## 安全基线
@@ -56,6 +59,7 @@ icons/                   icon-music.svg / icon-player.svg（角色专属图标�
 每次推主版本 tag 前：
 
 - [ ] `scripts/build-web.mjs` APP_VERSION 已递增
+- [ ] **`npm run test:all` 全绿**（单元 6/6 + E2E 4/4，SW cache 占位符 + 浏览器行为双保险）
 - [ ] SW cache 名已对应更新
 - [ ] Windows dotnet publish 本地跑过（`dotnet publish` 无警告）
 - [ ] `wrangler pages deploy release/pwa-site-music --project-name=greenrhino-music` 已执行
