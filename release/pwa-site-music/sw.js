@@ -1,6 +1,11 @@
 // Service Worker：预缓存应用壳 + 全部模块，实现真正的离线可安装
 // 注意：每次发布改版必须递增版本号（v3→v4→…），否则 cache-first 会一直用旧缓存，
 // 导致 exe 里已是新代码、页面却仍在跑旧前端（曾因此出现「转码完成却没画面」）。
+//
+// ⚠️ CACHE 是占位符，会被 scripts/build-web.mjs 里的精确正则替换成：
+//     - music 版 → 'gr-music-v16'（APP_VERSION 决定版本号）
+//     - player 版 → 'gr-player-v16'
+// 不要改成其他格式！替换逻辑见 build-web.mjs 第 ~103 行。
 const CACHE = 'gr-music-v16'
 const CORE = [
   '/', '/index.html', '/favicon.svg', '/icons/icon.svg', '/manifest.webmanifest',

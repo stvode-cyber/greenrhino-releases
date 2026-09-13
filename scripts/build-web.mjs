@@ -98,10 +98,10 @@ function buildRole(key) {
   // 2) manifest.webmanifest
   fs.writeFileSync(path.join(out, 'manifest.webmanifest'), JSON.stringify(cfg.manifest, null, 2))
 
-  // 3) sw.js：只改 CACHE 前缀（v15 角色桶），CORE 全量保留（静态 import 链完整，离线不崩）
+  // 3) sw.js：精确替换占位符 __SW_CACHE__ 为角色专属 cache 名（gr-music-v16 / gr-player-v16）
+  //    旧正则 'greenrhino-v\d+' 已废弃，改用显式占位符消除隐式依赖
   let sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8')
-  sw = sw.replace(/'greenrhino-v14'/, `'${cfg.cache}'`)
-  sw = sw.replace(/'greenrhino-v\d+'/, `'${cfg.cache}'`)
+  sw = sw.replace(/'__SW_CACHE__'/, `'${cfg.cache}'`)
   fs.writeFileSync(path.join(out, 'sw.js'), sw)
 
   // 4) favicon / icons / src / public（全量复制；public 可能不存在则跳过）
