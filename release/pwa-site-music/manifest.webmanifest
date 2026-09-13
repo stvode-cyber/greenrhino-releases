@@ -2,7 +2,7 @@
   "name": "绿角犀音乐",
   "short_name": "绿角犀音乐",
   "description": "离线优先的本地音乐播放器，支持曲库、歌单、收藏、均衡器、歌词与频谱。",
-  "theme_color": "#0E1116",
+  "theme_color": "#00D8A6",
   "background_color": "#0E1116",
   "display": "standalone",
   "orientation": "any",

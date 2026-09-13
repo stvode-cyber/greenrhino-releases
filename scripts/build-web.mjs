@@ -27,11 +27,12 @@ const ROLES = {
     brand: '绿角犀音乐',
     version: APP_VERSION,
     cache: 'gr-music-v16',
+    themeColor: '#00D8A6',
     manifest: {
       name: '绿角犀音乐',
       short_name: '绿角犀音乐',
       description: '离线优先的本地音乐播放器，支持曲库、歌单、收藏、均衡器、歌词与频谱。',
-      theme_color: '#0E1116',
+      theme_color: '#00D8A6',
       background_color: '#0E1116',
       display: 'standalone',
       orientation: 'any',
@@ -48,11 +49,12 @@ const ROLES = {
     brand: '绿角犀播放器',
     version: APP_VERSION,
     cache: 'gr-player-v16',
+    themeColor: '#FFB03A',
     manifest: {
       name: '绿角犀播放器',
       short_name: '绿角犀播放器',
       description: '离线优先的本地视频播放器，支持外挂字幕、音轨切换、画中画、AB 循环与章节跳转。',
-      theme_color: '#0E1116',
+      theme_color: '#FFB03A',
       background_color: '#0E1116',
       display: 'standalone',
       orientation: 'any',
@@ -82,10 +84,11 @@ function buildRole(key) {
   fs.rmSync(out, { recursive: true, force: true })
   fs.mkdirSync(out, { recursive: true })
 
-  // 1) index.html：注入 window.__winRole + 替换 title/brand
+  // 1) index.html：注入 window.__winRole + 替换 title/brand/theme-color
   let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
   html = html.replace(/<title>[^<]*<\/title>/, `<title>${cfg.title}</title>`)
   html = html.replace(/<span class="brand-name">[^<]*<\/span>/, `<span class="brand-name">${cfg.brand}</span>`)
+  html = html.replace(/<meta name="theme-color" content="[^"]*" \/>/, `<meta name="theme-color" content="${cfg.themeColor}" />`)
   html = html.replace(
     '<script type="module" src="/src/main.js"></script>',
     `<script>window.__winRole='${cfg.winRole}';window.__appVersion='${cfg.version}';</script>\n  <script type="module" src="/src/main.js"></script>`
