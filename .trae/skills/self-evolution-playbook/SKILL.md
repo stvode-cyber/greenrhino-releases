@@ -371,3 +371,44 @@ grep -c "theme_color" .trae/skills/code-review-checklist/SKILL.md
 3. **改进必须可回滚**：每次 Skill/Agent 改动必须有 commit hash + 失败证据 + 验证命令
 4. **不进化自己**：self-evolution-engineer.md 这个文件只能由人类修改（防止元递归导致系统不稳定）
 5. **进化的产物必须被消费**：追加的 Skill 条目必须在接下来 2 周内被某个 Agent 实际使用过。如果没人用 → 条目删掉
+
+---
+
+## 十一、审计报告输出（完整模板见同目录）
+
+> 自我进化循环**必须**产出审计报告。每轮循环结束后，复制 `AUDIT_REPORT_TEMPLATE.md` 到 `.trae/documents/YYYY-MM-DD-self-evolution-audit-report.md`，按模板填空。
+
+### 报告文件命名规则
+
+```
+.trae/documents/{YYYY-MM-DD}-self-evolution-audit-report.md
+.trae/documents/{YYYY-MM-DD}-cycle-{短名}.md              # 缩写可选
+```
+
+### 循环完成判断标准（模板 §十二）
+
+必须**全部 5 条**满足才算循环闭合：
+
+| # | 标准 | 检查命令 |
+|---|---|---|
+| 1 | 所有 Bug 已修复 | `git diff HEAD~N..HEAD --stat` |
+| 2 | 每个 Bug 有对应测试 | `test/` 目录有文件 + `npm run test:all` 全绿 |
+| 3 | Skill / Agent 已反哺 | `grep -r "本轮关键词" .trae/skills/` |
+| 4 | 线上验证完成（如有部署） | `curl -s https://{域名}/manifest.webmanifest` |
+| 5 | 报告已 push 到 main | `git log --oneline .trae/documents/ | head -3` |
+
+### 历史报告索引
+
+> 下一轮循环时，更新这里，让人类一眼就能看到所有已完成的循环。
+
+| 日期 | 报告 | 发现 Bug 数 | 核心产出 | 状态 |
+|---|---|---|---|---|
+| 2026-09-13 | [sw.js CACHE 占位符修复](../documents/2026-09-13-self-evolution-audit-report.md) | 2 | 显式占位符 + 10 条测试 + Skill 反哺 | ✅ CYCLE COMPLETE |
+
+### 模板位置
+
+```
+.trae/skills/self-evolution-playbook/
+├── SKILL.md                    # 本文件：执行手册
+└── AUDIT_REPORT_TEMPLATE.md    # 🆕 审计报告输出模板（填空式，含示例）
+```
