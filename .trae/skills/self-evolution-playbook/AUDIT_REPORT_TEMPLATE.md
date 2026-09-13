@@ -2,9 +2,82 @@
 
 > 自我进化工程师每轮循环的**输出契约**。按此模板填写，所有章节可填充即视为循环完成。
 
-使用方法：
+**完整示例**：同目录下 `EXAMPLE_2026-09-13.md`（真实跑通的一轮，可直接参考）
+
+---
+
+## 🚀 快速上手（1 分钟看懂）
+
+> 下面是把模板填完后的**样子**——来自 2026-09-13 真实循环，可直接当填空参考。
+
+### 摘要页（模板 §二 填完后）
+
+```markdown
+| 指标 | 数值 |
+|---|---|
+| 审计检查项 | 27 |
+| Bug 发现 | 4（🔴 2 / 🟠 1 / 🟡 1） |
+| Bug 修复 | 4 |
+| 单元测试新增 | 6 条（Node 原生 node:test） |
+| E2E 测试新增 | 4 条（Playwright 1.63 + Edge） |
+| Skill 反哺 | 4 个（code-review-checklist +2 / devops-engineer +3 / unit-test-spec +60行 / AGENTS.md +5行） |
+| Commit 数 | 7 |
+| 最终测试通过率 | 10/10（100%） |
+```
+
+### 根因分析（模板 §八 填完后）
+
+```markdown
+| 根因类型 | 是否命中 | 具体表现 |
+|---|---|---|
+| 隐式依赖 | ✅ | 两条正则掩盖源码硬编码 v14，新人以为是历史兼容 |
+| 版本号多层传递无断言 | ✅ | APP_VERSION → cfg.cache → 替换进 sw.js，三层无测试 |
+| 无 E2E 浏览器验证 | ✅ | 单元测 release 文本，但没测真实浏览器 SW 注册 |
+| Skill 手册缺条目 | ✅ | code-review-checklist 没有 sw.js cache 占位符检查 |
+| 新人看不懂 | ✅ | 隐式正则写成 replace(/'greenrhino-v\d+'/, ...) 看起来像"通用兜底" |
+| 文档与代码漂移 | ❌ | AGENTS.md §5 只写了"隔离"没写占位符机制 |
+```
+
+### 循环完成判断（模板 §十二 填完后）
+
+```markdown
+| # | 标准 | 证据 | 结果 |
+|---|---|---|---|
+| 1 | 所有 Bug 已修复 | commit 1732157 + 76b8460 | ✅ |
+| 2 | 每个 Bug 有测试 | test/build-sw-cache.test.js + test/e2e/sw-cache.spec.js，10/10 全绿 | ✅ |
+| 3 | Skill / Agent 已反哺 | grep __SW_CACHE__ .trae/skills/ → 3 处新条目 | ✅ |
+| 4 | 线上验证完成 | curl greenrhino-music.pages.dev/manifest → theme_color=#00D8A6 ✅ | ✅ |
+| 5 | 报告已 push | .trae/documents/2026-09-13-self-evolution-audit-report.md 在 main 分支 | ✅ |
+→ **结论：CYCLE COMPLETE**
+```
+
+---
+
+## 📚 示例速查表
+
+> 模板的每个章节，在 `EXAMPLE_2026-09-13.md` 里都有对应的真实内容。下表告诉你去哪找。
+
+| 模板章节 | 示例位置 | 示例亮点 |
+|---|---|---|
+| §一 头部元数据 | EXAMPLE §头部 | 状态写 CYCLE COMPLETE，列出审计范围 |
+| §二 摘要 | EXAMPLE §摘要 | 10 个指标全有数字 |
+| §三 Bug 修复 | EXAMPLE §一 | Bug-1 隐式正则脆弱性 + Bug-2 theme_color 未差异化 |
+| §四 测试覆盖 | EXAMPLE §二 | 双层防护架构图 + 反向验证步骤 |
+| §五 Git 提交链 | EXAMPLE §三 | 7 个 commit 的 hash + 文件数 + 类型 |
+| §六 Skill 反哺 | EXAMPLE §四 | 4 个 Skill/Agent 共约 70 行新内容 |
+| §七 线上验证 | EXAMPLE §五-§六 | Cloudflare Pages 6 项全 PASS + CI 三套 SUCCESS |
+| §八 根因分析 | EXAMPLE §七 | 3 个命中的根因类型详细分析 |
+| §九 改进措施 | EXAMPLE §八 | 7 项对照表 |
+| §十 后续建议 | EXAMPLE §九 | 低/中/高 三档共 8 条 |
+| §十一 审计命令 | EXAMPLE §十 | 10 条可复制 grep/curl/gh run |
+| §十二 循环判断 | 本文件 §十二 | 5 条全满足才算闭合 |
+
+---
+
+## 使用方法
+
 1. 复制本文件到 `.trae/documents/{YYYY-MM-DD}-self-evolution-audit-report.md`
-2. 用 `{占位符}` 标记的地方替换成实际数据
+2. 参考 `EXAMPLE_2026-09-13.md`，把 `{占位符}` 替换成实际数据
 3. 跑完整轮循环后 push 到仓库
 
 ---
