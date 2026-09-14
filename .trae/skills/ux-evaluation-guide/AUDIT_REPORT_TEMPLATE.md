@@ -79,6 +79,17 @@
 
 ## 一、头部元数据
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> # 🎨 UX 体验审计报告
+> 
+> > **项目**：绿角犀 v16
+> > **日期**：2026-09-14
+> > **执行 Agent**：ux-flow-tester + ux-clarity-auditor + ux-onboarding-designer（联合）
+> > **审计范围**：首次体验 30 秒 / 核心流程走查 / 易懂性审计
+> > **状态**：🔶 PARTIAL（CSS accent 颜色未按角色差异化等 3 个 P0 待修）
+> > **本次主要发现**：meta theme_color 改了，但 CSS 里的 --accent 没改
+> ```
 ```markdown
 # 🎨 UX 体验审计报告
 
@@ -93,6 +104,18 @@
 
 ## 二、摘要
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> | 指标 | 数值 |
+> |---|---|
+> | 审计场景 | 3（首次体验 / 流程走查 / 易懂性） |
+> | 走查步骤 | 42 |
+> | 🔴 P0 阻断 | 3 |
+> | 🟠 P1 核心 | 4 |
+> | 🟡 P2 摩擦 | 2 |
+> | 首次体验得分 | 3.5 / 10（音乐版） / 3 / 10（播放器版） |
+> | 模拟首次使用成功率 | 20% |
+> ```
 | 指标 | 数值 |
 |---|---|
 | 审计场景 | {N}（{列出场景名}） |
@@ -108,6 +131,17 @@
 
 ## 三、首次体验 30 秒打分
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> | 时间点 | 检查项 | PASS/FAIL | 证据 |
+> |---|---|---|---|
+> | T+0s | 0.5s 内有意义内容 | ✅ | sidebar + main 正常渲染（~300ms） |
+> | T+1s | 品牌识别 | ❌ | CSS accent 是蓝色 #2D6CDF，不是绿 #00D8A6 |
+> | T+2s | 空状态有引导文案 | ❌ | <main> 里只有搜索框，无引导卡片 |
+> | T+3s | 有大号行动按钮 | ⚠️ | 导入按钮在侧边栏底部（ghost-btn 小号） |
+> | T+25s | 用户完成核心循环 | ⚠️ | 导入 + 找歌 + 点播放需要多少步取决于用户 |
+> **得分：3.5 / 10**
+> ```
 > 必须对每个角色（音乐 / 播放器 / hub...）分别打分。每个检查项必须有证据（PASS/FAIL + 为什么）。
 
 ### 🎵 {角色 A} 版
@@ -137,6 +171,16 @@
 
 ## 四、流程走查
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> ### 场景 M-2：主题色应该按角色区分（但目前没做到）
+> | 检查 | 音乐版期望 | 音乐版实际 |
+> |---|---|---|
+> | manifest theme_color | #00D8A6 绿 | ✅ #00D8A6 |
+> | meta theme-color | #00D8A6 | ✅ #00D8A6 |
+> | CSS --accent | #00D8A6 | ❌ #2D6CDF 蓝 |
+> **根因**：build-web.mjs 只替换了 index.html 和 manifest，没替换 style.css 里的 --accent 变量
+> ```
 > 选择至少 3 个场景——从 `ux-evaluation-guide/SKILL.md` 的场景速查表复制，也可以自定义。
 > 每个场景标注操作步骤 + 用户感受 + 实际问题 + 严重度。
 
@@ -155,6 +199,20 @@
 
 ## 五、易懂性审计
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> ### 错误提示
+> | 位置 | 代码 | 用户能看到？ |
+> |---|---|---|
+> | src/cover.js | console.error('cover fetch fail') | ❌ |
+> | src/store.js | throw new Error('无效同步文件') | ❌ |
+> **结论**：🔴 P0 阻断——用户看不到任何错误反馈
+> 
+> ### 空状态文案
+> | 位置 | 当前状态 | 建议 | 严重度 |
+> |---|---|---|---|
+> | 首次打开 / 空库 | 只有搜索框 | 加引导卡片 | 🔴 P0 |
+> ```
 > 分 3 类：按钮文案 / 错误提示 / 空状态文案。
 > 每类逐条审，每条要么 PASS 要么 FAIL + 建议。
 
@@ -188,6 +246,17 @@ grep -r "console.error\|throw new Error" {src 目录} | wc -l
 
 ## 六、根因分析
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> | 根因类型 | 是否命中 | 具体表现 |
+> |---|---|---|
+> | 隐式依赖遗漏 | ✅ | build-web.mjs 改了 meta 但忘了 CSS 变量 |
+> | 版本号多层传递无断言 | ⚠️ | 三处主题色只测了两处 |
+> | 错误被吞 | ✅ | 12+ 处 console.error，零处用户可见 toast |
+> | UI 引导缺失 | ✅ | 空状态没有引导卡片 |
+> | Skill 手册缺条目 | ✅ | code-review-checklist 没主题色三处检查 |
+> | 无自动化检查 | ⚠️ | 单元测试没测主题色替换 |
+> ```
 > 从 6 类根因里选（命中的打 ✅，没命中的写 ❌ + 一句为什么没有）。
 > **必须写清楚"为什么这个问题能潜伏这么久"**。
 
@@ -204,6 +273,15 @@ grep -r "console.error\|throw new Error" {src 目录} | wc -l
 
 ## 七、改进措施（已落地 / 计划落地）
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> ### 🔴 P0 阻断（必须改）
+> | # | 问题 | 改法 | 落地文件 | 工作量 |
+> |---|---|---|---|---|
+> | 1 | CSS accent 两个 App 都是蓝色 | build-web.mjs 加 style.css 正则替换 | scripts/build-web.mjs | 1h |
+> | 2 | Player 版 main.js 默认 role='music' | build-web.mjs 加 main.js role 替换 | scripts/build-web.mjs | 1h |
+> | 3 | 空库无引导卡片 | main.js 加 items.length === 0 分支 | src/main.js | 4h |
+> ```
 ### 🔴 P0 阻断（必须改）
 
 | # | 问题 | 改法 | 落地文件 | 工作量 |
@@ -223,6 +301,18 @@ grep -r "console.error\|throw new Error" {src 目录} | wc -l
 
 ## 八、后续建议
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> ### 🟢 低风险 · 可立即做
+> 1. build-web.mjs 加 CSS accent 替换——一行正则就能搞定
+> 2. 加主题色替换的单元测试——扩展现有 build-sw-cache.test.js
+> 
+> ### 🟡 中风险 · 下个版本做
+> 4. 封装全局 toast + 替换所有 console.error——涉及 12+ 处
+> 
+> ### 🔴 高风险 · 需要设计评审
+> 6. 搜索 placeholder 按角色差异化——build-web.mjs 需条件替换
+> ```
 ### 🟢 低风险 · 可立即做
 
 1. **{建议 1}**：{一句话说明 + 为什么低风险}
@@ -239,6 +329,14 @@ grep -r "console.error\|throw new Error" {src 目录} | wc -l
 
 ## 九、与现有 Skill / 文档的交叉验证
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> | 现有文档 | 是否覆盖本次发现 | 覆盖程度 | 需追加什么 |
+> |---|---|---|---|
+> | AGENTS.md §4 manifest 主题色绑定 | ✅ 覆盖 manifest + meta | ❌ 没覆盖 CSS 变量 | 追加 CSS --accent 同步 |
+> | code-review-checklist | ❌ 无主题色全链路检查 | — | 追加 P0 条目 |
+> | frontend-component-spec | 需检查 | 可能有 CSS 规范 | 追加主题色三处同步 |
+> ```
 > 检查现有 Skill 手册、AGENTS.md、Skill 反哺清单——本次发现的问题有没有被覆盖？
 > 没覆盖 → 反哺 Skill（下次审计自动检查）。
 
@@ -253,6 +351,17 @@ grep -r "console.error\|throw new Error" {src 目录} | wc -l
 
 ## 十、可执行验证命令
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```bash
+> # CSS 主题色全链路验证
+> curl -s http://127.0.0.1:4173/src/style.css | grep "--accent:"
+> # 当前（有 bug）：两个 App 都是蓝色
+> # 期望（修复后）：音乐版输出 #00D8A6
+> 
+> # 错误可见性检查
+> grep -r "console.error" src/ | wc -l
+> # 期望修复后：0-2 处（且有注释说明是调试用）
+> ```
 > 每条命令必须**可直接复制跑**。跑出来的输出就是下一轮审计的证据。
 
 ```bash
@@ -280,6 +389,17 @@ curl -s https://{域名}/src/style.css | grep "--accent:"
 
 ## 十一、循环完成判断标准
 
+> 💡 **真实示例（来自 EXAMPLE_2026-09-14.md）：**
+> ```markdown
+> | # | 标准 | 证据 | 结果 |
+> |---|---|---|---|
+> | 1 | 所有 P0 已修复 | commit {hash} | ✅ |
+> | 2 | 首次体验得分 ≥ 7/10 | 重跑 §三 | ❌ 当前 3.5/10 |
+> | 3 | 改进措施已反哺 Skill | grep 追加条目 | ⚠️ 待做 |
+> | 4 | 线上验证完成 | curl 验证 | — 本轮未部署 |
+> | 5 | 报告已 push | git log | ✅ main@c5d9fd7 |
+> → **状态：🔶 PARTIAL**
+> ```
 > 满足**所有 5 条**才算 UX 审计循环真正闭合。
 
 | # | 标准 | 检查方式 |
