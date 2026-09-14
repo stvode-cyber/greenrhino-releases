@@ -1,5 +1,6 @@
-plugins {
+﻿plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
 }
 
 android {
@@ -34,16 +35,67 @@ android {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        debug {
+            signingConfig signingConfigs.release  // debug 也用 release keystore，保持 assetlinks 一致
+            minifyEnabled false
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
 }
 
-dependencies {
-    implementation 'androidx.browser:browser:1.8.0'
-    implementation 'androidx.core:core:1.13.1'
-    // TWA 启动器/服务实现（androidx.browser:browser 不包含 LauncherActivity，需此库）
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.4.0'
+// === 关键：把 PWA 打进 APK assets ===
+// 从项目根目录的 release/pwa-site-player/ 复制到 app/src/main/assets/pwa/
+// 如果 release/ 还没 build，自动跑 build-web.mjs
+task copyPwaAssets(type: Copy) {
+    def pwaDir = rootProject.file('../../release/pwa-site-player')
+    def destDir = file("$buildDir/intermediates/merged_assets/debug/out/pwa")
+
+    // 如果 release 目录不存在，先 build
+    if (!pwaDir.exists()) {
+        doLast {
+            exec {
+                workingDir rootProject.file('../..')
+                commandLine 'node', 'scripts/build-web.mjs'
+            }
+        }
+        pwaDir = rootProject.file('../../release/pwa-site-player')
+    }
+
+    from pwaDir
+    into destDir
+    exclude '.well-known/**'   // assetlinks.json 不需要打进 APK（是给云端的）
 }
+
+// release 构建也拷一份
+task copyPwaAssetsRelease(type: Copy) {
+    def pwaDir = rootProject.file('../../release/pwa-site-player')
+    def destDir = file("$buildDir/intermediates/merged_assets/release/out/pwa")
+    from pwaDir
+    into destDir
+    exclude '.well-known/**'
+}
+
+preBuild.dependsOn copyPwaAssets
+preBuild.dependsOn copyPwaAssetsRelease
+
+dependencies {
+    // Kotlin
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+
+    // 媒体能力
+    implementation 'androidx.media:media:1.7.0'
+
+    // WebView
+    implementation 'androidx.webkit:webkit:1.11.0'
+
+    // Splash Screen API（Android 12+）
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+}
+

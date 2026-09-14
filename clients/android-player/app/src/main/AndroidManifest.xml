@@ -1,68 +1,37 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.GreenRhino">
+        android:theme="@style/Theme.GreenRhino"
+        android:usesCleartextTraffic="true">
 
-        <!-- Trusted Web Activity 启动器（类来自 com.google.androidbrowserhelper:androidbrowserhelper） -->
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.GreenRhino">
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.GreenRhino.Launcher">
 
-            <!-- PWA 地址（部署后替换 app_url / app_host） -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="@string/app_url" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
-                android:resource="@color/colorPrimary" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
-                android:resource="@color/colorNavBar" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.SPLASH_SCREEN_BACKGROUND_COLOR"
-                android:resource="@color/colorSplashBg" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE"
-                android:resource="@drawable/splash" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.SPLASH_SCREEN_FADE_OUT_DURATION"
-                android:value="300" />
-            <!-- 数字资产委托：指向站点 /.well-known/assetlinks.json -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.ASSET_STATEMENTS"
-                android:resource="@string/asset_statements" />
-
-            <!-- 启动器入口：让应用出现在桌面/抽屉，供 launcher 直接启动 -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="@string/app_host" />
-            </intent-filter>
         </activity>
-
-        <!-- 媒体通知（Android 13+ 前台服务通知渠道） -->
-        <service
-            android:name="com.google.androidbrowserhelper.trusted.TrustedWebActivityService"
-            android:exported="false">
-            <meta-data
-                android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE"
-                android:value="@string/twa_service" />
-        </service>
     </application>
 </manifest>
+

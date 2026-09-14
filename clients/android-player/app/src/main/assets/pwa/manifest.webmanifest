@@ -1,0 +1,19 @@
+{
+  "name": "绿角犀播放器",
+  "short_name": "绿角犀播放器",
+  "description": "离线优先的本地视频播放器，支持外挂字幕、音轨切换、画中画、AB 循环与章节跳转。",
+  "theme_color": "#FFB03A",
+  "background_color": "#0E1116",
+  "display": "standalone",
+  "orientation": "any",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

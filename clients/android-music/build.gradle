@@ -1,4 +1,5 @@
-// 顶层 build.gradle（TWA 工程）
+// 顶层 build.gradle（WebView 壳工程 · 路线 A）
 plugins {
     id 'com.android.application' version '8.5.2' apply false
+    id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
 }
