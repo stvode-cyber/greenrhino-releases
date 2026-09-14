@@ -1,11 +1,13 @@
-﻿package com.greenrhino.music
+package com.greenrhino.music
 
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
+import android.webkit.ConsoleMessage
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -98,15 +100,42 @@ class MainActivity : ComponentActivity() {
                 val url = request.url.toString()
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     if (!url.contains("android_asset")) {
+                        Log.d("GreenRhino", "External URL intercepted: $url")
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                         return true
                     }
                 }
                 return false
             }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: android.webkit.WebResourceError?
+            ) {
+                Log.e("GreenRhino", "onReceivedError: ${request?.url} → ${error?.description} (code=${error?.errorCode})")
+                super.onReceivedError(view, request, error)
+            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                if (consoleMessage != null) {
+                    val level = when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.ERROR -> "E"
+                        ConsoleMessage.MessageLevel.WARNING -> "W"
+                        ConsoleMessage.MessageLevel.DEBUG -> "D"
+                        else -> "D"
+                    }
+                    Log.println(
+                        level[0].code,
+                        "GreenRhino/JS",
+                        "[${consoleMessage.lineNumber()}] ${consoleMessage.message()}"
+                    )
+                }
+                return true
+            }
+
             override fun onShowFileChooser(
                 webView: WebView,
                 callback: ValueCallback<Array<Uri>>?,

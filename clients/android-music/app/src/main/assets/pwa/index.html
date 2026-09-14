@@ -5,11 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#00D8A6" />
   <title>绿角犀音乐 · 离线音乐播放器</title>
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="stylesheet" href="/src/style.css" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
+  <!-- WebView 壳补丁：检测 webkitdirectory 是否支持，不支持则隐藏文件夹导入按钮 -->
+  <script>
+    (function() {
+      var hasFolderInput = 'webkitdirectory' in HTMLInputElement.prototype;
+      if (!hasFolderInput) {
+        var btn = document.getElementById('import-folder');
+        if (btn) btn.style.display = 'none';
+      }
+      console.log('[GreenRhino] env: webkitdirectory=' + hasFolderInput + ', userAgent=' + navigator.userAgent.match(/GreenRhino\/\d+/));
+    })();
+  </script>
   <div id="app">
     <!-- 侧边栏 -->
     <aside id="sidebar">
@@ -60,6 +71,7 @@
 
   <!-- 隐藏的媒体元素由播放引擎创建 -->
   <script>window.__winRole='music';window.__appVersion='v16';</script>
-  <script type="module" src="/src/main.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
+
