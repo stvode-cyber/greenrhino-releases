@@ -176,3 +176,43 @@
 ├── ux-clarity-{YYYY-MM-DD}.md              # 易懂性审计输出
 └── ux-onboarding-{YYYY-MM-DD}-v{版本}.md   # 首次体验报告
 ```
+
+---
+
+## 九、完整审计报告输出（三 Agent 联合）
+
+> 三个 UX Agent 跑完一轮联合审计后，**必须**产出一份完整的 UX 审计报告。
+> 复制同目录下 AUDIT_REPORT_TEMPLATE.md 到 .trae/documents/{YYYY-MM-DD}-ux-audit-report.md，按模板填空。
+
+### 报告文件命名
+
+`
+.trae/documents/{YYYY-MM-DD}-ux-audit-report.md
+`
+
+### 模板位置 + 目录结构
+
+`
+.trae/skills/ux-evaluation-guide/
+├── SKILL.md                       本文件（评估方法 + 打分工具 + 反模式库）
+├── AUDIT_REPORT_TEMPLATE.md       🆕 填空式模板（11 章节）
+└── EXAMPLE_2026-09-14.md          🆕 完整示例（2026-09-14 真实报告）
+`
+
+### 历史报告索引
+
+> 下一轮 UX 审计时，更新这里。
+
+| 日期 | 报告 | 首次体验得分 | P0 数 | 核心产出 | 状态 |
+|---|---|---|---|---|---|
+| 2026-09-14 | [UX 审计报告](../documents/2026-09-14-ux-audit-report.md) | 3.5 / 3 | 3 | CSS accent 遗漏 + role 默认值错误 | 🔶 PARTIAL（P0 待修） |
+
+### 循环完成判断标准
+
+| # | 标准 | 检查方式 |
+|---|---|---|
+| 1 | 所有 P0 已修复 | git diff 有修复 commit |
+| 2 | 首次体验得分 ≥ 7/10 | 重跑 §三 打分表 |
+| 3 | 改进措施已反哺 Skill | grep 追加条目 |
+| 4 | 线上验证完成（如有部署） | curl 验证 |
+| 5 | 报告已 push 到 main | git log 有报告 commit |
