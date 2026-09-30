@@ -42,6 +42,7 @@ Thumbs.db
 # 测试运行时状态（Playwright/Jest 自动生成，非源码）
 test-results/
 *.screenshot.png
+*-screenshot.png
 
 # 沙箱自测素材（Playwright 导入/播放测试用，非产品内容）
 test-assets/
