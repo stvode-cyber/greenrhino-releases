@@ -75,7 +75,10 @@ document.querySelectorAll('.nav-item').forEach((b) => {
 if (!isHub) { const _ff = document.getElementById('import-folder'); if (_ff) _ff.style.display = 'none' }
 
 // 影像窗口：藏起侧栏，做成纯黑居中的三段式播放器
-if (ROLE === 'video') document.body.classList.add('win-video')
+if (ROLE === 'video') {
+  document.body.classList.add('win-video')
+  document.documentElement.dataset.theme = 'dark'   // 同步设深色主题，等不起异步 getSettings
+}
 // 音乐窗口：强制深色主题（酷狗沉浸绿在浅色下不成立），并挂载 win-music 供酷狗样式作用
 if (ROLE === 'music') {
   document.documentElement.dataset.theme = 'dark'

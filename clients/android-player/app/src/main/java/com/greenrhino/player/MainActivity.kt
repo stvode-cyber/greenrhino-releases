@@ -19,7 +19,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
 /**
- * 绿角犀音乐 · Android WebView 壳（路线 A）
+ * 绿角犀播放器 · Android WebView 壳（路线 A）
  *
  * 设计要点：
  * 1. 全屏沉浸式（无标题栏、隐藏系统 UI）

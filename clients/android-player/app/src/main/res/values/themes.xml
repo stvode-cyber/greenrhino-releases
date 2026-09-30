@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.GreenRhino" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">@color/colorPrimary</item>
+    <!-- 基础主题（无 ActionBar，全屏）-->
+    <style name="Theme.GreenRhino" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:statusBarColor">@color/colorStatusBar</item>
         <item name="android:navigationBarColor">@color/colorNavBar</item>
-        <item name="android:windowBackground">@color/colorSplashBg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+
+    <!-- 启动 Activity 专用（防止白屏）-->
+    <style name="Theme.GreenRhino.Launcher" parent="Theme.GreenRhino">
+        <item name="android:windowBackground">@drawable/splash_gradient</item>
     </style>
 </resources>

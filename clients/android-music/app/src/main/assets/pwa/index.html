@@ -10,17 +10,6 @@
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-  <!-- WebView 壳补丁：检测 webkitdirectory 是否支持，不支持则隐藏文件夹导入按钮 -->
-  <script>
-    (function() {
-      var hasFolderInput = 'webkitdirectory' in HTMLInputElement.prototype;
-      if (!hasFolderInput) {
-        var btn = document.getElementById('import-folder');
-        if (btn) btn.style.display = 'none';
-      }
-      console.log('[GreenRhino] env: webkitdirectory=' + hasFolderInput + ', userAgent=' + navigator.userAgent.match(/GreenRhino\/\d+/));
-    })();
-  </script>
   <div id="app">
     <!-- 侧边栏 -->
     <aside id="sidebar">
@@ -74,4 +63,3 @@
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
-

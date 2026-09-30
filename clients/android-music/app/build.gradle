@@ -54,7 +54,7 @@ android {
 // 如果 release/ 还没 build，自动跑 build-web.mjs
 task copyPwaAssets(type: Copy) {
     def pwaDir = rootProject.file('../../release/pwa-site-music')
-    def destDir = file("$buildDir/intermediates/merged_assets/debug/out/pwa")
+    def destDir = file("$rootDir/app/src/main/assets/pwa")
 
     // 如果 release 目录不存在，先 build
     if (!pwaDir.exists()) {
@@ -75,7 +75,7 @@ task copyPwaAssets(type: Copy) {
 // release 构建也拷一份
 task copyPwaAssetsRelease(type: Copy) {
     def pwaDir = rootProject.file('../../release/pwa-site-music')
-    def destDir = file("$buildDir/intermediates/merged_assets/release/out/pwa")
+    def destDir = file("$rootDir/app/src/main/assets/pwa")
     from pwaDir
     into destDir
     exclude '.well-known/**'
