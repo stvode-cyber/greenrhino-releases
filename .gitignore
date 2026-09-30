@@ -6,12 +6,17 @@ node_modules/
 
 # 构建产物
 dist/
+release/windows-music/
+release/windows-player/
 clients/**/publish/
 clients/**/build/
 clients/**/bin/
 clients/**/obj/
 clients/**/wwwroot/
 clients/**/wwwroot.zip
+
+# Android Gradle 缓存（每次 build 自动变，严禁入库）
+clients/android-*/.gradle/
 
 # 内置 ffmpeg 转码器（98MB 大二进制，构建必需但严禁入库；缺失会导致转码链路失效）
 clients/windows/GreenRhino/ffmpeg.exe
@@ -33,6 +38,10 @@ profile.mobileprovision
 .DS_Store
 Thumbs.db
 *.log
+
+# 测试运行时状态（Playwright/Jest 自动生成，非源码）
+test-results/
+*.screenshot.png
 
 # 沙箱自测素材（Playwright 导入/播放测试用，非产品内容）
 test-assets/
