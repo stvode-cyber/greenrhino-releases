@@ -1,6 +1,6 @@
 # 📋 当前状态 context.md
 
-> **🆕 换电脑交接 TL;DR（2026-09-30 更新）**
+> **🆕 换电脑交接 TL;DR（2026-10-08 更新）**
 > 
 > 这是项目最核心的文件。**新电脑上第一步先读这个，再跑 `npm run test:all` 验证环境。**
 > 
@@ -8,15 +8,14 @@
 > |---|---|
 > | 版本 | v16 |
 > | 分支 | main |
-> | 未提交改动 | AGENTS.md 台账系统升级（五步闭环 + 成长型归类 + daily.md）+ 台账 5 文件升级 |
-> | 最近 git | main 分支，大量改动未 commit（AGENTS.md 台账升级 + Android 壳历史修复 + .trae/memory/ untracked） |
-> | 阻塞 | Android 真机渲染验证（Motorola Resolver + APK 已装但未看到完整渲染） |
-> | 核心已知 bug 已修 | ISS-002（主题）、ISS-003（相对路径）、ISS-005（build.gradle 丢 src/） |
-> | 铁律 | 资源相对路径、copyPwaAssets 去标准目录、改 PWA 重 build-web + build APK、**台账五步闭环必走** |
-> | 测试命令 | `npm run test:all` |
+> | 最近 commit | `d7fd251` chore: 清理调试垃圾文件 → `df1b9e3` feat: 视频播放全屏/沉浸式/控制条自动隐藏 |
+> | 阻塞 | Android 真机视频播放完整验证（CSS grid 溢出坑已修、WebView cache-busting 已加，但真机确认反馈未回） |
+> | 核心已知 bug 已修 | ISS-002/003/005（老）+ **ISS-20261008-001/002/003/004**（本轮新：CSS grid 溢出、WebView 缓存、gradle 覆盖） |
+> | 铁律 | 资源相对路径、copyPwaAssets 去标准目录、改 PWA 重 build-web + build APK、**台账五步闭环必走**、CSS grid 1fr 必写 `minmax(0,1fr)` |
+> | 测试命令 | `npm run test:all`（E2E 依赖 Playwright chromium，新环境可能要重装） |
 > | 台账位置 | `.trae/memory/台账/`（context.md 本文件 + decisions.md + issues.md + index.md + daily.md + .session-memory.md） |
 > 
-> 一句话交接：**台账系统升级完毕——成长型归类加级 + 五步闭环 + daily.md 每日流水。Android 真机渲染待验证是老阻塞，新 AI 先看「最近 5 条动作」区。**
+> 一句话交接：**视频播放核心功能落地（全屏/沉浸式/控制条 auto-hide/返回按钮/顶栏导入按钮），4 个新坑已进台账，#css-grid-overflow 成问题群🔥。新 AI 先看「最近 5 条动作」区。**
 >
 > ---
 > 
@@ -172,6 +171,9 @@ curl -s https://greenrhino-music.pages.dev/index.html | Select-String 'src=|href
 | **adb daemon 重启才能认设备** | ISS-20260915-004 | Windows 上 USB 插好但 `adb devices` 空 → `adb kill-server; adb start-server` |
 | **copyPwaAssets 不能往 merged_assets 中间目录写** | ISS-20260916-001 | 必须往 `app/src/main/assets/pwa/`（Android 标准目录），否则 compressDebugAssets 丢 src/ 子目录 → WebView 白屏 |
 | **Motorola launcher install 会堆快捷方式残留** | ISS-20260916-002 | install 前先 `adb uninstall` 干净；install 后可 `adb shell pm clear com.motorola.launcher3` 清残留，但下次 install 又复现 |
+| **CSS grid 1fr 必须写 minmax(0,1fr)** | **ISS-20261008-001/002** | grid-template-columns 里的 1fr 默认 min-width:auto，子元素 width:100% 会把列撑到无限宽。**必须**写 `minmax(0, 1fr)`；中间容器 `#main` 也必须 `overflow:hidden` |
+| **WebView 缓存旧 CSS/JS 坑** | **ISS-20261008-003** | debug 迭代时：① `adb shell pm clear <pkg>` ② index.html 加 `?v=timestamp` cache-busting ③ install 后**用户必须手动重新打开 App**（force-stop + monkey 不能清 WebView disk cache） |
+| **gradle copyPwaAssets 会覆盖 assets/pwa 里的手改** | **ISS-20261008-004** | copyPwaAssets 从 release/pwa-site-* 拷到 assets/pwa，会覆盖之前 inject 的 marker 或手动改的文件。改 assets 里的文件**必须**在 `gradlew assembleDebug` **之前**改 release 目录，或者改 gradle 任务顺序 |
 
 ---
 
@@ -246,11 +248,11 @@ adb shell am start -n com.greenrhino.player/.MainActivity
 
 | # | 日期 | 做了啥 | 改了哪些文件 | 跑了啥命令 | 关联决策/坑 |
 |---|---|---|---|---|---|
-| 1 | 2026-09-30 | **台账系统全面升级**：AGENTS.md 从 6 条自动触发规则 → 五步闭环（启动先看→改前扫坑→动作即记→完成总汇→索引同步）+ 成长型归类加级（同类问题自动归群、≥3 次修复自动升严重度）+ 工作交接铁律 | AGENTS.md、context.md、decisions.md、issues.md、index.md、daily.md（新增） | — | DEC-20260914-004（迭代台账系统本身） |
-| 2 | 2026-09-18 | Android 壳交接文档 HANDOVER.md 完成，context.md 升级成换电脑交接核心入口 | context.md、HANDOVER.md | — | DEC-20260914-005 |
-| 3 | 2026-09-16 | 修 3 层白屏问题（ISS-002 主题同步、ISS-003 相对路径、ISS-005 build.gradle 标准目录） | index.html、scripts/build-web.mjs、src/main.js、clients/android-player/app/build.gradle | node scripts/build-web.mjs / clean assembleDebug | ISS-20260916-001/002/003 |
-| 4 | 2026-09-15 | HarmonyOS P50 Pro 真机验证 music ✅ 全绿；player 首帧白屏（ISS-002） | src/main.js（L78-80 加 video role data-theme） | adb install / adb logcat | ISS-20260915-002/003/004 |
-| 5 | 2026-09-14 | 台账系统 4 文件 + 6 条自动触发规则首次落地；4 个 UX Agent 分工体系建立 | .trae/memory/台账/（decisions/issues/context/index）、AGENTS.md | — | DEC-20260914-003/004 |
+| 1 | 2026-10-08 | **视频播放核心功能落地**：CSS grid 溢出根因修复（#main overflow:hidden + minmax(0,1fr)）+ 视频沉浸式（顶栏底栏侧栏全隐藏）+ 控制条 3s 自动淡出 + 点画面温柔唤起 + 返回按钮 + 顶栏导入按钮 + MainActivity 清理调试代码 + cache-busting query string 防 WebView 缓存 | src/style.css、src/ui/videoPlayer.js、index.html、src/main.js、MainActivity.kt | build-web.mjs / gradlew assembleDebug / adb shell pm clear / adb install | ISS-20261008-001/002/003/004、DEC-20261008-001/002/003 |
+| 2 | 2026-09-30 | **台账系统全面升级**：AGENTS.md → 五步闭环 + 成长型归类加级 | AGENTS.md、context.md、decisions.md、issues.md、index.md、daily.md | — | DEC-20260914-004 |
+| 3 | 2026-09-18 | Android 壳交接文档 HANDOVER.md 完成 | context.md、HANDOVER.md | — | DEC-20260914-005 |
+| 4 | 2026-09-16 | 修 3 层白屏问题（ISS-002/003/005） | index.html、build-web.mjs、main.js、build.gradle | build-web + assembleDebug | ISS-20260916-001/002/003 |
+| 5 | 2026-09-15 | HarmonyOS P50 Pro 真机验证 music ✅ 全绿 | main.js（加 data-theme） | adb install | ISS-20260915-002/003/004 |
 
 ---
 

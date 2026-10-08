@@ -12,6 +12,23 @@
 
 ### P0 — 影响发布/构建/核心功能
 
+#### 🔶 问题群 #css-grid-overflow（🔥 已加级 P0，累计修复 3 次）
+> 标签：`#css-grid-overflow #css-layout`
+
+| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
+|---|---|---|---|---|---|---|---|
+| 🔥 ISS-20261008-001 | 2026-10-08 | `#main` 缺 `overflow:hidden` → 子元素（vp-page width:100%）撑到容器 82 万亿像素宽 → 顶栏底栏被挤没 | `#main { overflow: hidden }` | CSS grid 中，子元素 `width:100%` 会基于「grid 列的 min-width:auto」计算，而不是容器实际宽度 | **grid 布局的中间容器必须加 overflow:hidden；不要依赖 grid-auto-flow 的隐式裁剪** | #css-grid-overflow | src/style.css `#main` |
+| 🔥 ISS-20261008-002 | 2026-10-08 | `#app { grid-template-columns: 0 minmax(0, 1fr) }` — 1fr 不带 minmax → 列被内容撑宽 | 所有 1fr 列改写 `minmax(0, 1fr)` | grid 的 1fr 默认 min-width:auto，任何 min-width > 0 的子元素会把列撑到超过可用空间 | **所有 grid-template-columns 里的 1fr 必须写 minmax(0, 1fr)** | #css-grid-overflow | src/style.css `#app` grid |
+| ISS-20261008-005 | 2026-10-08 | 视频 `<video>` 元素 `object-fit:contain`（缺省）→ 竖屏播放时黑边 | 沉浸式视频改用 `cover` | contain 保持比例但留黑边；cover 铺满但裁切边角 | **视频播放器提供切换按钮让用户选 contain（完整）/ cover（铺满）/ fill（拉伸）** | #css-video-fit | src/style.css `.vp-stage video` |
+
+#### 🔶 问题群 #android-webview-cache（累计修复 2 次）
+> 标签：`#android-webview-cache #android-webview`
+
+| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
+|---|---|---|---|---|---|---|---|
+| ISS-20261008-003 | 2026-10-08 | WebView 缓存旧 CSS/JS → APK 改了但设备上渲染不变 | ① `adb shell pm clear <pkg>` 清 app 数据 ② index.html 加 `?v=timestamp` cache-busting query string ③ install 后用户手动重新打开 App | WebView 有 disk cache（HTML + JS + CSS 全缓存），install -r 不覆盖已缓存文件，force-stop 也不清 disk cache | **Android WebView debug 迭代必须 cache-busting + pm clear，不要只 install -r + force-stop** | #android-webview-cache | index.html、MainActivity.kt |
+| ISS-20261008-004 | 2026-10-08 | gradle `copyPwaAssets` 每次从 release/pwa-site-* 拷到 assets/pwa，覆盖之前手改的文件 | 改 assets 里的文件必须在 `gradlew assembleDebug` 之前改 release 目录，或改 gradle 任务顺序 | copyPwaAssets 是 gradle 的 Copy 任务，每次 build 都执行，覆盖 destDir 里的所有文件 | **改 Android assets/pwa 里的文件，优先改 src/ → build-web → 再 assemble，不要直接改 assets 目录** | #gradle-asset-copy | clients/android-player/app/build.gradle copyPwaAssets |
+
 #### 🔶 问题群 #android-webview（🔥 已加级 P0，累计修复 4 次）
 > 标签：`#android-webview #relative-path #feature-detection`
 

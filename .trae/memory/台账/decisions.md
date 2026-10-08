@@ -1,4 +1,4 @@
-# 📜 决策台账 decisions.md
+﻿# 📜 决策台账 decisions.md
 
 > 记录项目所有关键决策：**选了啥 / 为啥 / 备选方案 / 关联文件 / 相关坑**
 > 编号规则：`DEC-YYYYMMDD-NNN`，每天递增。已入 Skill 的决策移至「📦 归档区」。
@@ -10,7 +10,9 @@
 ## 🔵 活跃决策
 
 | 编号 | 日期 | 决策项 | 选了啥 | 为什么 | 备选方案（为啥没选） | 关联文件 | **相关坑/决策** | 备注 |
-|---|---|---|---|---|---|---|---|---|
+| DEC-20261008-001 | 2026-10-08 | 视频播放 object-fit 策略：竖屏用 contain（完整），全屏切 cover（铺满） | src/style.css .vp-stage video | 无 | ISS-20261008-005 |
+| DEC-20261008-002 | 2026-10-08 | 控制条 auto-hide 策略：3s 无操作淡出，中间透明层 vp-hint 温柔唤起；**禁止** video.click toggle 播放 | src/ui/videoPlayer.js | 单击画面触发播放/暂停（常见设计，但与唤起控制条冲突） | — |
+| DEC-20261008-003 | 2026-10-08 | player role 把 import-folder 按钮**移到 topbar**（侧栏藏起来了用户找不到） | index.html、src/main.js | 放在隐藏的侧栏里 | ISS-20261008-003 ||---|---|---|---|---|---|---|---|---|
 | DEC-20260914-001 | 2026-09-14 | Android 壳方案 | WebView 原生壳（Kotlin MainActivity） | TWA 依赖 Google Play Services，华为设备 GMS 缺失 → 无法全屏、显示浏览器地址栏；WebView 壳自带全屏、可打包离线资源、可拦截 URL | TWA（原方案，Google 官方但依赖 GMS） | clients/android-music/app/src/main/java/.../MainActivity.kt | → ISS-20260914-002、ISS-20260914-003 | 同时支持音乐和播放器两个 App |
 | DEC-20260914-002 | 2026-09-14 | index.html 资源路径 | 改为相对路径 `./src/...` | WebView 加载本地 assets 时，绝对路径 `/src/...` 指向设备根 → 404；相对路径才能正确指向 assets 内文件 | 绝对路径 `/src/...`（浏览器 dev server 正常但 WebView 失效） | release/pwa-site-{music,player}/index.html | → ISS-20260914-001、🔥ISS-20260916-003 | 浏览器 dev server 下相对路径也能工作 |
 | DEC-20260913-001 | 2026-09-13 | SW cache 版本管理 | sw.js 源码用 `'__SW_CACHE__'` 占位符，build-web.mjs 精确正则替换 | 之前硬编码 `'greenrhino-v14'` + 隐式正则匹配 → 版本号漂移风险；显式占位符 + 精确替换 = 双保险 | 硬编码版本号（隐式正则替换） | sw.js、scripts/build-web.mjs | → ISS-20260913-001 | 已补单元测试 6 条 + E2E 测试 4 条 |

@@ -6,6 +6,22 @@
 
 ---
 
+## 2026-10-08（周三）
+
+- 视频播放核心功能落地：CSS grid 溢出根因修复（`#main overflow:hidden` + `minmax(0,1fr)`）
+- 视频沉浸式：`body.video-playing` 隐藏顶栏底栏侧栏；全屏用 `body.video-immersive`
+- 控制条 3s 自动淡出 + 中间透明层 `vp-hint` 温柔唤起（**不再**硬切播放/暂停）
+- 全屏横屏切换：`RhinoBridge.toggleFullscreen` → `setRequestedOrientation + immersive`
+- 返回按钮加入控制条最前；player role 顶栏加「📁 导入」按钮
+- MainActivity 清理 `onPageFinished` 里的绿色 dump div 调试代码
+- index.html 加 cache-busting query string 防 WebView 缓存旧 CSS
+- `npm run test:all` → Playwright chromium 缺失失败（不是业务代码问题）
+- **2 个 commit 入库**：`df1b9e3` feat: 视频播放全屏/沉浸式/控制条自动隐藏 → `d7fd251` chore: 清理调试垃圾文件
+- 新坑 5 条进台账（ISS-20261008-001~005）+ **#css-grid-overflow 新问题群🔥 P0**
+- 新决策 3 条进台账（DEC-20261008-001~003）
+- 改了 `src/style.css` / `src/ui/videoPlayer.js` / `index.html` / `src/main.js` / `MainActivity.kt`
+- 跑了 `node scripts/build-web.mjs` / `gradlew assembleDebug` / `adb shell pm clear` / `adb install`
+
 ## 2026-09-30（周二）
 
 | 时间 | 任务 | 改了哪些文件 | 跑了啥命令 | 备注 |

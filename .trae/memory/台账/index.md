@@ -11,9 +11,11 @@
 
 | 问题群标签 | 活跃坑 | 归档坑 | 严重度 | 详见 issues.md 第几段 |
 |---|---|---|---|---|
-| `#android-webview` 🔥 | 2 | 2 | 🔴 P0 | P0 活跃坑第一段 |
-| `#relative-path` 🔥 | 1 | 1 | 🔴 P0 | P0 活跃坑第一段 + 归档区 |
-| `#twa-gms` | 2 | 0 | 🔴 P0 | P0 活跃坑第二段 |
+| `#css-grid-overflow` 🔥 | 2 | 0 | 🔴 P0 | **P0 活跃坑第一段（最新！）** |
+| `#android-webview` 🔥 | 2 | 2 | 🔴 P0 | P0 活跃坑第三段 |
+| `#android-webview-cache` | 2 | 0 | 🔴 P0 | P0 活跃坑第二段 |
+| `#relative-path` 🔥 | 1 | 1 | 🔴 P0 | P0 活跃坑第三段 + 归档区 |
+| `#twa-gms` | 2 | 0 | 🔴 P0 | P0 活跃坑第四段 |
 | `#gradle-directory` | 0 | 2 | 🟠 P1 | 归档区第一段 |
 | `#playwright-mirror` | 0 | 1 | 🟡 P2 | 归档区（已提升 user shared） |
 
@@ -24,6 +26,9 @@
 | 模块 | 关键决策 | 踩过的坑 |
 |---|---|---|
 | 整体架构 | DEC-20260909-002（原生 ES Module 零构建） | ISS-20260914-001（资源路径相对路径）、ISS-20260914-010（webkitdirectory feature detection）、🔥ISS-20260916-003（WebView 绝对路径白屏） |
+| style.css（全局） | DEC-20261008-001（object-fit contain/cover 策略） | 🔥ISS-20261008-001（#main 缺 overflow:hidden）、🔥ISS-20261008-002（grid 1fr 缺 minmax）、ISS-20261008-005（video object-fit 默认黑边） |
+| ui/videoPlayer.js | DEC-20261008-002（控制条 auto-hide 策略） | ISS-20261008-003（WebView 缓存旧 JS） |
+| ui/bottombar.js | — | — |
 | library.js | — | ISS-20260914-006（refresh 并发去重） |
 | main.js | — | ISS-20260915-002（video role 同步 data-theme） |
 | player.js | — | — |
