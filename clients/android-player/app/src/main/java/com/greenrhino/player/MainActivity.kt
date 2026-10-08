@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var container: FrameLayout
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val FILE_CHOOSER_REQUEST = 1001
-    private var immersive = true  // 初始就是沉浸式
+    private var immersive = false  // 🔶 初始非沉浸式（toggle 切换：false→true=进入全屏）
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,13 +97,10 @@ class MainActivity : ComponentActivity() {
             cacheMode = WebSettings.LOAD_NO_CACHE  // 🔶 调试期：禁缓存，每次从 assets 重读
         }
 
-        // 🔶 JS Bridge：让 JS 能调 Android 原生功能（全屏、文件选择、console 日志）
-        webView.addJavascriptInterface(object : Any() {
-            @JavascriptInterface
-            fun toggleFullscreen() { runOnUiThread { toggleImmersive() } }
-            @JavascriptInterface
-            fun log(msg: String) { android.util.Log.d("GreenRhino", "[JS] $msg") }
-        }, "RhinoBridge")
+        // 🔶 JS Bridge：让 JS 能调 Android 原生功能（全屏、日志）
+        // ⚠️ 必须用 inner class！匿名 object 上的 @JavascriptInterface 在 targetSdk 34+ 某些设备不生效
+        webView.addJavascriptInterface(RhinoBridge(), "RhinoBridge")
+        android.util.Log.d("GreenRhino", "RhinoBridge registered OK")
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
@@ -240,17 +237,18 @@ class MainActivity : ComponentActivity() {
             if (immersive) hide(WindowInsetsCompat.Type.systemBars())
             else show(WindowInsetsCompat.Type.systemBars())
         }
-        // 2. 切横屏/竖屏（configChanges 在 manifest，不重建 Activity）
-        // 🔶 SCREEN_ORIENTATION_LANDSCAPE 比 SENSOR_LANDSCAPE 更强制
+        // 2. 切横屏/恢复（configChanges 在 manifest，不重建 Activity）
+        // 🔶 SCREEN_ORIENTATION_LANDSCAPE 硬锁横屏——不依赖系统传感器！
+        //    不管用户开不开自动旋转开关，强制切横屏。退出用 UNSPECIFIED 让系统接管。
         val target = if (immersive)
             android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         else
-            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         requestedOrientation = target
         android.util.Log.d("GreenRhino", "requestedOrientation set to=$target")
     }
 
-    // 🔶 确认系统有没有应用我们的旋转请求
+    // 🔶 旋转后强制 WebView 重新布局（解决旋转时左边黑块问题）
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         val orient = when (newConfig.orientation) {
@@ -259,6 +257,19 @@ class MainActivity : ComponentActivity() {
             else -> "OTHER"
         }
         android.util.Log.d("GreenRhino", "onConfigurationChanged → $orient")
+        // 🔶 强制 WebView 重新测量：post 到 UI 线程下一帧，确保配置已生效
+        webView.post {
+            webView.requestLayout()
+            webView.invalidate()
+            // 🔶 通知 JS 层刷新全屏尺寸（解决 vp-page 100vw/100vh 缓存问题）
+            try {
+                webView.evaluateJavascript(
+                    "if(window.__onOrientationChange) window.__onOrientationChange(); " +
+                    "else { var e=new Event('orientationchange'); window.dispatchEvent(e); }",
+                    null
+                )
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onDestroy() {
@@ -266,6 +277,19 @@ class MainActivity : ComponentActivity() {
         webView.removeAllViews()
         webView.destroy()
         super.onDestroy()
+    }
+
+    // 🔶 JS Bridge inner class（必须是独立类，不能匿名！）
+    inner class RhinoBridge {
+        @JavascriptInterface
+        fun toggleFullscreen() {
+            android.util.Log.d("GreenRhino", "RhinoBridge.toggleFullscreen() called from JS")
+            runOnUiThread { toggleImmersive() }
+        }
+        @JavascriptInterface
+        fun log(msg: String) {
+            android.util.Log.d("GreenRhino", "[JS] $msg")
+        }
     }
 }
 

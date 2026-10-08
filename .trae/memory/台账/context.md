@@ -1,4 +1,4 @@
-# 📋 当前状态 context.md
+﻿# 📋 当前状态 context.md
 
 > **🆕 换电脑交接 TL;DR（2026-10-08 更新）**
 > 
@@ -173,7 +173,9 @@ curl -s https://greenrhino-music.pages.dev/index.html | Select-String 'src=|href
 | **Motorola launcher install 会堆快捷方式残留** | ISS-20260916-002 | install 前先 `adb uninstall` 干净；install 后可 `adb shell pm clear com.motorola.launcher3` 清残留，但下次 install 又复现 |
 | **CSS grid 1fr 必须写 minmax(0,1fr)** | **ISS-20261008-001/002** | grid-template-columns 里的 1fr 默认 min-width:auto，子元素 width:100% 会把列撑到无限宽。**必须**写 `minmax(0, 1fr)`；中间容器 `#main` 也必须 `overflow:hidden` |
 | **WebView 缓存旧 CSS/JS 坑** | **ISS-20261008-003** | debug 迭代时：① `adb shell pm clear <pkg>` ② index.html 加 `?v=timestamp` cache-busting ③ install 后**用户必须手动重新打开 App**（force-stop + monkey 不能清 WebView disk cache） |
-| **gradle copyPwaAssets 会覆盖 assets/pwa 里的手改** | **ISS-20261008-004** | copyPwaAssets 从 release/pwa-site-* 拷到 assets/pwa，会覆盖之前 inject 的 marker 或手动改的文件。改 assets 里的文件**必须**在 `gradlew assembleDebug` **之前**改 release 目录，或者改 gradle 任务顺序 |
+| **install 不再 pm clear —— 保留 IndexedDB 媒体库数据** | **ISS-20261008-007** | 每次 adb install 前 pm clear 会把 IndexedDB 全清 → 用户每次打开都要重导入。改用 cache-busting query string 防缓存就够了 |
+| **不再 am force-stop —— Motorola 多 profile 杀旧 uid 混乱** | **ISS-20261008-008** | Motorola 设备有多用户 profile（uid 90010396, 90110396...），force-stop 杀了旧 uid，新 uid 又启动 → 多实例冲突。只用 db install -r |
+| **JS Bridge 必须 inner class，不能匿名 object** | **ISS-20261008-009** | object : Any() { @JavascriptInterface fun ... } 在 targetSdk 34+ 某些设备上不生效。必须是 inner class RhinoBridge { ... } || **gradle copyPwaAssets 会覆盖 assets/pwa 里的手改** | **ISS-20261008-004** | copyPwaAssets 从 release/pwa-site-* 拷到 assets/pwa，会覆盖之前 inject 的 marker 或手动改的文件。改 assets 里的文件**必须**在 `gradlew assembleDebug` **之前**改 release 目录，或者改 gradle 任务顺序 |
 
 ---
 
