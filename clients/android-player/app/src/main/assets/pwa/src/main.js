@@ -2,7 +2,7 @@
 import { h, toast, openModal } from './ui/dom.js'
 import { player } from './player.js'
 import {
-  addMediaFiles, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile
+  addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile
 } from './store.js'
 import { parseTags, guessFromFilename } from './metadata.js'
 import { initBottomBar } from './ui/bottombar.js'
@@ -139,6 +139,32 @@ showPage(isHub ? 'home' : ROLE)
 initBottomBar(app)
 const queue = buildQueue(app)
 initGestures(app)
+
+// 🔶 Android MediaStore 自动导入回调（Native 扫描完回喂 JS）
+// 🔶 Android MediaStore 自动导入——分批累积再一次性落库
+let __mediaBatchBuf = []
+window.__mediaBatch = async (items, status) => {
+  if (items?.length) __mediaBatchBuf.push(...items)
+  if (status === 'ok') {
+    const all = __mediaBatchBuf
+    __mediaBatchBuf = []  // reset
+    if (!all.length) { toast('扫描完成但没发现视频', 'info'); return }
+    toast(`自动扫描到 ${all.length} 个视频/音频，导入中...`, 'ok')
+    const added = await addMediaFromAndroid(all)
+    toast(`导入完成：新增 ${added.length} 个`, 'ok')
+  }
+}
+// 兼容旧单批入口
+window.__mediaImported = (items, status) => window.__mediaBatch(items, status)
+
+// 🔶 App 启动时自动请求 Android MediaStore 扫描（RhinoBridge 存在才调）
+// 🔶 延迟 1.5s 确保 RhinoBridge 注册完再调（WebView 初始化时序）
+setTimeout(() => {
+  if (window.RhinoBridge?.requestAutoImport) {
+  console.log('[gr] Requesting auto import from Android MediaStore...')
+  try { window.RhinoBridge.requestAutoImport() } catch(e) { console.error(e) }
+  }
+}, 1500);
 
 // 移动端侧栏开关
 const sidebar = document.getElementById('sidebar')

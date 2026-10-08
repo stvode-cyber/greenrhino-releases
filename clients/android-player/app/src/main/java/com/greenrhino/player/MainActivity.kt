@@ -1,10 +1,12 @@
 ﻿package com.greenrhino.player
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
@@ -14,10 +16,13 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import org.json.JSONArray
 
 /**
  * 绿角犀播放器 · Android WebView 壳（路线 A）
@@ -36,6 +41,90 @@ class MainActivity : ComponentActivity() {
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val FILE_CHOOSER_REQUEST = 1001
     private var immersive = false  // 🔶 初始非沉浸式（toggle 切换：false→true=进入全屏）
+
+    // 🔶 MediaStore 自动扫描：权限请求 + 全盘查询
+    private val mediaPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val granted = perms.values.any { it }
+        Toast.makeText(this, if (granted) "权限已授予，扫描视频中..." else "权限被拒绝", Toast.LENGTH_SHORT).show()
+        if (granted) scanMediaStore()
+        else webView.evaluateJavascript(
+            "if(window.__mediaImported) window.__mediaImported([], 'permission_denied')", null
+        )
+    }
+
+    private fun scanMediaStore() {
+        Thread {
+            val videos = JSONArray()
+            try {
+                val proj = arrayOf(
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.DURATION,
+                    MediaStore.Video.Media.SIZE
+                )
+                val sort = "${MediaStore.Video.Media.DATE_ADDED} DESC"
+                contentResolver.query(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    proj, null, null, sort
+                )?.use { cur ->
+                    val idxId = cur.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                    val idxName = cur.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                    val idxDur = cur.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                    val idxSize = cur.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                    while (cur.moveToNext()) {
+                        val id = cur.getLong(idxId)
+                        val name = cur.getString(idxName) ?: "video_$id"
+                        val dur = cur.getLong(idxDur)
+                        val size = cur.getLong(idxSize)
+                        val uriStr = Uri.parse("${MediaStore.Video.Media.EXTERNAL_CONTENT_URI}/$id").toString()
+                        val obj = org.json.JSONObject().apply {
+                            put("id", id); put("name", name); put("uri", uriStr)
+                            put("duration", dur); put("size", size)
+                        }
+                        videos.put(obj)
+                    }
+                }
+            } catch (_: Exception) {}
+            runOnUiThread {
+                Toast.makeText(this@MainActivity, "扫描完成: ${videos.length()} 个视频", Toast.LENGTH_LONG).show()
+                // 🔶 分批喂 JS：每 50 个一批 evaluateJavascript（绕开 WebView 长度限制）
+                val batchSize = 50
+                var idx = 0
+                while (idx < videos.length()) {
+                    val end = minOf(idx + batchSize, videos.length())
+                    val batch = JSONArray()
+                    for (i in idx until end) batch.put(videos.getJSONObject(i))
+                    // 最后一批 status='ok'，中间批 status='batch'
+                    val status = if (end == videos.length()) "ok" else "batch"
+                    webView.evaluateJavascript(
+                        "if(window.__mediaBatch)window.__mediaBatch($batch,'$status')", null
+                    )
+                    idx = end
+                }
+            }
+        }.start()
+    }
+
+    private fun requestMediaPermission() {
+        val needsVideo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (needsVideo) {
+            val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO)
+            } else {
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            mediaPermissionLauncher.launch(perms)
+        } else {
+            Toast.makeText(this, "已有权限，扫描视频中...", Toast.LENGTH_SHORT).show()
+            scanMediaStore()
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,6 +209,8 @@ class MainActivity : ComponentActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 android.util.Log.d("GreenRhino", "onPageFinished: $url")
+                // 🔶 页面加载完 → 延迟 2s 自动扫描 MediaStore（等 main.js 初始化）
+                webView.postDelayed({ requestMediaPermission() }, 2000)
             }
 
         }
@@ -289,6 +380,11 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun log(msg: String) {
             android.util.Log.d("GreenRhino", "[JS] $msg")
+        }
+        @JavascriptInterface
+        fun requestAutoImport() {
+            android.util.Log.d("GreenRhino", "RhinoBridge.requestAutoImport() from JS")
+            runOnUiThread { requestMediaPermission() }
         }
     }
 }

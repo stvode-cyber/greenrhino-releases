@@ -190,7 +190,7 @@ class PlayerEngine {
     // 在线预览（接管主播放器后的在线曲目）：直接用远程 URL，不经过 blob 对象 URL
     if (item && item._onlineUrl) return item._onlineUrl
     if (this._urlCache.has(item.id)) return this._urlCache.get(item.id)
-    const url = URL.createObjectURL(item.blob)
+    const url = item.uri || URL.createObjectURL(item.blob)
     this._urlCache.set(item.id, url)
     return url
   }
@@ -220,8 +220,9 @@ class PlayerEngine {
 
   // ---------- 播放控制 ----------
   async playItem(item, { crossfade = false, autoplay = true } = {}) {
-    // §12 文件已丢失：blob 缺失或为空，不尝试加载（避免 URL.createObjectURL(null) 崩溃），直接上报。在线预览除外。
-    if (!item?._online && (!item || !item.blob || item.blob.size === 0)) { this.emit('lost', item); return }
+    // §12 文件已丢失：blob 和 uri 都没有才报丢失（Android MediaStore 自动导入的 item 用 uri 不用 blob）
+    const hasSrc = item?.uri || item?.blob
+    if (!item?._online && (!item || !hasSrc)) { this.emit('lost', item); return }
     // 编解码能力预检：浏览器原生不支持的格式（如 APE、部分特殊编码）提前明确提示，避免静默无反应
     const _mime = item.mime || guessMime(item.name, item.type)
     const _isVid = item.type === 'video' || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(item.name || '')

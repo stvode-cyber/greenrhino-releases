@@ -109,6 +109,34 @@ export async function addMediaFiles(files, folder = '未分类', onProgress) {
   return items
 }
 
+// 🔶 Android MediaStore 自动导入（JSON 数组，有 uri 字段）
+// 不同于 addMediaFiles 接收 File blob，这里存 content:// URI
+export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
+  if (!Array.isArray(jsonItems) || !jsonItems.length) return []
+  // 🔶 双层保险：只收视频（player role 不需要音乐）
+  const VIDEO_EXT = /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv|3gp|rmvb)$/i
+  const items = []
+  for (const j of jsonItems) {
+    if (!j || !j.name) continue
+    if (!VIDEO_EXT.test(j.name)) continue  // 非视频扩展名直接跳过
+    const id = hashId('android:' + j.id + ':' + j.uri)
+    const exists = await dbGet('media', id)
+    if (exists) continue
+    const item = {
+      id, name: j.name, type: 'video', mime: 'video/mp4',
+      size: j.size || 0, addedAt: Date.now(), folder, artist: '', album: '',
+      title: j.name.replace(/\.[^.]+$/, ''), duration: j.duration || 0,
+      uri: j.uri,
+      favorite: false, playCount: 0, lastPlayedAt: 0,
+      source: 'android_mediastore'
+    }
+    await dbPut('media', item, id)
+    items.push(item)
+  }
+  if (items.length) emit('library:changed', items)
+  return items
+}
+
 export async function getAllMedia() {
   const all = await dbGetAll('media')
   return all.sort((a, b) => b.addedAt - a.addedAt)

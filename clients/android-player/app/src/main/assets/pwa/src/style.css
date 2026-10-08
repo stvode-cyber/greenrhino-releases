@@ -277,6 +277,12 @@ body.win-music .app-version { color: var(--kg); border-color: var(--kg-soft); ba
   transform: translateX(100%); transition: transform .25s; z-index: 40; display: flex; flex-direction: column;
 }
 .drawer.open { transform: translateX(0); }
+/* 🔶 播放队列抽屉的背景遮罩（点空白处关闭 + ESC 关闭）*/
+.drawer-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 39;
+}
+.drawer-backdrop.open { opacity: 1; pointer-events: auto; }
 .drawer .dh { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--line); }
 .drawer .dh h3 { margin: 0; font-size: 15px; }
 .drawer .q-search {
