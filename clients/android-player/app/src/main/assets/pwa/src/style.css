@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg: #0E1116;
   --card: #181C22;
   --card-2: #1F242C;
@@ -41,10 +41,11 @@ button { font-family: inherit; cursor: pointer; }
 
 #app {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  grid-template-rows: 1fr auto;
+  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: "side main" "bottom bottom";
   height: 100vh;
+  overflow-x: hidden;  /* 🔶 防止 vp-page 撑宽 body！ */
 }
 
 /* ---------- 侧边栏 ---------- */
@@ -106,7 +107,7 @@ body.win-music .app-version { color: var(--kg); border-color: var(--kg-soft); ba
 .ghost-btn.accent:hover { background: var(--accent); color: #fff; }
 
 /* ---------- 主区 ---------- */
-#main { grid-area: main; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#main { grid-area: main; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 #topbar {
   display: flex; align-items: center; gap: 16px;
   padding: 14px 20px; border-bottom: 1px solid var(--line);
@@ -212,7 +213,7 @@ body.win-music .app-version { color: var(--kg); border-color: var(--kg-soft); ba
 
 /* ---------- 底栏 ---------- */
 #bottombar {
-  grid-area: bottom; background: var(--card); border-top: 1px solid var(--line);
+  grid-area: bottom; width: 100%; min-width: 0; background: var(--card); border-top: 1px solid var(--line);
   display: grid; grid-template-columns: 260px 1fr 200px; align-items: center;
   gap: 16px; padding: 10px 18px;
 }
@@ -515,12 +516,14 @@ body.win-video #view { padding: 0; overflow: hidden; }
   width: 100%;
   height: 100%;
   min-height: calc(100vh - 96px);
+  max-width: 100%;
   background: #0b0d10;
   overflow: hidden;
+  overflow-x: hidden;
 }
 /* 空态：视频内容网格铺满 */
 .vp-page .media-lib { width: 100%; height: 100%; box-sizing: border-box; padding: 18px 22px 16px; }
-/* 播放态：画面铺满整屏，裁剪边缘不留黑边；覆盖在网格之上 */
+/* 播放态：画面铺满整屏，视频居中完整显示（contain，黑边）；覆盖在网格之上 */
 .vp-stage {
   position: absolute;
   inset: 0;
@@ -530,7 +533,49 @@ body.win-video #view { padding: 0; overflow: hidden; }
   background: #000;
   z-index: 5;
 }
-.vp-stage video { width: 100%; height: 100%; object-fit: cover; }
+/* 默认 contain：视频居中完整显示，留黑边；用户可切 cover（铺满裁剪） */
+.vp-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+
+/* 🔶 视频播放态（竖屏）：保留 topbar/bottombar；vp-page 顶到 100vh（但 bottombar 还占一行） */
+body.video-playing .vp-page { min-height: calc(100vh - 96px); }
+
+/* 🔶 播放器角色：永远干掉侧栏 grid 列 —— 画面偏右的根因！ */
+body.win-video #app { grid-template-columns: 0 minmax(0, 1fr) !important; }
+body.win-video #sidebar { display: none !important; width: 0 !important; min-width: 0 !important; max-width: 0 !important; }
+body.win-video #view { margin-left: 0 !important; padding-left: 0 !important; }
+
+/* 🔶 沉浸式全屏（横屏）：隐藏 topbar/bottombar + vp-page fixed 盖满 */
+body.video-playing #topbar { display: none !important; }
+body.video-playing #bottombar { display: none !important; }
+body.video-playing #sidebar { display: none !important; }
+body.video-playing { overflow: hidden !important; }
+body.video-immersive { overflow: hidden !important; }
+body.video-immersive html,
+body.video-immersive body { overflow: hidden !important; }
+body.video-immersive #topbar { display: none !important; }
+body.video-immersive #bottombar { display: none !important; }
+body.video-immersive .vp-page {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  width: 100vw !important; height: 100vh !important;
+  z-index: 9999 !important;
+  margin: 0 !important; padding: 0 !important;
+}
+body.video-immersive .vp-stage {
+  position: absolute !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+}
+body.video-immersive .vp-stage video {
+  object-fit: cover !important;
+  object-position: center center !important;
+  width: 100% !important; height: 100% !important;
+}
+/* 🔶 视频播放控制条：3s 无操作自动隐藏 */
+.vp-stage .vp-opts { transition: opacity .35s ease, transform .35s ease !important; pointer-events: auto !important; }
+.vp-stage.ctrl-hidden .vp-opts { opacity: 0 !important; transform: translateY(12px) !important; pointer-events: none !important; }
+/* 中间提示层：点画面唤起控制条 */
+.vp-stage .vp-hint { position: absolute; inset: 0; z-index: 50; cursor: pointer; background: transparent; }
 /* 影像窗增强控制条：画面底部半透明浮层 */
 .vp-opts {
   position: absolute;

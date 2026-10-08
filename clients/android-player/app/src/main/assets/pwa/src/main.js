@@ -1,4 +1,4 @@
-// main.js — 应用装配与编排
+﻿// main.js — 应用装配与编排
 import { h, toast, openModal } from './ui/dom.js'
 import { player } from './player.js'
 import {
@@ -368,6 +368,7 @@ document.getElementById('search').addEventListener('input', (e) => {
 })
 document.getElementById('import-files').addEventListener('click', importFilesDialog)
 document.getElementById('import-folder').addEventListener('click', importFolderDialog)
+const _ift = document.getElementById('import-folder-top'); if (_ift) _ift.addEventListener('click', importFolderDialog)
 
 // 维护 currentList 供队列上下文使用（音乐/视频各自页内库刷新后同步）
 async function syncCurrentList() { app.currentList = await getAllMedia() }

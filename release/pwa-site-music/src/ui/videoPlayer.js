@@ -1,4 +1,4 @@
-// videoPlayer.js — 影像（视频）窗口的播放器。
+﻿// videoPlayer.js — 影像（视频）窗口的播放器。
 // 空态：用视频内容网格填满整个主区域（不再是一块留白黑屏）。
 // 播放态：画面铺满整屏（object-fit:cover，不留黑边），画面下方是增强控制条：
 //   倍速 / 音轨 / 字幕轨 / 载入字幕 / 章节 / 画中画 / 旋转 / 比例 / 截图 / AB 循环 / 生成片段。
@@ -31,8 +31,8 @@ export function buildVideoPlayer(app) {
   player.on('transcodeProgress', (e) => showTc((e && e.pct) || 0))
   player.on('transcodeDone', hideTc)
 
-  // ---------- 增强控制条（倍速 / 音轨 / 字幕 / 章节 / 画中画 / 旋转 / 比例 / 截图 / AB 循环 / 片段） ----------
-  let rotate = 0, fit = 'cover'
+  // ---------- 增强控制条（倍速 / 音轨 / 字幕 / 章节 / 画中画 / 旋转 / 比例 / 截图 / AB 循环 / 片段 / 全屏） ----------
+  let rotate = 0, fit = 'contain'
 
   const speedSel = h('select', { class: 'opt', onchange: (e) => player.setSpeed(parseFloat(e.target.value)) },
     ...[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) =>
@@ -109,19 +109,31 @@ export function buildVideoPlayer(app) {
     else toast(m && m.msg ? m.msg : '片段生成失败', 'err')
   })
 
-  const opts = h('div', { class: 'vp-opts' },
+    const opts = h('div', { class: 'vp-opts' },
+    h('button', { class: 'opt', title: '返回视频库', onclick: () => {
+      if (document.body.classList.contains('video-immersive')) {
+        document.body.classList.remove('video-immersive');
+        try { window.RhinoBridge?.toggleFullscreen?.() } catch {}
+      }
+      document.body.classList.remove('video-playing');
+      const stage = document.querySelector('.vp-stage'); if (stage) stage.style.display = 'none';
+      const libEl = document.querySelector('#view .vp-page > div:first-child'); if (libEl) libEl.style.display = '';
+      showGrid();
+      if (player) player.stop();
+    } }, '← 返回'),
     h('span', { class: 'opt', style: { pointerEvents: 'none', opacity: .7 } }, '⏩'), speedSel,
     audSel, subSel,
     h('button', { class: 'opt', title: '载入字幕(.srt/.vtt)', onclick: () => subInput.click() }, '📝 字幕'),
     h('button', { class: 'opt', title: '载入章节', onclick: () => chapInput.click() }, '📑 章节'),
     h('button', { class: 'opt', title: '画中画', onclick: () => player.togglePiP() }, '🖼 画中画'),
     h('button', { class: 'opt', title: '旋转', onclick: () => { rotate = (rotate + 1) % 4; video.style.transform = `rotate(${rotate * 90}deg)` } }, '🔄'),
-    h('button', { class: 'opt', title: '画面比例(铺满/原始)', onclick: () => { fit = fit === 'contain' ? 'cover' : 'contain'; video.style.objectFit = fit } }, '📐'),
+    h('button', { class: 'opt', title: '画面比例(完整显示/铺满裁剪)', onclick: () => { fit = fit === 'contain' ? 'cover' : 'contain'; video.style.objectFit = fit; toast('比例：' + (fit === 'contain' ? '完整显示' : '铺满裁剪')) } }, '📐'),
     h('button', { class: 'opt', title: '截图', onclick: screenshot }, '📸'),
     h('button', { class: 'opt', title: '设 A 点(循环起点)', onclick: () => { player.setAB(player.getTime(), (player._ab || {}).b); updAB(); toast('已设 A 点 ' + fmtT(player.getTime())) } }, 'ⓐ'),
     h('button', { class: 'opt', title: '设 B 点(循环终点)', onclick: () => { player.setAB((player._ab || {}).a, player.getTime()); updAB(); toast('已设 B 点 ' + fmtT(player.getTime())) } }, 'ⓑ'),
     h('button', { class: 'opt', title: '清除 AB 循环', onclick: () => { player.clearAB(); updAB(); toast('已清除 AB 循环') } }, '✕AB'),
     h('button', { class: 'opt', title: '生成片段(保存到视频/影音先锋剪辑)', onclick: generateClip }, '✂ 生成片段'),
+    h('button', { class: 'opt', title: '全屏/退出全屏', onclick: () => toggleFullscreen() }, '🔲 全屏'),
     abA, abB)
   stage.appendChild(opts)
 
@@ -167,15 +179,73 @@ export function buildVideoPlayer(app) {
 
   player.setVideoElement(video)
   video.addEventListener('click', () => player.toggle())
-  video.addEventListener('dblclick', postFS)   // 双击画面：全屏/退出全屏
-  function postFS() {
-    try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'fullscreen' })) } catch {}
+  video.addEventListener('dblclick', toggleFullscreen)   // 双击画面：全屏/退出全屏
+  function toggleFullscreen() {
+    try {
+      const bridge = window.RhinoBridge
+      if (bridge?.toggleFullscreen) {
+        bridge.toggleFullscreen()                        // → Android 原生：切横屏 + 沉浸式
+        const alreadyImmersive = document.body.classList.contains('video-immersive')
+        const willEnter = !alreadyImmersive
+        // 🔶 显式 add/remove（不用 toggle！避免状态漂移）
+        if (willEnter) document.body.classList.add('video-immersive')
+        else document.body.classList.remove('video-immersive')
+        document.body.classList.toggle('video-playing', true)
+        video.style.objectPosition = 'center center'
+        video.style.objectFit = willEnter ? 'cover' : 'contain'
+        setTimeout(() => { window.dispatchEvent(new Event('resize')) }, 150)
+        toast(willEnter ? '已进入全屏（横屏）' : '已退出全屏（竖屏）')
+        return
+      }
+      // 兜底：HTML5 Fullscreen API（桌面浏览器）
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+      if (fsEl) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen
+        exit?.call(document); toast('已退出全屏')
+      } else {
+        const target = video.requestFullscreen || video.webkitRequestFullscreen
+        if (target) { target.call(video); toast('已进入全屏') }
+        else toast('当前环境不支持全屏')
+      }
+    } catch (e) {
+      window.RhinoBridge?.log?.('全屏失败: ' + (e?.message || e))
+      toast('全屏失败: ' + (e?.message || e))
+    }
   }
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') postFS() })
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') {
+    // 退出全屏优先
+    if (document.fullscreenElement || document.webkitFullscreenElement) return
+    // 否则是 Android 兜底
+    try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'fullscreen' })) } catch {}
+  }})
 
   // 空态显示内容网格；播放时画面铺满覆盖
-  function showGrid() { stage.style.display = 'none'; lib.el.style.display = '' }
-  function showStage() { stage.style.display = 'flex'; lib.el.style.display = 'none' }
+  function showGrid() { stage.style.display = 'none'; lib.el.style.display = ''; document.body.classList.remove('video-playing'); document.body.classList.remove('video-immersive') }
+  function showStage() { stage.style.display = 'flex'; lib.el.style.display = 'none'; document.body.classList.add('video-playing') }
+
+  // 🔶 控制条自动隐藏：3s 无操作 → 淡出；点画面 → 温柔唤起
+  let hideTimer = null
+  function showControls() {
+    stage.classList.remove('ctrl-hidden')
+    clearTimeout(hideTimer)
+    hideTimer = setTimeout(() => stage.classList.add('ctrl-hidden'), 3000)
+  }
+  // 中间透明层：点画面唤起控制条
+  const hintLayer = h('div', { class: 'vp-hint' })
+  hintLayer.addEventListener('click', () => {
+    // 唤起控制条 + 1.5s 后再 auto-hide
+    showControls()
+    clearTimeout(hideTimer)
+    hideTimer = setTimeout(() => stage.classList.add('ctrl-hidden'), 1500)
+  })
+  stage.appendChild(hintLayer)
+  // 控制条里任何操作都重置 timer
+  opts.addEventListener('click', showControls)
+  opts.addEventListener('mousemove', showControls)
+  stage.addEventListener('touchstart', showControls)
+  stage.addEventListener('mousemove', showControls)
+  // 视频元素自身：点击唤起控制条（不切播放！）
+  video.removeEventListener('click', () => player.toggle())
   player.on('trackchanged', (it) => {
     const playing = !!(it && it.type === 'video')
     if (playing) { showStage(); setTimeout(refreshTrackSelects, 60) } else showGrid()

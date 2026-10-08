@@ -520,7 +520,7 @@ body.win-video #view { padding: 0; overflow: hidden; }
 }
 /* 空态：视频内容网格铺满 */
 .vp-page .media-lib { width: 100%; height: 100%; box-sizing: border-box; padding: 18px 22px 16px; }
-/* 播放态：画面铺满整屏，裁剪边缘不留黑边；覆盖在网格之上 */
+/* 播放态：画面铺满整屏，视频居中完整显示（contain，黑边）；覆盖在网格之上 */
 .vp-stage {
   position: absolute;
   inset: 0;
@@ -530,7 +530,14 @@ body.win-video #view { padding: 0; overflow: hidden; }
   background: #000;
   z-index: 5;
 }
-.vp-stage video { width: 100%; height: 100%; object-fit: cover; }
+/* 默认 contain：视频居中完整显示，留黑边；用户可切 cover（铺满裁剪） */
+.vp-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+
+/* 🔶 视频播放态：隐藏 topbar + bottombar，vp-page 顶到 100vh */
+body.video-playing #topbar { display: none !important; }
+body.video-playing #bottombar { display: none !important; }
+body.video-playing .vp-page { min-height: 100vh; height: 100vh; }
+body.video-playing #app { grid-template-rows: 1fr; }
 /* 影像窗增强控制条：画面底部半透明浮层 */
 .vp-opts {
   position: absolute;

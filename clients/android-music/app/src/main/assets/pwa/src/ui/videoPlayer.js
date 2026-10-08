@@ -31,8 +31,8 @@ export function buildVideoPlayer(app) {
   player.on('transcodeProgress', (e) => showTc((e && e.pct) || 0))
   player.on('transcodeDone', hideTc)
 
-  // ---------- 增强控制条（倍速 / 音轨 / 字幕 / 章节 / 画中画 / 旋转 / 比例 / 截图 / AB 循环 / 片段） ----------
-  let rotate = 0, fit = 'cover'
+  // ---------- 增强控制条（倍速 / 音轨 / 字幕 / 章节 / 画中画 / 旋转 / 比例 / 截图 / AB 循环 / 片段 / 全屏） ----------
+  let rotate = 0, fit = 'contain'
 
   const speedSel = h('select', { class: 'opt', onchange: (e) => player.setSpeed(parseFloat(e.target.value)) },
     ...[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) =>
@@ -116,12 +116,13 @@ export function buildVideoPlayer(app) {
     h('button', { class: 'opt', title: '载入章节', onclick: () => chapInput.click() }, '📑 章节'),
     h('button', { class: 'opt', title: '画中画', onclick: () => player.togglePiP() }, '🖼 画中画'),
     h('button', { class: 'opt', title: '旋转', onclick: () => { rotate = (rotate + 1) % 4; video.style.transform = `rotate(${rotate * 90}deg)` } }, '🔄'),
-    h('button', { class: 'opt', title: '画面比例(铺满/原始)', onclick: () => { fit = fit === 'contain' ? 'cover' : 'contain'; video.style.objectFit = fit } }, '📐'),
+    h('button', { class: 'opt', title: '画面比例(完整显示/铺满裁剪)', onclick: () => { fit = fit === 'contain' ? 'cover' : 'contain'; video.style.objectFit = fit; toast('比例：' + (fit === 'contain' ? '完整显示' : '铺满裁剪')) } }, '📐'),
     h('button', { class: 'opt', title: '截图', onclick: screenshot }, '📸'),
     h('button', { class: 'opt', title: '设 A 点(循环起点)', onclick: () => { player.setAB(player.getTime(), (player._ab || {}).b); updAB(); toast('已设 A 点 ' + fmtT(player.getTime())) } }, 'ⓐ'),
     h('button', { class: 'opt', title: '设 B 点(循环终点)', onclick: () => { player.setAB((player._ab || {}).a, player.getTime()); updAB(); toast('已设 B 点 ' + fmtT(player.getTime())) } }, 'ⓑ'),
     h('button', { class: 'opt', title: '清除 AB 循环', onclick: () => { player.clearAB(); updAB(); toast('已清除 AB 循环') } }, '✕AB'),
     h('button', { class: 'opt', title: '生成片段(保存到视频/影音先锋剪辑)', onclick: generateClip }, '✂ 生成片段'),
+    h('button', { class: 'opt', title: '全屏/退出全屏', onclick: () => toggleFullscreen() }, '🔲 全屏'),
     abA, abB)
   stage.appendChild(opts)
 
@@ -167,15 +168,34 @@ export function buildVideoPlayer(app) {
 
   player.setVideoElement(video)
   video.addEventListener('click', () => player.toggle())
-  video.addEventListener('dblclick', postFS)   // 双击画面：全屏/退出全屏
-  function postFS() {
-    try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'fullscreen' })) } catch {}
+  video.addEventListener('dblclick', toggleFullscreen)   // 双击画面：全屏/退出全屏
+  function toggleFullscreen() {
+    // 优先：HTML5 Fullscreen API（WebView 原生支持）
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document)
+      toast('已退出全屏')
+    } else {
+      const el = stage.requestFullscreen ? stage : (stage.webkitRequestFullscreen || stage.mozRequestFullScreen)
+      if (el) {
+        el.call(stage)
+        toast('已进入全屏')
+      } else {
+        // 兜底：WebView bridge（Android 侧沉浸式）
+        try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'fullscreen' })) } catch {}
+        toast('当前环境不支持原生全屏')
+      }
+    }
   }
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') postFS() })
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') {
+    // 退出全屏优先
+    if (document.fullscreenElement || document.webkitFullscreenElement) return
+    // 否则是 Android 兜底
+    try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'fullscreen' })) } catch {}
+  }})
 
   // 空态显示内容网格；播放时画面铺满覆盖
-  function showGrid() { stage.style.display = 'none'; lib.el.style.display = '' }
-  function showStage() { stage.style.display = 'flex'; lib.el.style.display = 'none' }
+  function showGrid() { stage.style.display = 'none'; lib.el.style.display = ''; document.body.classList.remove('video-playing') }
+  function showStage() { stage.style.display = 'flex'; lib.el.style.display = 'none'; document.body.classList.add('video-playing') }
   player.on('trackchanged', (it) => {
     const playing = !!(it && it.type === 'video')
     if (playing) { showStage(); setTimeout(refreshTrackSelects, 60) } else showGrid()
