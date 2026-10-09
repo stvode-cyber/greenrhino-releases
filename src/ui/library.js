@@ -1,5 +1,5 @@
 // library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
-import { h, openModal } from './dom.js'
+import { h, openModal, toast } from './dom.js'
 import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
 import { player } from '../player.js'
 import { getThumbsMap, queueVideoThumbs } from '../videoThumb.js'

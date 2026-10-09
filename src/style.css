@@ -1007,11 +1007,20 @@ body.win-music #sidebar .brand-logo {
   border-bottom: 1px solid rgba(0,0,0,.04);
   cursor: pointer; transition: background .12s;
 }
-.sr-row:hover { background: rgba(0,0,0,.025); }
-.sr-row:active { background: rgba(0,0,0,.05); }
-.sr-row.sel { background: rgba(0,216,166,.06); }
+.sr-row:hover { background: rgba(0,0,0,.03); }
+.sr-row:active { background: rgba(0,0,0,.06); }
+.sr-row.sel { background: rgba(0,216,166,.08); }
 .sr-row.selectable { cursor: default; }
 .sr-row.selectable .sr-play { opacity: .5; pointer-events: auto; }
+/* 🔶 用户要求：列表行加深区别，在 #EAECEF 灰底上能一眼看清每行边界 */
+.sr-list .sr-row {
+  border-bottom: 1px solid rgba(0,0,0,.07);
+  background: #F2F4F7;   /* 比容器 #EAECEF 稍深 1 级，行与行之间有层次 */
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+.sr-list .sr-row:last-child { border-bottom: none; }
 
 .sr-cover {
   width: 56px; height: 56px; flex-shrink: 0;
