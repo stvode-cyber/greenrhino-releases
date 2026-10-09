@@ -515,7 +515,12 @@ body.win-music .app-version { color: var(--kg); border-color: var(--kg-soft); ba
 
 /* ---------- 影像（视频）窗口：全屏内容播放器 ---------- */
 body.win-video #sidebar { display: none; }
-body.win-video #view { padding: 0; overflow: hidden; }
+/* 🔶 player role 不需要搜索条，隐藏 topbar 里的 .search-box */
+body.win-video .search-box { display: none !important; }
+/* 🔶 win-video 空态（媒体库）保持可滚；只有 video-playing / video-immersive 才禁 */
+body.win-video:not(.video-playing):not(.video-immersive) #view { overflow-y: auto !important; }
+body.win-video.video-playing #view,
+body.win-video.video-immersive #view { overflow: hidden !important; }
 
 .vp-page {
   position: relative;
@@ -524,9 +529,12 @@ body.win-video #view { padding: 0; overflow: hidden; }
   min-height: calc(100vh - 96px);
   max-width: 100%;
   background: #0b0d10;
-  overflow: hidden;
   overflow-x: hidden;
+  /* 🔶 空态（没在播放）时能滚媒体库；播放态 stage 盖上来后 overflow:hidden 更干净 */
+  overflow-y: auto;
 }
+body.video-playing .vp-page,
+body.video-immersive .vp-page { overflow-y: hidden !important; }
 /* 空态：视频内容网格铺满 */
 .vp-page .media-lib { width: 100%; height: 100%; box-sizing: border-box; padding: 18px 22px 16px; }
 /* 播放态：画面铺满整屏，视频居中完整显示（contain，黑边）；覆盖在网格之上 */
@@ -546,8 +554,12 @@ body.win-video #view { padding: 0; overflow: hidden; }
 body.video-playing .vp-page { min-height: calc(100vh - 96px); }
 
 /* 🔶 播放器角色：永远干掉侧栏 grid 列 —— 画面偏右的根因！ */
-body.win-video #app { grid-template-columns: 0 minmax(0, 1fr) !important; }
-body.win-video #sidebar { display: none !important; width: 0 !important; min-width: 0 !important; max-width: 0 !important; }
+body.win-video #app {
+  grid-template-columns: 1fr !important;
+  grid-template-areas: "main" "bottom" !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+}
+body.win-video #sidebar { display: none !important; width: 0 !important; min-width: 0 !important; max-width: 0 !important; grid-area: none !important; }
 body.win-video #view { margin-left: 0 !important; padding-left: 0 !important; }
 
 /* 🔶 沉浸式全屏（横屏）：隐藏 topbar/bottombar + vp-page fixed 盖满 */
@@ -575,7 +587,9 @@ body.video-immersive .vp-stage video {
   object-position: center center !important;
   position: absolute !important; inset: 0 !important;
 }
-/* 🔶 全屏时：返回按钮浮左上角、全屏按钮浮右上角 */
+/* 🔶 播放态（竖屏+全屏）：返回按钮浮左上角、全屏按钮浮右上角 */
+body.video-playing .vp-opts .vp-back,
+body.video-playing .vp-opts .vp-fs,
 body.video-immersive .vp-opts .vp-back,
 body.video-immersive .vp-opts .vp-fs {
   position: fixed !important;
@@ -583,7 +597,9 @@ body.video-immersive .vp-opts .vp-fs {
   z-index: 9999 !important;
   opacity: 0.95 !important;
 }
+body.video-playing .vp-opts .vp-back,
 body.video-immersive .vp-opts .vp-back { left: 16px !important; }
+body.video-playing .vp-opts .vp-fs,
 body.video-immersive .vp-opts .vp-fs  { right: 16px !important; }
 /* 🔶 视频播放控制条：3s 无操作自动隐藏 */
 .vp-stage .vp-opts { transition: opacity .35s ease, transform .35s ease !important; pointer-events: auto !important; z-index: 60 !important; }
@@ -626,6 +642,9 @@ body.video-immersive .vp-opts .vp-fs  { right: 16px !important; }
 .vp-opts select.opt { cursor: pointer; }
 .vp-opts .opt:hover { border-color: var(--accent); color: var(--accent); }
 .vp-opts .ab-label { pointer-events: none; opacity: .85; color: var(--accent); }
+/* 🔶 AB 循环按钮默认隐藏，点「✂ 生成片段」后才出现 */
+.opt-ab { display: none !important; }
+.opt-ab.show { display: inline-flex !important; }
 
 /* ---------- 音乐页 · 酷狗风格（Kugou-like）：品牌绿 + 大圆角封面 + 沉浸播放区 ---------- */
 body.win-music,
@@ -811,19 +830,39 @@ body.win-video,
     var(--bg);
 }
 /* 影片网格卡片：温和圆角 + 悬停琥珀 */
-.video-page .media-lib .card {
+body.win-video .vp-page .media-lib .card {
   border-radius: 16px;
   border-color: rgba(255, 255, 255, .07);
   overflow: hidden;
   transition: transform .18s, border-color .18s, box-shadow .18s;
 }
-.video-page .media-lib .card .thumb { border-radius: 16px 16px 0 0; }
-.video-page .media-lib .card:hover {
+body.win-video .vp-page .media-lib .card .thumb { border-radius: 16px 16px 0 0; position: relative; }
+/* 🔶 视频卡片：时长徽标绝对定位在缩略图右下角（data-dur 非空才显示） */
+body.win-video .vp-page .media-lib .card .thumb[data-dur]:not([data-dur=""])::after {
+  content: attr(data-dur);
+  position: absolute; right: 6px; bottom: 6px;
+  background: rgba(0,0,0,.72); color: #fff;
+  font-size: 11px; padding: 1px 6px; border-radius: 4px;
+  pointer-events: none;
+}
+body.win-video .vp-page .media-lib .card:hover {
   transform: translateY(-5px);
   border-color: rgba(255, 176, 58, .6);
   box-shadow: 0 16px 34px rgba(0,0,0,.4), 0 0 28px var(--vd-soft);
 }
-.video-page .media-lib .card .meta .name { font-size: 13.5px; font-weight: 600; }
+/* 🔶 video page 卡片 meta 区加大 + 完整显示文件名（不截断） */
+body.win-video .vp-page .media-lib .card .meta { padding: 10px 12px 12px; }
+body.win-video .vp-page .media-lib .card .meta .name {
+  font-size: 13px; font-weight: 600;
+  white-space: normal !important;      /* 🔶 不截断 */
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.35;
+  max-height: 2.7em;                    /* 最多 2 行 */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+body.win-video .vp-page .media-lib .card .meta .sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 
 /* 影像窗控制条：按钮悬停琥珀 + 玻璃底 */
 body.win-video .vp-opts .opt {

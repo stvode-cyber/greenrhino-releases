@@ -120,8 +120,9 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
     if (!j || !j.name) continue
     if (!VIDEO_EXT.test(j.name)) continue  // 非视频扩展名直接跳过
     const id = hashId('android:' + j.id + ':' + j.uri)
-    const exists = await dbGet('media', id)
-    if (exists) continue
+    // 🔶 跳过 exists 检查：WebView IndexedDB 残留 + 重复 import 覆盖更新
+    // const exists = await dbGet('media', id)
+    // if (exists) continue
     const item = {
       id, name: j.name, type: 'video', mime: 'video/mp4',
       size: j.size || 0, addedAt: Date.now(), folder, artist: '', album: '',

@@ -8,7 +8,8 @@
 > |---|---|
 > | 版本 | v16 |
 > | 分支 | main |
-> | 最近 commit | `d7fd251` chore: 清理调试垃圾文件 → `df1b9e3` feat: 视频播放全屏/沉浸式/控制条自动隐藏 |
+> | 最近 commit：
+  v16 持续迭代 → 2026-10-09 修复 3 个闪烁根因
 > | 阻塞 | Android 真机视频播放完整验证（CSS grid 溢出坑已修、WebView cache-busting 已加，但真机确认反馈未回） |
 > | 核心已知 bug 已修 | ISS-002/003/005（老）+ **ISS-20261008-001/002/003/004**（本轮新：CSS grid 溢出、WebView 缓存、gradle 覆盖） |
 > | 铁律 | 资源相对路径、copyPwaAssets 去标准目录、改 PWA 重 build-web + build APK、**台账五步闭环必走**、CSS grid 1fr 必写 `minmax(0,1fr)` |

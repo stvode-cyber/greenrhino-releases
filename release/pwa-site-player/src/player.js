@@ -191,6 +191,7 @@ class PlayerEngine {
     if (item && item._onlineUrl) return item._onlineUrl
     if (this._urlCache.has(item.id)) return this._urlCache.get(item.id)
     const url = item.uri || URL.createObjectURL(item.blob)
+    console.error('[gr] _urlFor id=' + item?.id?.slice(0,10) + ' url=' + (url?.slice(0,80) || 'null') + ' isContent=' + (url?.startsWith?.('content://') || false))
     this._urlCache.set(item.id, url)
     return url
   }

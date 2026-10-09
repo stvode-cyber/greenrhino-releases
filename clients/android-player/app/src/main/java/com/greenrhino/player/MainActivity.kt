@@ -12,6 +12,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -86,44 +87,45 @@ class MainActivity : ComponentActivity() {
                         videos.put(obj)
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.e("GreenRhino", "scanMediaStore EXCEPTION: ${e.javaClass.name}: ${e.message}", e)
+            }
+            android.util.Log.e("GreenRhino", "scanMediaStore: FINISHED videos.length=${videos.length()}")
             runOnUiThread {
-                Toast.makeText(this@MainActivity, "扫描完成: ${videos.length()} 个视频", Toast.LENGTH_LONG).show()
-                // 🔶 分批喂 JS：每 50 个一批 evaluateJavascript（绕开 WebView 长度限制）
+                android.util.Log.e("GreenRhino", "runOnUiThread: evaluateJavascript batches start, total=${videos.length()}")
                 val batchSize = 50
                 var idx = 0
+                var bn = 0
                 while (idx < videos.length()) {
                     val end = minOf(idx + batchSize, videos.length())
                     val batch = JSONArray()
                     for (i in idx until end) batch.put(videos.getJSONObject(i))
-                    // 最后一批 status='ok'，中间批 status='batch'
                     val status = if (end == videos.length()) "ok" else "batch"
-                    webView.evaluateJavascript(
-                        "if(window.__mediaBatch)window.__mediaBatch($batch,'$status')", null
-                    )
+                    // 🔶 用 batch.toString() 确保 JSON 正确转义；去掉 if guard 直接调
+                    val js = "try{window.__mediaBatch(${batch.toString()},'$status')}catch(e){'ERR:'+e.message}"
+                    bn++
+                    android.util.Log.e("GreenRhino", "evalJS batch#$bn size=${batch.length()} status=$status jsLen=${js.length}")
+                    webView.evaluateJavascript(js) { r ->
+                        android.util.Log.e("GreenRhino", "evalJS batch#$bn result=$r")
+                    }
                     idx = end
+                }
+                // 额外测试：直接 evaluate 一个简单表达式
+                webView.evaluateJavascript("window.__mediaBatch ? 'EXISTS' : 'MISSING'") { r ->
+                    android.util.Log.e("GreenRhino", "direct check __mediaBatch = $r")
+                }
+                // 🔶 诊断 DOM 尺寸链：vp-page / lib.el / #view / #main
+                webView.evaluateJavascript("(function(){var r=[];var sels=['#app','#main','#view','.vp-page','.vp-page .media-lib','.vp-page .media-grid'];for(var s of sels){var e=document.querySelector(s);if(e){var rct=e.getBoundingClientRect();r.push(s+': '+Math.round(rct.width)+'x'+Math.round(rct.height)+' display='+getComputedStyle(e).display+' vis='+getComputedStyle(e).visibility+' op='+getComputedStyle(e).opacity)}}return r.join(' | ')})()") { r ->
+                    android.util.Log.e("GreenRhino", "DOM size chain: $r")
                 }
             }
         }.start()
     }
 
     private fun requestMediaPermission() {
-        val needsVideo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        } else {
-            checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-        if (needsVideo) {
-            val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO)
-            } else {
-                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-            }
-            mediaPermissionLauncher.launch(perms)
-        } else {
-            Toast.makeText(this, "已有权限，扫描视频中...", Toast.LENGTH_SHORT).show()
-            scanMediaStore()
-        }
+        // 🔶 无条件直接 scan：pm grant 已预授权；Motorola 拦截权限请求链路
+        android.util.Log.e("GreenRhino", "requestMediaPermission -> scanMediaStore() (force)")
+        scanMediaStore()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -192,6 +194,26 @@ class MainActivity : ComponentActivity() {
         android.util.Log.d("GreenRhino", "RhinoBridge registered OK")
 
         webView.webViewClient = object : WebViewClient() {
+            // 🔶 拦截 content:// URI → ContentResolver.openInputStream → WebResourceResponse
+            // WebView 不认识 content://，必须代理给 Android ContentResolver
+            override fun shouldInterceptRequest(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): WebResourceResponse? {
+                val url = request?.url?.toString() ?: return null
+                if (url.startsWith("content://")) {
+                    return try {
+                        val input = contentResolver.openInputStream(Uri.parse(url)) ?: return null
+                        val mime = contentResolver.getType(Uri.parse(url)) ?: "video/mp4"
+                        android.util.Log.e("GreenRhino", "intercept content:// mime=$mime url=${url.take(60)}")
+                        WebResourceResponse(mime, null, input)
+                    } catch (e: Exception) {
+                        android.util.Log.e("GreenRhino", "intercept content:// FAIL: ${e.message}")
+                        null
+                    }
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
             override fun shouldOverrideUrlLoading(
                 view: WebView,
                 request: WebResourceRequest

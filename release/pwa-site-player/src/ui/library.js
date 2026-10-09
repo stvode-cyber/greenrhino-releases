@@ -54,6 +54,11 @@ export function mediaLibrary(app, type) {
     const gen = ++refreshGen
     const all = await getAllMedia()
     if (gen !== refreshGen) return
+    // 🔶 诊断日志：MediaStore 数据到底对不对
+    const typeCounts = {}
+    for (const m of all) typeCounts[m.type] = (typeCounts[m.type] || 0) + 1
+    console.error(`[gr-lib] refresh: all=${all.length} typeCounts=`, JSON.stringify(typeCounts), `filtering for type="${type}"`)
+    if (all.length) console.error(`[gr-lib] sample item.type=${all[0].type} name=${all[0].name?.slice(0,30)} id=${all[0].id}`)
     el.replaceChildren()
     // 显示层去重（只隐藏、不动数据）：
     // 1) 同名同规格（name+size）判定为同一文件重复导入，只保留最新导入的一条；
@@ -71,6 +76,7 @@ export function mediaLibrary(app, type) {
       for (const m of latest.values()) keepIds.add(m.id)
     }
     const list = all.filter((m) => matches(m) && keepIds.has(m.id))
+    console.error(`[gr-lib] refresh: keepIds.size=${keepIds.size} list(after matches+dedup)=${list.length}`)
     // 视频缩略图：从 thumbnails store 合并到条目，随后把缺图的视频排进后台抽帧队列
     const thumbs = await getThumbsMap()
     for (const m of list) if (m.type === 'video') m.thumb = thumbs.get(m.id) || null
@@ -235,8 +241,15 @@ export function mediaLibrary(app, type) {
 }
 
 export function mediaCard(item, app, opts = {}) {
-  const isLost = !item.blob || item.blob.size === 0
-  const thumb = h('div', { class: 'thumb' }, TYPE_ICON[item.type])
+  // 🔶 丢失判断：有 uri（Android MediaStore）就不算丢失，只有 blob 为空且没 uri 才算丢
+  const isLost = !item.blob && !item.uri
+  // 🔶 时长格式化：秒 → "mm:ss"（CSS attr() 读 data-dur 显示在 thumb 右下角）
+  let durStr = ''
+  if (item.duration != null && isFinite(item.duration) && item.duration > 0) {
+    const m = Math.floor(item.duration / 60), s = Math.floor(item.duration % 60)
+    durStr = `${m}:${String(s).padStart(2, '0')}`
+  }
+  const thumb = h('div', { class: 'thumb', 'data-dur': durStr }, TYPE_ICON[item.type])
   const coverOrThumb = item.cover || item.thumb
   if (coverOrThumb) thumb.innerHTML = ''
   if (coverOrThumb) thumb.appendChild(h('img', { src: coverOrThumb, alt: '', loading: 'lazy' }))

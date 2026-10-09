@@ -18,6 +18,7 @@ import { buildQueue } from './ui/queue.js'
 import { openSettings } from './ui/settings.js'
 import { openHelp } from './help.js'
 import { initGestures } from './ui/gestures.js'
+import { queueVideoThumbs } from './videoThumb.js'
 
 // store.js 事件总线
 const app = {
@@ -144,14 +145,20 @@ initGestures(app)
 // 🔶 Android MediaStore 自动导入——分批累积再一次性落库
 let __mediaBatchBuf = []
 window.__mediaBatch = async (items, status) => {
+  console.error('[gr] __mediaBatch called items=' + (items?.length || 0) + ' status=' + status + ' __mediaBatchBuf.length=' + __mediaBatchBuf.length)
   if (items?.length) __mediaBatchBuf.push(...items)
   if (status === 'ok') {
     const all = __mediaBatchBuf
-    __mediaBatchBuf = []  // reset
+    __mediaBatchBuf = []
+    console.error('[gr] __mediaBatch final buf.length=' + all.length)
     if (!all.length) { toast('扫描完成但没发现视频', 'info'); return }
     toast(`自动扫描到 ${all.length} 个视频/音频，导入中...`, 'ok')
     const added = await addMediaFromAndroid(all)
+    console.error('[gr] addMediaFromAndroid added.length=' + added.length)
     toast(`导入完成：新增 ${added.length} 个`, 'ok')
+    // 🔶 ISS-20261008-006：给新导入的视频排队抽帧生成封面
+    const newVideos = added.filter(i => i.type === 'video')
+    if (newVideos.length) queueVideoThumbs(newVideos)
   }
 }
 // 兼容旧单批入口
@@ -166,7 +173,14 @@ setTimeout(() => {
   }
 }, 1500);
 
-// 移动端侧栏开关
+// 🔶 ISS-20261008-006：启动时对已存在的视频也排队抽帧（兜底，防止之前导入的没封面）
+setTimeout(async () => {
+  try {
+    const all = await getAllMedia()
+    const videos = all.filter(i => i.type === 'video')
+    if (videos.length) queueVideoThumbs(videos)
+  } catch {}
+}, 3000);
 const sidebar = document.getElementById('sidebar')
 document.getElementById('menu-toggle').addEventListener('click', () => sidebar.classList.toggle('open'))
 

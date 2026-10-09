@@ -90,7 +90,7 @@ function buildRole(key) {
   html = html.replace(/<span class="brand-name">[^<]*<\/span>/, `<span class="brand-name">${cfg.brand}</span>`)
   html = html.replace(/<meta name="theme-color" content="[^"]*" \/>/, `<meta name="theme-color" content="${cfg.themeColor}" />`)
   html = html.replace(
-    '<script type="module" src="./src/main.js"></script>',
+    /<script type="module" src="\.\/src\/main\.js[^"]*"><\/script>/,
     `<script>window.__winRole='${cfg.winRole}';window.__appVersion='${cfg.version}';</script>\n  <script type="module" src="./src/main.js"></script>`
   )
   fs.writeFileSync(path.join(out, 'index.html'), html)
