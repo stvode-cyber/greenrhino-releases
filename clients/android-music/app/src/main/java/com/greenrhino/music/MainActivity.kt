@@ -147,6 +147,10 @@ class MainActivity : ComponentActivity() {
                 Log.e("GreenRhino", "onReceivedError: ${request?.url} → ${error?.description} (code=${error?.errorCode})")
                 super.onReceivedError(view, request, error)
             }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+            }
         }
 
 // 🔶 ISS-20261009-017: 现代 ActivityResultLauncher（替代废弃的 startActivityForResult）

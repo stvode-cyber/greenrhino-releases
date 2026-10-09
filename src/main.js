@@ -118,40 +118,21 @@ function buildHome(app) {
   return { el, show() { setTimeout(() => input.focus?.(), 60) } }
 }
 
-// 🔶 DEC-20261009-005: 整页导入页（用户确认方案：点导入 → 进入整页，不是弹窗）
-// 页面上两个大选项：扫描音乐 / 手动打开手机文件
+// 🔶 DEC-20261009-005: 所有导入入口直接触发，不走中间层
+// 📥 扫描音乐（MediaStore 全量扫） / 📁 手动打开（SAF 文件选择器）
 function doScan() {
   if (window.RhinoBridge?.requestAutoImport) {
     toast('开始扫描音乐文件...', 'info')
     window.RhinoBridge.requestAutoImport()
   } else {
-    toast('当前环境不支持自动扫描，请用"手动打开"', 'warn')
+    toast('当前环境不支持自动扫描', 'warn')
   }
 }
-function openImportPage(app) {
-  const page = h('div', { class: 'imp-page' },
-    h('div', { class: 'imp-head' },
-      h('button', { class: 'icon-btn', onclick: () => close() }, '←'),
-      h('h3', {}, '导入音乐')),
-    h('div', { class: 'imp-body' },
-      h('div', { class: 'imp-opt', onclick: () => { close(); doScan() } },
-        h('div', { class: 'imp-opt-icon' }, '📥'),
-        h('div', { class: 'imp-opt-txt' },
-          h('div', { class: 'imp-opt-title' }, '扫描音乐'),
-          h('div', { class: 'imp-opt-desc' }, '自动扫描手机里所有音频，一键导入')),
-        h('div', { class: 'imp-opt-arrow' }, '›')),
-      h('div', { class: 'imp-opt', onclick: () => { close(); app.importFilesDialog() } },
-        h('div', { class: 'imp-opt-icon' }, '📁'),
-        h('div', { class: 'imp-opt-txt' },
-          h('div', { class: 'imp-opt-title' }, '手动打开手机文件'),
-          h('div', { class: 'imp-opt-desc' }, '从文件管理器挑选音乐，支持多选')),
-        h('div', { class: 'imp-opt-arrow' }, '›'))))
-  function close() { page.remove() }
-  document.body.appendChild(page)
+function doOpenFiles(app) {
+  app.importFilesDialog()
 }
-// 暴露到 window 供 library.js 等子模块调用
-window.openImportPage = openImportPage
 window.doScan = doScan
+window.doOpenFiles = doOpenFiles
 
 // 🔶 ISS-20261009-018: Music App 专属首页（参考图风格 — 问候 + 搜索 + 大卡片 + 可折叠 section）
 // 上一轮 UI 重构漏了函数体 → music role main.js init crash → SW 注册走不到（ISS-20261009-019）
@@ -171,17 +152,18 @@ function buildMusicHome(app) {
   const cardFav = h('div', { class: 'mh-card', onclick: () => showPage('favorites') },
     h('div', { class: 'mh-card-icon' }, '⭐'),
     h('div', { class: 'mh-card-label' }, '我的收藏'), favN)
-  const cardImport = h('div', { class: 'mh-card', onclick: () => openImportPage(app) },
-    h('div', { class: 'mh-card-icon' }, '📥'),
-    h('div', { class: 'mh-card-label' }, '导入音乐'),
-    h('div', { class: 'mh-card-hint' }, '扫描 / 手动选择'))
+  const cardImport = h('div', { class: 'mh-card', onclick: () => doOpenFiles(app) },
+    h('div', { class: 'mh-card-icon' }, '📁'),
+    h('div', { class: 'mh-card-label' }, '打开手机文件'),
+    h('div', { class: 'mh-card-hint' }, '从文件管理器选歌'))
 
-  // 空库引导：进整页导入页（两个选项）
+  // 空库引导：两直触按钮
   const emptyBox = h('div', { class: 'mh-empty-box', hidden: true },
     h('div', { class: 'mh-empty-big' }, '🎶'),
     h('p', {}, '还没有音乐，先导入几首歌吧'),
     h('div', { class: 'mh-empty-actions' },
-      h('button', { class: 'cta', onclick: () => openImportPage(app) }, '📥 导入音乐')))
+      h('button', { class: 'cta', onclick: () => doScan() }, '📥 扫描音乐'),
+      h('button', { class: 'ghost-btn', onclick: () => doOpenFiles(app) }, '📁 打开手机文件')))
 
   const el = h('div', { class: 'mh-home' },
     h('div', { class: 'mh-hello' },
