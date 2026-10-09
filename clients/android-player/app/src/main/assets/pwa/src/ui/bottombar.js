@@ -180,6 +180,16 @@ export function initBottomBar(app) {
   player.on('volume', (v) => { vol.value = String(Math.round(v * 100)); vol.style.setProperty('--pct', Math.round(v * 100) + '%'); muteBtn.textContent = v === 0 ? '🔇' : '🔊' })
   player.on('mute', (m) => { muteBtn.textContent = m ? '🔇' : '🔊' })
   player.on('playmode', () => refreshModeBadge())
-  player.on('error', (msg) => app.toast(msg, 'err'))
-  player.on('transcode', (msg) => app.toast(msg, 'info'))
+  // 🔶 ISS-20261009-004：player role 下 video error 由 videoPlayer.js 全权处理（删库+toast）
+  // 这里只处理 music error，避免 3 个 handler 叠 toast
+  player.on('error', (msg, item) => {
+    if (item?.type === 'video' && window.__winRole === 'video') return
+    app.toast(msg, 'err')
+  })
+  // 🔶 ISS-20261009-006：Android 上没有转码管线，player.js _startTranscode 会直接 emit error
+  // 不会 emit('transcode')；这里加守卫，即便未来 Android 上有 transcode 事件也不弹误导性 toast
+  player.on('transcode', (msg) => {
+    if (!window.chrome || !window.chrome.webview) return
+    app.toast(msg, 'info')
+  })
 }

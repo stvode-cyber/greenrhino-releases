@@ -563,6 +563,9 @@ body.win-video #sidebar { display: none !important; width: 0 !important; min-wid
 body.win-video #view { margin-left: 0 !important; padding-left: 0 !important; }
 
 /* 🔶 沉浸式全屏（横屏）：隐藏 topbar/bottombar + vp-page fixed 盖满 */
+/* 🔶 ISS-20261009-005：player role 空态时隐藏底部播放控制条（没在播，不需要▶⏮⏭进度条） */
+/* 选了视频后 body.video-playing 自动切到视频专属控制条 .vp-opts，这里只管"空态不带播放功能" */
+body.win-video:not(.video-playing):not(.video-immersive) #bottombar { display: none !important; }
 body.video-playing #topbar { display: none !important; }
 body.video-playing #bottombar { display: none !important; }
 body.video-playing #sidebar { display: none !important; }

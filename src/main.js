@@ -151,6 +151,8 @@ window.__mediaBatch = async (items, status) => {
     const all = __mediaBatchBuf
     __mediaBatchBuf = []
     console.error('[gr] __mediaBatch final buf.length=' + all.length)
+    // 🔶 ISS-20261009-007：首次扫描成功后写标记，后续启动不再自动扫
+    localStorage.setItem('__grFirstScanDone', '1')
     if (!all.length) { toast('扫描完成但没发现视频', 'info'); return }
     toast(`自动扫描到 ${all.length} 个视频/音频，导入中...`, 'ok')
     const added = await addMediaFromAndroid(all)
@@ -165,11 +167,15 @@ window.__mediaBatch = async (items, status) => {
 window.__mediaImported = (items, status) => window.__mediaBatch(items, status)
 
 // 🔶 App 启动时自动请求 Android MediaStore 扫描（RhinoBridge 存在才调）
-// 🔶 延迟 1.5s 确保 RhinoBridge 注册完再调（WebView 初始化时序）
+// 🔶 ISS-20261009-007：只在"第一次打开"自动扫，之后用户手动点扫描按钮才触发
+// localStorage 标记 __grFirstScanDone：存在即表示已扫过，跳过自动扫
+const _firstScanDone = localStorage.getItem('__grFirstScanDone')
 setTimeout(() => {
-  if (window.RhinoBridge?.requestAutoImport) {
-  console.log('[gr] Requesting auto import from Android MediaStore...')
-  try { window.RhinoBridge.requestAutoImport() } catch(e) { console.error(e) }
+  if (window.RhinoBridge?.requestAutoImport && !_firstScanDone) {
+    console.log('[gr] 首次启动 → 自动请求 Android MediaStore 扫描')
+    try { window.RhinoBridge.requestAutoImport() } catch(e) { console.error(e) }
+  } else if (_firstScanDone) {
+    console.log('[gr] __grFirstScanDone 已存在 → 跳过自动扫描（用户可手动点"扫描"按钮）')
   }
 }, 1500);
 
@@ -471,11 +477,15 @@ function trySkipInQueue(badItem, label) {
     setTimeout(() => { player.next(true); _skipGuard = false }, 1000)
   }
 }
+// 🔶 ISS-20261009-004：player role 下 video error/lost 由 videoPlayer.js 全权处理（删库+toast）
+// 避免 3 个 handler 叠 toast 污染画面
 player.on('error', (msg, item) => {
+  if (item?.type === 'video' && window.__winRole === 'video') { trySkipInQueue(item, '格式不支持'); return }
   toast(msg || '该格式暂不支持播放', 'err')
   trySkipInQueue(item, '格式不支持')
 })
 player.on('lost', (item) => {
+  if (item?.type === 'video' && window.__winRole === 'video') return
   toast(`「${item?.title || item?.name || '该文件'}」文件已丢失`, 'err')
   app.refreshCurrent() // 让媒体库标灰显示
   trySkipInQueue(item, '文件已丢失')

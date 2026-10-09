@@ -690,15 +690,20 @@ class PlayerEngine {
     sessionStorage.setItem('__grBlackReload', '1')
     setTimeout(() => location.reload(), ms)
   }
-  // 编码不支持（HEVC/10bit）自动转码：WebView2 与原生 MediaElement 都解不了该视频轨，
-  // 交给 C# 用内置 ffmpeg 转成 H.264 再原生播放。本地文件直接给路径；库内 Blob 走分片传输。
+  // 编码不支持（HEVC/10bit）自动转码：仅 Windows C# WebView2 有 ffmpeg 转码能力。
+  // Android WebView 无转码管线 → 直接报 error，不浪费时间尝试转码。
   _startTranscode(item, diag) {
     if (!item || this._transcodeStarted) return
     this._transcodeStarted = true
     // 立即暂停 web 端黑屏视频：停止双声轨，也停止可能存在的 playing 事件风暴
     try { if (this.videoEl && !this.videoEl.paused) this.videoEl.pause() } catch {}
-    const path = item.localPath
     const name = item.name || '该视频'
+    // 🔶 ISS-20261009-006：Android 上没有 chrome.webview → 没有转码能力 → 直接报编码不兼容
+    if (!window.chrome || !window.chrome.webview) {
+      this.emit('error', `「${name}」编码不兼容(H.265/HEVC)，WebView 无法解码，请改用 H.264 编码的 MP4。`, item)
+      return
+    }
+    const path = item.localPath
     this.emit('transcode', `检测到不兼容编码，正在转码「${name}」为 H.264，请稍候…`)
     if (path) {
       try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoTranscode', path, diag })) } catch {}

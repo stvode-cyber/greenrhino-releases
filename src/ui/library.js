@@ -42,7 +42,21 @@ export function mediaLibrary(app, type) {
       'data-m': mode
     }, label)
     seg.append(mk('manual', '手动'), mk('scan', '扫描'))
-    const btn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => importMode === 'scan' ? app.importFolderDialog() : app.importFilesDialog() }, '＋ 导入')
+    // 🔶 ISS-20261009-007：scan 模式调 Android MediaStore 自动扫描（RhinoBridge 存在才调）
+    // 手动扫描不清 __grFirstScanDone 标记（让它一直能扫但启动不自动扫）
+    const btn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
+      if (importMode === 'scan') {
+        if (window.RhinoBridge?.requestAutoImport) {
+          toast('开始扫描 MediaStore...', 'info')
+          window.RhinoBridge.requestAutoImport()
+        } else {
+          // 非 Android 环境 fallback 到选文件夹
+          app.importFolderDialog()
+        }
+      } else {
+        app.importFilesDialog()
+      }
+    } }, '＋ 导入')
     const selBtn = h('button', { class: 'ghost-btn' + (selMode ? ' active' : ''), style: { padding: '6px 12px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, selMode ? '✓ 退出选择' : '☑ 多选')
     const dupBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => openDuplicates(), title: '查找媒体库中重复的文件' }, '🔁 查重复')
     return h('div', { class: 'lib-toolbar' }, seg, btn, selBtn, dupBtn)
