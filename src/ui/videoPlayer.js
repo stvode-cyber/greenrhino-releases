@@ -424,18 +424,22 @@ export function buildVideoPlayer(app) {
     hideTc()
   })
   player.on('loaded', (item) => { if (item?.type === 'video') setTimeout(refreshTrackSelects, 60) })
-  // 🔶 视频加载失败：从库自动删除失效条目
+  // 🔶 ISS-20261009-004：视频加载失败自动移除 + 冷却防重复 toast
+  const _errHandled = new Set()  // 每个 item.id 只处理一次 error
   player.on('lost', (item) => {
-    if (!item) return
+    if (!item || _errHandled.has(item.id)) return
+    _errHandled.add(item.id)
     toast(`「${item.name || '文件'}」已丢失，从库移除`, 'warn')
     deleteMedia(item.id).then(() => { lib.refresh(); showGrid() })
   })
   player.on('error', (msg, item) => {
-    if (item && item.type === 'video' && player.videoEl?.error?.code === 4) {
-      // SRC_NOT_SUPPORTED → content:// 无法加载
-      toast(`「${item.name}」无法播放，从库移除`, 'warn')
-      deleteMedia(item.id).then(() => { lib.refresh(); showGrid() })
-    }
+    if (!item || item.type !== 'video' || _errHandled.has(item.id)) return
+    _errHandled.add(item.id)
+    const code = player.videoEl?.error?.code || 0
+    // code 4 = SRC_NOT_SUPPORTED；code 2 = NETWORK；code 3 = DECODE（H.265/HEVC 解码失败）
+    const reason = code === 3 ? '编码不兼容(H.265/HEVC)' : (code === 4 ? '源不支持' : '加载失败')
+    toast(`「${item.name}」${reason}，从库移除`, 'warn')
+    deleteMedia(item.id).then(() => { lib.refresh(); showGrid() })
   })
   if (video.textTracks) {
     video.textTracks.onaddtrack = () => refreshTrackSelects()

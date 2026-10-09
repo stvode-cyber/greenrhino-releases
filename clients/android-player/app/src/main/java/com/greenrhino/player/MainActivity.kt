@@ -65,10 +65,15 @@ class MainActivity : ComponentActivity() {
                     MediaStore.Video.Media.DURATION,
                     MediaStore.Video.Media.SIZE
                 )
+                // 🔶 ISS-20261009-002：只扫 800MB 以上的大视频（小视频如微信/抖音缓存让用户手动导入）
+                // Kotlin 里 Long 字面量 L 后缀：800 * 1024 * 1024 = 838860800
+                val minSize = 800L * 1024L * 1024L
+                val selection = "${MediaStore.Video.Media.SIZE} >= ?"
+                val selectionArgs = arrayOf(minSize.toString())
                 val sort = "${MediaStore.Video.Media.DATE_ADDED} DESC"
                 contentResolver.query(
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                    proj, null, null, sort
+                    proj, selection, selectionArgs, sort
                 )?.use { cur ->
                     val idxId = cur.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
                     val idxName = cur.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)

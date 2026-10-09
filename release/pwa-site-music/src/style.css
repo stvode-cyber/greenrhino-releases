@@ -596,11 +596,19 @@ body.video-immersive .vp-opts .vp-fs {
   top: 16px !important;
   z-index: 9999 !important;
   opacity: 0.95 !important;
+  /* 🔶 ISS-20261009-003：返回/全屏按钮加大触控区（手机上更容易点） */
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  padding: 10px 18px !important;
+  min-width: 68px !important;
+  min-height: 42px !important;
+  border-radius: 12px !important;
+  line-height: 1 !important;
 }
 body.video-playing .vp-opts .vp-back,
-body.video-immersive .vp-opts .vp-back { left: 16px !important; }
+body.video-immersive .vp-opts .vp-back { left: 12px !important; }
 body.video-playing .vp-opts .vp-fs,
-body.video-immersive .vp-opts .vp-fs  { right: 16px !important; }
+body.video-immersive .vp-opts .vp-fs  { right: 12px !important; }
 /* 🔶 视频播放控制条：3s 无操作自动隐藏 */
 .vp-stage .vp-opts { transition: opacity .35s ease, transform .35s ease !important; pointer-events: auto !important; z-index: 60 !important; }
 .vp-stage.ctrl-hidden .vp-opts { opacity: 0 !important; transform: translateY(12px) !important; pointer-events: none !important; }

@@ -113,12 +113,16 @@ export async function addMediaFiles(files, folder = '未分类', onProgress) {
 // 不同于 addMediaFiles 接收 File blob，这里存 content:// URI
 export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
   if (!Array.isArray(jsonItems) || !jsonItems.length) return []
-  // 🔶 双层保险：只收视频（player role 不需要音乐）
+  // 🔶 双层保险：只收视频（player role 不需要音乐）+ 800MB 以上（小视频用户手动导入）
   const VIDEO_EXT = /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv|3gp|rmvb)$/i
+  const MIN_SIZE = 800 * 1024 * 1024  // 800MB
   const items = []
+  let skippedSmall = 0
   for (const j of jsonItems) {
     if (!j || !j.name) continue
-    if (!VIDEO_EXT.test(j.name)) continue  // 非视频扩展名直接跳过
+    if (!VIDEO_EXT.test(j.name)) continue
+    // 🔶 ISS-20261009-002：前端兜底再过滤 800MB（Kotlin 原生层已过滤，这层是双保险）
+    if (j.size && j.size < MIN_SIZE) { skippedSmall++; continue }
     const id = hashId('android:' + j.id + ':' + j.uri)
     // 🔶 跳过 exists 检查：WebView IndexedDB 残留 + 重复 import 覆盖更新
     // const exists = await dbGet('media', id)
@@ -134,6 +138,7 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
     await dbPut('media', item, id)
     items.push(item)
   }
+  console.error('[gr] addMediaFromAndroid: kept=' + items.length + ' skippedSmall=' + skippedSmall + ' (MIN_SIZE=800MB)')
   if (items.length) emit('library:changed', items)
   return items
 }

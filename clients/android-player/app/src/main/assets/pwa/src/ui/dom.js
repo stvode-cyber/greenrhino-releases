@@ -25,8 +25,23 @@ export function formatTime(sec) {
 }
 
 let toastHost
+// 🔶 ISS-20261009-004：Toast 去重 + 限流
+// 同 msg 3s 内不重复弹；屏幕上最多保留 2 条（超了自动删最老的）
+const _toastLastAt = new Map()
+const TOAST_COOLDOWN = 3000
+const TOAST_MAX = 2
 export function toast(msg, type = '') {
   if (!toastHost) toastHost = document.getElementById('toast-host')
+  const now = Date.now()
+  const key = (type || '') + '|' + msg
+  const last = _toastLastAt.get(key) || 0
+  if (now - last < TOAST_COOLDOWN) return  // 同消息 3s 内跳过
+  _toastLastAt.set(key, now)
+  // 屏幕上超 TOAST_MAX 条 → 删掉最老的
+  while (toastHost.children.length >= TOAST_MAX) {
+    const oldest = toastHost.firstElementChild
+    oldest?.remove()
+  }
   const t = h('div', { class: 'toast' + (type ? ' ' + type : '') }, msg)
   toastHost.appendChild(t)
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300) }, 2400)
