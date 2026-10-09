@@ -1,5 +1,5 @@
 // library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
-import { h, openModal } from './dom.js'
+import { h, openModal, toast } from './dom.js'
 import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
 import { player } from '../player.js'
 import { getThumbsMap, queueVideoThumbs } from '../videoThumb.js'
@@ -95,16 +95,6 @@ export function mediaLibrary(app, type) {
     if (!all.length) {
       el.appendChild(emptyState(app, type))
       el.appendChild(selbar)
-      // 🔶 首次启动 / 清空数据后，自动触发 MediaStore 扫描
-      if (type === 'music' && !window.__autoScannedForMusic) {
-        window.__autoScannedForMusic = true
-        setTimeout(() => {
-          if (window.RhinoBridge?.requestAutoImport) {
-            toast('自动扫描 MediaStore...', 'info')
-            window.RhinoBridge.requestAutoImport()
-          }
-        }, 500)
-      }
       return
     }
     if (!list.length) {
@@ -357,8 +347,18 @@ function emptyState(app, type) {
   return h('div', { class: 'empty' },
     h('div', { class: 'big' }, isMusic ? '🎧' : '🎬'),
     h('div', {}, isMusic ? '还没有音乐' : '还没有视频'),
-    h('div', { style: { marginTop: '6px', color: 'var(--text-3)' } }, `把${isMusic ? '音乐' : '视频'}拖进来，或点击下方按钮导入`),
-    h('button', { class: 'cta', onclick: () => app.importFilesDialog() }, '导入媒体')
+    h('div', { style: { marginTop: '6px', color: 'var(--text-3)' } }, `把${isMusic ? '音乐' : '视频'}拖进来，或点下方按钮导入`),
+    h('div', { style: { display: 'flex', gap: '12px', marginTop: '16px', justifyContent: 'center', flexWrap: 'wrap' } },
+      h('button', { class: 'cta', onclick: () => {
+        if (window.RhinoBridge?.requestAutoImport) {
+          toast('开始扫描 MediaStore...', 'info')
+          window.RhinoBridge.requestAutoImport()
+        } else {
+          toast('当前环境不支持自动扫描，请用"选择文件"', 'warn')
+        }
+      } }, '📥 自动扫描（推荐）'),
+      h('button', { class: 'ghost-btn', style: { padding: '12px 24px' }, onclick: () => app.importFilesDialog() }, '📁 选择文件'),
+    )
   )
 }
 

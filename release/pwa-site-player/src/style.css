@@ -1007,11 +1007,20 @@ body.win-music #sidebar .brand-logo {
   border-bottom: 1px solid rgba(0,0,0,.04);
   cursor: pointer; transition: background .12s;
 }
-.sr-row:hover { background: rgba(0,0,0,.025); }
-.sr-row:active { background: rgba(0,0,0,.05); }
-.sr-row.sel { background: rgba(0,216,166,.06); }
+.sr-row:hover { background: rgba(0,0,0,.03); }
+.sr-row:active { background: rgba(0,0,0,.06); }
+.sr-row.sel { background: rgba(0,216,166,.08); }
 .sr-row.selectable { cursor: default; }
 .sr-row.selectable .sr-play { opacity: .5; pointer-events: auto; }
+/* 🔶 用户要求：列表行加深区别，在 #EAECEF 灰底上能一眼看清每行边界 */
+.sr-list .sr-row {
+  border-bottom: 1px solid rgba(0,0,0,.07);
+  background: #F2F4F7;   /* 比容器 #EAECEF 稍深 1 级，行与行之间有层次 */
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+.sr-list .sr-row:last-child { border-bottom: none; }
 
 .sr-cover {
   width: 56px; height: 56px; flex-shrink: 0;
@@ -1270,3 +1279,16 @@ body.win-music .mn-cover {
   background-image: initial !important;
 }
 /* .mh-card / .mh-section 保留各自灰色（不强制统一一个值） */
+
+/* 🔶 手机端：隐藏 music-player 大面板（封面+EQ+睡眠+歌词），只留纯歌曲列表 */
+/* 用户反馈：大面板盖在列表上像个"背景"，要干净列表。播放器走底部导航中间按钮 openMusicFullpage() */
+@media (max-width: 760px) {
+  body.win-music .music-page .music-player { display: none !important; }
+  body.win-music .music-page { grid-template-rows: 1fr !important; }
+}
+
+/* 🔶 DEC-20261009-003: 音乐 App 隐藏全局播放控制条（含进度条），保留三栏底部导航（发现/正在播放/我的） */
+/* #bottombar = 全局播放控制条（含进度条/音量/队列）——隐藏 */
+/* #music-nav = 三栏底部导航 ——保留 */
+body.win-music #bottombar { display: none !important; }
+/* 去掉底栏后 #main 需要占满剩余空间，但 #music-nav 还在，让 #app 正常 grid */

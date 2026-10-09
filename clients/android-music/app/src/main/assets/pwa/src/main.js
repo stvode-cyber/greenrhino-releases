@@ -120,6 +120,8 @@ function buildHome(app) {
 
 // 🔶 ISS-20261009-018: Music App 专属首页（参考图风格 — 问候 + 搜索 + 大卡片 + 可折叠 section）
 // 上一轮 UI 重构漏了函数体 → music role main.js init crash → SW 注册走不到（ISS-20261009-019）
+// 🔶 用户要求：首页只留问候+搜索+两张大卡片，去掉歌单/最近播放/收藏单曲三个 section
+// 详情/列表直接点卡片 → showPage('music') 或 showPage('favorites') 看完整列表
 function buildMusicHome(app) {
   const hourNow = new Date().getHours()
   const hi = hourNow < 5 ? '夜深了' : hourNow < 11 ? '早上好' : hourNow < 14 ? '中午好' : hourNow < 18 ? '下午好' : '晚上好'
@@ -134,14 +136,6 @@ function buildMusicHome(app) {
   const cardFav = h('div', { class: 'mh-card', onclick: () => showPage('favorites') },
     h('div', { class: 'mh-card-icon' }, '⭐'),
     h('div', { class: 'mh-card-label' }, '我的收藏'), favN)
-
-  // 三个可折叠 section（点头部折叠）
-  const plBody = h('div', { class: 'mh-section-body' })
-  const rcBody = h('div', { class: 'mh-section-body' })
-  const fvBody = h('div', { class: 'mh-section-body' })
-  const plSec = makeSection('🎧 我创建的歌单', plBody)
-  const rcSec = makeSection('🔥 最近播放', rcBody)
-  const fvSec = makeSection('❤️ 收藏的单曲', fvBody)
 
   // 空库引导：两个入口一步到位
   const emptyBox = h('div', { class: 'mh-empty-box', hidden: true },
@@ -162,82 +156,14 @@ function buildMusicHome(app) {
       h('div', { class: 'mh-sub' }, '今天也要开心听歌')),
     searchI,
     h('div', { class: 'mh-cards' }, cardLocal, cardFav),
-    emptyBox,
-    h('div', { class: 'mh-sections' }, plSec, rcSec, fvSec))
-
-  function makeSection(title, body) {
-    const count = h('span', { class: 'mh-section-count' }, '')
-    const node = h('div', { class: 'mh-section' },
-      h('div', { class: 'mh-section-head' },
-        h('span', {}, h('span', { class: 'mh-section-title' }, title), count),
-        h('span', { class: 'mh-section-arrow' }, '▼')),
-      body)
-    node.querySelector('.mh-section-head').addEventListener('click', () => node.classList.toggle('collapsed'))
-    node._count = count
-    return node
-  }
-
-  // 歌单横卡：点击整单直接播放
-  function playlistChip(pl, items) {
-    const chip = h('div', { class: 'mh-play' },
-      h('div', { class: 'mh-play-cover' }, '📃'),
-      h('div', { class: 'mh-play-name' }, pl.name))
-    chip.addEventListener('click', () => {
-      const real = items.filter((x) => x && !x._missing && x.type === 'music')
-      if (real.length) playList(real, real[0])
-      else toast('歌单里的文件都不在了')
-    })
-    return chip
-  }
+    emptyBox)
 
   async function refresh() {
-    const [all, favs, pls, recents] = await Promise.all([
-      getAllMedia(), getFavorites(), getPlaylists(), getRecent(6)
-    ])
+    const [all, favs] = await Promise.all([getAllMedia(), getFavorites()])
     const songs = all.filter((m) => m.type === 'music')
     localN.textContent = songs.length
     favN.textContent = favs.length
     emptyBox.hidden = songs.length > 0
-
-    // 歌单
-    plBody.innerHTML = ''
-    if (!pls.length) {
-      plBody.appendChild(h('div', { class: 'mh-empty' }, '还没创建歌单 · 歌单页可把当前队列存成歌单'))
-      plSec._count.textContent = ''
-    } else {
-      const rail = h('div', { class: 'mh-plays' })
-      for (const pl of pls.slice(0, 10)) {
-        const items = []
-        for (const id of pl.ids || []) items.push(await getMedia(id))
-        rail.appendChild(playlistChip(pl, items))
-      }
-      plBody.appendChild(rail)
-      plSec._count.textContent = `${pls.length} 个`
-    }
-
-    // 最近播放
-    rcBody.innerHTML = ''
-    const rcSongs = recents.filter((m) => m.type === 'music').slice(0, 5)
-    if (!rcSongs.length) rcBody.appendChild(h('div', { class: 'mh-empty' }, '还没有播放记录'))
-    else rcSongs.forEach((m) => rcBody.appendChild(songRow(m, app)))
-
-    // 收藏单曲
-    fvBody.innerHTML = ''
-    const fvSongs = favs.filter((m) => m.type === 'music').slice(0, 5)
-    if (!fvSongs.length) fvBody.appendChild(h('div', { class: 'mh-empty' }, '点 ♥ 把喜欢的歌收进来'))
-    else {
-      fvSongs.forEach((m) => fvBody.appendChild(songRow(m, app)))
-      if (favs.length > 5) {
-        fvBody.appendChild(h('div', { class: 'mh-more', onclick: () => showPage('favorites') }, `查看全部 ${favs.length} 首 ›`))
-      }
-    }
-  }
-
-  // 底部导航「我的」：展开全部 section 并滚到歌单区
-  function showMine() {
-    if (app.page !== 'home') showPage('home')
-    ;[plSec, rcSec, fvSec].forEach((s) => s.classList.remove('collapsed'))
-    requestAnimationFrame(() => plSec.scrollIntoView({ behavior: 'smooth' }))
   }
 
   // 搜索：输入即过滤音乐页，回车跳过去看结果
@@ -251,7 +177,7 @@ function buildMusicHome(app) {
   })
 
   refresh()
-  return { el, show: refresh, refresh, showMine }
+  return { el, show: refresh, refresh }
 }
 
 // ---------- 🎵 全屏播放页（大歌词居中 + 进度条 + 控制按钮） ----------

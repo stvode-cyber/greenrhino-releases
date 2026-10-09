@@ -10,10 +10,7 @@
 | 项 | 值 |
 |---|---|
 | 当前版本 | **APP_VERSION = 'v16'**（scripts/build-web.mjs L10） |
-| Git 状态 | main 分支干净，3 commits 推不上去（GitHub 超时） |
-| 未 push commit | `9af8358` feat: 音乐 App UI 改版 + 导入修复 |
-|               | `b1d91ce` fix: 边界过滤大修复（Music MediaStore.Audio + store.js role 分流） |
-|               | `dc4b2f7` fix(urgent): buildMusicHome 函数缺失补 stub |
+| Git 状态 | main 分支干净，已推 origin/main ✅ |
 | 测试状态 | ✅ 单元 6/6 + E2E 4/4 = 10/10 全绿 |
 | 本地构建 | ✅ release/pwa-site-music/ + release/pwa-site-player/ 已生成 |
 | Android APK | ✅ music + player assembleDebug BUILD SUCCESSFUL |
@@ -350,11 +347,11 @@ git push origin main   # 上次超时了，这次可能好了
 
 | 时间 | 动作 | commit |
 |---|---|---|
-| 2026-10-09 晚2 | 🎵 歌曲列表按参考图改造：songRow 组件 + Tab/工具条 + 真机验证点击播放正常 | — |
-| 2026-10-09 晚 | **SAF 严格过滤真机验证通过**：音乐 App 抽屉只剩音频 / 播放器只剩视频；adb uiautomator dump 拿精确坐标破解 WebView NAF 点击难题 | — |
-| 2026-10-09 下午 | buildMusicHome 补 stub，测试 10/10 全绿，commit 3 个，push GitHub 超时 | dc4b2f7 |
-| 2026-10-09 下午 | Music MainActivity 补完整 RhinoBridge + MediaStore.Audio + requestMediaPermission；store.js 按 GR_ROLE 分流 addMediaFromAndroid | b1d91ce |
-| 2026-10-09 下午 | 手动 Python server 跑 Playwright headless 验证 SW 注册 ✅ (count=1, caches=['gr-music-v16']) | — |
+| 2026-10-09 下午5 | 🎵 手机端隐藏 .music-player 大面板（封面+未在播放+EQ/睡眠+歌词），只留纯歌曲列表 | 615da48 |
+| 2026-10-09 晚2 | 🎵 歌曲列表按参考图改造：songRow 组件 + Tab/工具条 + 真机验证点击播放正常 | b3e19d2 |
+| 2026-10-09 晚 | **SAF 严格过滤真机验证通过**：音乐 App 抽屉只剩音频 / 播放器只剩视频 | — |
+| 2026-10-09 下午 | buildMusicHome 补 stub，测试 10/10 全绿，commit 3 个 | dc4b2f7 |
+| 2026-10-09 下午 | Music MainActivity 补完整 RhinoBridge + MediaStore.Audio；store.js 按 GR_ROLE 分流 addMediaFromAndroid | b1d91ce |
 
 ---
 

@@ -1,4 +1,4 @@
-﻿// player.js — 统一播放引擎（音频 Web Audio 图 + 视频原生）
+// player.js — 统一播放引擎（音频 Web Audio 图 + 视频原生）
 import { getProgress, saveProgress, getSettings, recordPlayback } from './store.js'
 import { srtToVtt } from './lrc.js'
 
@@ -351,19 +351,22 @@ class PlayerEngine {
 
   play() {
     if (!this.current) return
-    if (this.mode === 'video' && this.videoEl) { this.videoEl.play().catch(() => {}); this.emit('play'); return }
+    if (this.mode === 'video' && this.videoEl) { this.videoEl.play().catch(() => {}); this.emit('play'); this._reportPlaying(true); return }
     const eng = this.engines[this.activeIndex]
     if (this._isPlaying(eng)) return
     eng.el.play().catch(() => {})
     eng.gain.gain.value = 1
     this.emit('play')
+    this._reportPlaying(true)
   }
   pause() {
-    if (this.mode === 'video' && this.videoEl) { this.videoEl.pause(); this.emit('pause'); return }
+    if (this.mode === 'video' && this.videoEl) { this.videoEl.pause(); this.emit('pause'); this._reportPlaying(false); return }
     const eng = this.engines[this.activeIndex]
     eng.el.pause()
     this.emit('pause')
+    this._reportPlaying(false)
   }
+  _reportPlaying(v) { try { if (window.RhinoBridge?.setPlaying) window.RhinoBridge.setPlaying(v) } catch {} }
   toggle() { this.isPlaying() ? this.pause() : this.play() }
 
   _isPlaying(eng) {

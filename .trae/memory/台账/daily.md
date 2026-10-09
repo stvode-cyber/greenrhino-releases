@@ -81,6 +81,8 @@
   - 🎵 音乐 App SAF 抽屉 = 最近 / **音频** / 下载 / moto X50 Ultra（无图片无视频）；音频页全是歌手文件夹（邰正宵/陈奕迅/戴佩妮…）
   - 🎬 播放器 App SAF 抽屉 = 最近 / **视频** / 下载 / moto X50 Ultra（无图片无音频）；最近页只有一个视频文件
 - 新坑入台账：ISS-20261009-021（#saf-mime-filter #android-webview）
+- **下午5**: 用户反馈手机端音乐列表"背景"（.music-player 大面板：封面+未在播放+EQ/睡眠+歌词区）盖在列表上多余 → style.css 加移动端媒体查询隐藏 .music-player，只留纯歌曲列表；播放器走底部导航中间按钮 → openMusicFullpage() 全屏播放页；commit 615da48；测试 10/10 全绿
+- **下午6**: 4 个修复一起上：① library.js 补 `import toast`（之前直接调用没 import 静默失败）；② buildMusicHome 简化——删掉 plSec/rcSec/fvSec 三个歌单/最近/收藏 section，只剩问候+搜索+两张大卡片；③ style.css .sr-row 加深区别（#F2F4F7 稍深背景 + 圆角 + 底部边框）；④ store.js deleteMedia 加 skipEmit 参数——修复 pruneLost 每删一个条目都 emit library:changed → 触发 refresh 连锁循环（之前 prune 35 条 = 至少 35 次 refresh）。commit 0848fdb，真机验证 MediaStore 扫描 633 → prune 35 → kept 598，只触发 1 次 refresh ✅
 - 技巧沉淀：WebView 内部 NAF 点不中 → 改用屏幕截图按比例换算坐标（display 460×1023 ↔ device 1220×2712，scale 2.652）；SAF 原生界面直接 uiautomator dump 拿 bounds 精确点击
 - 发现的设备状况：手机 6 个用户 profile（主用户+5 分身），`am start` 播放器弹"选择应用程序"歧义框 → 需显式 `--user 0` 或手动选第一个
 

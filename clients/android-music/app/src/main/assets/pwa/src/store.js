@@ -200,7 +200,7 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描', pr
   if (pruneLost && existingAndroidIds.size) {
     for (const eid of existingAndroidIds) {
       if (!scannedIds.has(eid)) {
-        await deleteMedia(eid)
+        await deleteMedia(eid, true)
         prunedCount++
       }
     }
@@ -239,10 +239,10 @@ export async function findDuplicates() {
   return groups
 }
 export const getMedia = (id) => dbGet('media', id)
-export async function deleteMedia(id) {
+export async function deleteMedia(id, skipEmit = false) {
   await dbDelete('media', id)
   await dbDelete('progress', id)
-  emit('library:changed', [])
+  if (!skipEmit) emit('library:changed', [])
 }
 export async function updateMedia(id, patch) {
   const cur = await dbGet('media', id)

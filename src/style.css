@@ -1286,3 +1286,9 @@ body.win-music .mn-cover {
   body.win-music .music-page .music-player { display: none !important; }
   body.win-music .music-page { grid-template-rows: 1fr !important; }
 }
+
+/* 🔶 DEC-20261009-003: 音乐 App 隐藏全局播放控制条（含进度条），保留三栏底部导航（发现/正在播放/我的） */
+/* #bottombar = 全局播放控制条（含进度条/音量/队列）——隐藏 */
+/* #music-nav = 三栏底部导航 ——保留 */
+body.win-music #bottombar { display: none !important; }
+/* 去掉底栏后 #main 需要占满剩余空间，但 #music-nav 还在，让 #app 正常 grid */

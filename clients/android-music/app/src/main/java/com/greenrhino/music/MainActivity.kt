@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.util.Log
 import android.view.WindowManager
@@ -40,6 +41,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private lateinit var fileChooserLauncher: androidx.activity.result.ActivityResultLauncher<Intent>
+
+    // 🔶 后台播放：JS 端调 setPlaying(true/false) 来同步，onPause 时据此决定是否暂停 WebView
+    @Volatile private var isPlaying = false
+    private val wakeLock by lazy {
+        (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK, "GreenRhinoMusic:Playback"
+        ).apply { setReferenceCounted(false) }
+    }
 
     // 🔶 ISS-20261009-018: Music App 也需要 MediaStore.Audio 扫描！
     // 之前只有 Player 版有 MediaStore 扫描逻辑，Music 版完全是空壳 → 自动扫描按钮静默失败
@@ -247,11 +256,8 @@ class MainActivity : ComponentActivity() {
         // ⚠️ 必须用 inner class！匿名 object 上的 @JavascriptInterface 在 targetSdk 34+ 某些设备不生效
         webView.addJavascriptInterface(RhinoBridge(), "RhinoBridge")
         Log.d("GreenRhino", "RhinoBridge registered OK (music)")
-        // 🔶 启动后 3s 自动扫描 MediaStore（不依赖 JS 层 setTimeout，彻底绕开 JS 链失效问题）
-        webView.postDelayed({
-            Log.d("GreenRhino", "AUTO: postDelayed scan kickoff")
-            requestMediaPermission()
-        }, 3000)
+        // 🔶 DEC-20261009-002: 彻底砍掉自动扫描——用户必须手动点工具栏「📥 自动扫描」或「📁 选择文件」导入
+        // 不再有任何 postDelayed / SharedPreferences 标记 / 首次启动自动触发
     }
 
     
@@ -268,14 +274,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        webView.onPause()
-        webView.pauseTimers()
+        // 🔶 后台播放关键：在播时不暂停 WebView（pauseTimers 全删，onPause 也跳过）
+        // HTML5 audio 需要 JS 定时器驱动播放事件，pauseTimers 会一刀切停掉
+        if (isPlaying) {
+            Log.d("GreenRhino", "onPause: isPlaying=true → keep WebView alive for background playback")
+            // PARTIAL_WAKE_LOCK 防止 CPU 休眠导致播放卡死
+            if (!wakeLock.isHeld) wakeLock.acquire(30 * 60 * 1000L) // 30min 兜底
+        } else {
+            webView.onPause()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        webView.onResume()
-        webView.resumeTimers()
+        // 🔶 ISS-20261009-019: 必须先检查 isHeld 再 release！
+        // onPause 时若 isPlaying=false 不会 acquire，onResume 直接 release 会抛
+        // "WakeLock under-locked" RuntimeException 导致 App 崩溃
+        if (wakeLock.isHeld) wakeLock.release()
+        if (!isPlaying) webView.onResume()
     }
 
     override fun onDestroy() {
@@ -380,6 +396,16 @@ class MainActivity : ComponentActivity() {
                     wic.show(WindowInsetsCompat.Type.systemBars())
                 }
             }
+        }
+
+        // 🔶 后台播放：JS 端 player.play()/pause() 时主动上报状态
+        // 存到 @Volatile var isPlaying，供 onPause() 同步读取
+        @android.webkit.JavascriptInterface
+        fun setPlaying(playing: Boolean) {
+            isPlaying = playing
+            Log.d("GreenRhino", "RhinoBridge.setPlaying($playing)")
+            if (playing && !wakeLock.isHeld) wakeLock.acquire(30 * 60 * 1000L)
+            else if (!playing && wakeLock.isHeld) wakeLock.release()
         }
 
         @android.webkit.JavascriptInterface
