@@ -111,3 +111,14 @@
 3. 全屏播放页 openMusicFullpage 实现
 4. 推 GitHub + Cloudflare Pages 部署
 5. 打 release tag + 写 changelog
+
+---
+
+## 2026-10-09（深夜）
+
+- 整页导入页上线（DEC-20261009-005）：点「导入音乐」卡片/空态按钮 → .imp-page 整页，两个大选项「📥 扫描音乐」「📁 手动打开手机文件」，弃用弹窗
+- 排查"手机应用没变化"：adb pull 端上 base.apk 解包验证代码已进包 → 病根是 5 个应用分身旧数据未清（ISS-20261009-022），pm clear user 0+900-904 全清
+- MainActivity.kt：LOAD_NO_CACHE + clearCache(true) + loadUrl 加 ?v=时间戳 cache-bust
+- 改动文件：src/main.js（openImportPage/doScan）、src/style.css（.imp-page 块）、src/ui/library.js（工具栏两直触按钮）
+- 验证：npm run test:all 全绿（单元 6 + E2E 4）；wrangler 部署 greenrhino-music / greenrhino-player 双站点；gradlew assembleRelease + adb install -r 装机
+- commit dc4073a（17 文件 +556/-101）
