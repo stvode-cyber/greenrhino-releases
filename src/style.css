@@ -1270,3 +1270,10 @@ body.win-music .mn-cover {
   background-image: initial !important;
 }
 /* .mh-card / .mh-section 保留各自灰色（不强制统一一个值） */
+
+/* 🔶 手机端：隐藏 music-player 大面板（封面+EQ+睡眠+歌词），只留纯歌曲列表 */
+/* 用户反馈：大面板盖在列表上像个"背景"，要干净列表。播放器走底部导航中间按钮 openMusicFullpage() */
+@media (max-width: 760px) {
+  body.win-music .music-page .music-player { display: none !important; }
+  body.win-music .music-page { grid-template-rows: 1fr !important; }
+}
