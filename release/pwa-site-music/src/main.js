@@ -115,6 +115,40 @@ function buildHome(app) {
   return { el, show() { setTimeout(() => input.focus?.(), 60) } }
 }
 
+// 🔶 ISS-20261009-018: Music App 专属首页（参考图风格 — 大卡片 + 可折叠 section）
+// 上一轮 UI 重构漏了函数体 → music role main.js init crash → SW 注册走不到
+function buildMusicHome(app) {
+  const el = h('div', { class: 'mh-home', style: 'padding:16px;' },
+    // 搜索框
+    h('input', { class: 'hub-input', type: 'search', placeholder: '搜索本地音乐…', autocomplete: 'off', style: 'width:100%;margin-bottom:16px;' }),
+    // 两张大卡片：本地音乐 / 我的收藏
+    h('div', { class: 'mh-cards', style: 'display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;' },
+      h('div', { class: 'mh-card', style: 'background:#fff;border-radius:14px;padding:18px;text-align:center;cursor:pointer;border:1px solid #f0f0f0;' },
+        h('div', { class: 'mh-card-icon' }, '📥'),
+        h('div', { class: 'mh-card-label' }, '本地音乐')
+      ),
+      h('div', { class: 'mh-card', style: 'background:#fff;border-radius:14px;padding:18px;text-align:center;cursor:pointer;border:1px solid #f0f0f0;' },
+        h('div', { class: 'mh-card-icon' }, '⭐'),
+        h('div', { class: 'mh-card-label' }, '我的收藏')
+      )
+    ),
+    // 可折叠 section 占位
+    h('div', { class: 'mh-section', style: 'background:#fff;border-radius:14px;border:1px solid #f0f0f0;margin-bottom:12px;' },
+      h('div', { class: 'mh-section-head', style: 'padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;' },
+        h('div', { class: 'mh-section-title' }, '🎧 我创建的歌单'),
+        h('span', { class: 'mh-section-arrow' }, '▼')
+      )
+    ),
+    h('div', { class: 'mh-section', style: 'background:#fff;border-radius:14px;border:1px solid #f0f0f0;margin-bottom:12px;' },
+      h('div', { class: 'mh-section-head', style: 'padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;' },
+        h('div', { class: 'mh-section-title' }, '❤️ 我收藏的单曲'),
+        h('span', { class: 'mh-section-arrow' }, '▼')
+      )
+    )
+  )
+  return { el, show() {} }
+}
+
 function showPage(name) {
   if (!pages[name]) return // 弹窗角色下该视图未构建，直接忽略（避免操作无关媒体崩溃）
   app.page = name
