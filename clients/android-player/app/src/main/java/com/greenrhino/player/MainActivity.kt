@@ -40,8 +40,26 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var container: FrameLayout
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
-    private val FILE_CHOOSER_REQUEST = 1001
     private var immersive = false  // 🔶 初始非沉浸式（toggle 切换：false→true=进入全屏）
+
+    // 🔶 ISS-20261009-009：现代 ActivityResultLauncher 处理 WebView 文件选择（支持多选）
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            // 🔶 支持多选：优先读 clipData（SAF 多选返回这里），fallback 到 data
+            val uris = mutableListOf<Uri>()
+            result.data?.clipData?.let { clip ->
+                for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
+            }
+            if (uris.isEmpty()) result.data?.data?.let { uris.add(it) }
+            android.util.Log.d("GreenRhino", "fileChooser result: ${uris.size} uris")
+            filePathCallback?.onReceiveValue(uris.toTypedArray())
+        } else {
+            filePathCallback?.onReceiveValue(null)
+        }
+        filePathCallback = null
+    }
 
     // 🔶 MediaStore 自动扫描：权限请求 + 全盘查询
     private val mediaPermissionLauncher = registerForActivityResult(
@@ -251,7 +269,12 @@ class MainActivity : ComponentActivity() {
                 filePathCallback = callback
                 val intent: Intent? = params?.createIntent()
                 try {
-                    intent?.let { startActivityForResult(it, FILE_CHOOSER_REQUEST) } ?: run { filePathCallback = null; return false }
+                    intent?.let {
+                        // 🔶 ISS-20261009-009：显式加多选支持（即使 WebView input.multiple=true）
+                        it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        it.addCategory(Intent.CATEGORY_OPENABLE)
+                        fileChooserLauncher.launch(it)
+                    } ?: run { filePathCallback = null; return false }
                 } catch (e: Exception) {
                     filePathCallback = null
                     return false
@@ -308,17 +331,6 @@ class MainActivity : ComponentActivity() {
             WebView.setWebContentsDebuggingEnabled(
                 (0 != applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)
             )
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == FILE_CHOOSER_REQUEST) {
-            val result = if (resultCode == RESULT_OK && data != null) {
-                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-            } else null
-            filePathCallback?.onReceiveValue(result)
-            filePathCallback = null
         }
     }
 

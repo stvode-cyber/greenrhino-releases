@@ -429,16 +429,21 @@ export function buildVideoPlayer(app) {
   player.on('lost', (item) => {
     if (!item || _errHandled.has(item.id)) return
     _errHandled.add(item.id)
-    toast(`「${item.name || '文件'}」已丢失，从库移除`, 'warn')
+    // 🔶 ISS-20261009-008：明确提示"文件不存在"（区别于编码不兼容）
+    toast(`「${item.name || '文件'}」文件不存在，从库移除`, 'warn')
     deleteMedia(item.id).then(() => { lib.refresh(); showGrid() })
   })
   player.on('error', (msg, item) => {
     if (!item || item.type !== 'video' || _errHandled.has(item.id)) return
     _errHandled.add(item.id)
-    const code = player.videoEl?.error?.code || 0
-    // code 4 = SRC_NOT_SUPPORTED；code 2 = NETWORK；code 3 = DECODE（H.265/HEVC 解码失败）
-    const reason = code === 3 ? '编码不兼容(H.265/HEVC)' : (code === 4 ? '源不支持' : '加载失败')
-    toast(`「${item.name}」${reason}，从库移除`, 'warn')
+    // 🔶 ISS-20261009-008：优先用 player 传来的 msg（已带明确文案），没有再用 error.code 猜
+    if (msg) {
+      toast(`「${item.name}」${msg.replace(/^「[^」]*」/, '')}`, 'warn')
+    } else {
+      const code = player.videoEl?.error?.code || 0
+      const reason = code === 3 ? '编码不兼容(H.265/HEVC)' : (code === 4 ? '源不支持' : '加载失败')
+      toast(`「${item.name}」${reason}，从库移除`, 'warn')
+    }
     deleteMedia(item.id).then(() => { lib.refresh(); showGrid() })
   })
   if (video.textTracks) {

@@ -118,15 +118,23 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
   const MIN_SIZE = 800 * 1024 * 1024  // 800MB
   const items = []
   let skippedSmall = 0
+  let skippedDup = 0
+  // 🔶 ISS-20261009-010：先拉全库 name+size 建 Set → 跨来源去重
+  // （addMediaFiles 用 file.name+size+lastModified+type 做 hashId，
+  //   addMediaFromAndroid 用 'android:'+j.id+j.uri 做 hashId → 两个不同 ID 同一文件会重复存）
+  const existing = await dbGetAll('media')
+  const existingKeys = new Set(existing.map(e => `${e.name}::${e.size || 0}`))
   for (const j of jsonItems) {
     if (!j || !j.name) continue
     if (!VIDEO_EXT.test(j.name)) continue
     // 🔶 ISS-20261009-002：前端兜底再过滤 800MB（Kotlin 原生层已过滤，这层是双保险）
     if (j.size && j.size < MIN_SIZE) { skippedSmall++; continue }
+    // 🔶 ISS-20261009-010：跨来源去重——库里已有同名同体积的（不管来源），跳过
+    const dupKey = `${j.name}::${j.size || 0}`
+    if (existingKeys.has(dupKey)) { skippedDup++; continue }
+    existingKeys.add(dupKey)  // 本轮内也要去重（MediaStore 可能一次扫出两条同名的）
     const id = hashId('android:' + j.id + ':' + j.uri)
-    // 🔶 跳过 exists 检查：WebView IndexedDB 残留 + 重复 import 覆盖更新
-    // const exists = await dbGet('media', id)
-    // if (exists) continue
+    // 幂等覆盖：同来源同文件再扫一次 → hashId 相同 → dbPut 覆盖更新（不重复）
     const item = {
       id, name: j.name, type: 'video', mime: 'video/mp4',
       size: j.size || 0, addedAt: Date.now(), folder, artist: '', album: '',
@@ -138,7 +146,7 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
     await dbPut('media', item, id)
     items.push(item)
   }
-  console.error('[gr] addMediaFromAndroid: kept=' + items.length + ' skippedSmall=' + skippedSmall + ' (MIN_SIZE=800MB)')
+  console.error('[gr] addMediaFromAndroid: kept=' + items.length + ' skippedSmall=' + skippedSmall + ' skippedDup=' + skippedDup + ' (MIN_SIZE=800MB)')
   if (items.length) emit('library:changed', items)
   return items
 }

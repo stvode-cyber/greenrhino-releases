@@ -290,6 +290,7 @@ class PlayerEngine {
   async _playVideo(item, autoplay = true) {
     if (!this.videoEl) { this.emit('error', '视频播放器未就绪'); return }
     this._videoErrShown = false
+    this._videoMetaLoaded = false  // 🔶 ISS-20261009-008：每次换视频重置 loadedmetadata 标记
     const switching = !this.current || item.id !== this.current.id
     // 同一视频循环重播且已转码：直接复用转码 URL 从头播。
     // 否则会重新把 src 设回不兼容的 HEVC blob，再次触发解码失败→转码（8s 测试片每轮循环都卡顿重载）。
@@ -508,6 +509,7 @@ class PlayerEngine {
     // display:none→显示 会打断视频再次触发 playing，形成无限 playing 风暴，视频永远卡在开头。
     el.addEventListener('playing', () => { this._startBlackWatchdog() })
     el.addEventListener('loadedmetadata', () => {
+      this._videoMetaLoaded = true  // 🔶 ISS-20261009-008：标记元数据加载成功（用来区分文件不存在 vs 编码不兼容）
       if (this._videoResumeTo) { try { el.currentTime = this._videoResumeTo } catch {} ; this._videoResumeTo = 0 }
       this.emit('loaded', this.current); this._saveProgressThrottled()
       // HEVC/不兼容编码快速判定：metadata 已加载但视频轨解不出（videoWidth=0）。
@@ -527,11 +529,23 @@ class PlayerEngine {
       }
     })
     el.addEventListener('error', () => {
-      console.log('[gr] video error fired, code=' + (this.videoEl && this.videoEl.error ? this.videoEl.error.code : '?'))
+      const code = this.videoEl && this.videoEl.error ? this.videoEl.error.code : '?'
+      console.log('[gr] video error fired, code=' + code + ' _videoMetaLoaded=' + this._videoMetaLoaded)
       if (this._videoErrShown) return
       this._videoErrShown = true
-      // 直接报错（如 MEDIA_ERR_SRC_NOT_SUPPORTED）多半是 HEVC/10bit 编码：交给内置转码
-      this._startTranscode(this.current, this._videoDiag())
+      // 🔶 ISS-20261009-008：区分"文件不存在"vs"编码不兼容"
+      // 关键条件：loadedmetadata 是否触发过
+      //   文件不存在 → code=4 且 _videoMetaLoaded=false（还没加载到元数据就挂了）
+      //   编码不兼容 → code=3 或 code=4 但 _videoMetaLoaded=true（元数据加载成功了）
+      const cur = this.current
+      if (!this._videoMetaLoaded && code === 4) {
+        // MEDIA_ERR_SRC_NOT_SUPPORTED 且没触发过 loadedmetadata → 源根本打不开 → 文件不存在/URI 失效
+        console.log('[gr] video src unreachable (meta never loaded) -> emit lost')
+        this.emit('lost', cur)
+      } else {
+        // 其他情况 → 编码不兼容（H.265/10bit 等）→ 交给转码管线（Android 上已跳过转码直接 emit error）
+        this._startTranscode(cur, this._videoDiag())
+      }
     })
     el.volume = this.volume
     el.muted = this.muted
