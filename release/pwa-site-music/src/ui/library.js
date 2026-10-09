@@ -95,6 +95,16 @@ export function mediaLibrary(app, type) {
     if (!all.length) {
       el.appendChild(emptyState(app, type))
       el.appendChild(selbar)
+      // 🔶 首次启动 / 清空数据后，自动触发 MediaStore 扫描
+      if (type === 'music' && !window.__autoScannedForMusic) {
+        window.__autoScannedForMusic = true
+        setTimeout(() => {
+          if (window.RhinoBridge?.requestAutoImport) {
+            toast('自动扫描 MediaStore...', 'info')
+            window.RhinoBridge.requestAutoImport()
+          }
+        }, 500)
+      }
       return
     }
     if (!list.length) {

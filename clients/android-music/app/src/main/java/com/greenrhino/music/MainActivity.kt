@@ -247,6 +247,11 @@ class MainActivity : ComponentActivity() {
         // ⚠️ 必须用 inner class！匿名 object 上的 @JavascriptInterface 在 targetSdk 34+ 某些设备不生效
         webView.addJavascriptInterface(RhinoBridge(), "RhinoBridge")
         Log.d("GreenRhino", "RhinoBridge registered OK (music)")
+        // 🔶 启动后 3s 自动扫描 MediaStore（不依赖 JS 层 setTimeout，彻底绕开 JS 链失效问题）
+        webView.postDelayed({
+            Log.d("GreenRhino", "AUTO: postDelayed scan kickoff")
+            requestMediaPermission()
+        }, 3000)
     }
 
     
