@@ -62,6 +62,15 @@
 - **下午4**: 写交接文档（本 context.md + daily.md）
 - **晚**: SAF 严格过滤真机验证 ✅ 双 App 通过（详见下方「晚间验证」）
 - **晚2**: 🎵 歌曲列表按参考图改造（详见下方「歌曲列表改造」）
+- **晚3**: 🎵 **彻底砍掉自动扫描 + UI 调整 + 后台播放 Phase 1**（commit 3187fd0）
+  - 删 Kotlin `postDelayed` 自动扫描触发 + `SharedPreferences first_scan_done` 标记
+  - 删 JS `library.js` 空库 `setTimeout` 自动扫描（**根因修复**——之前只删 Kotlin 层，JS 层漏了导致仍自动扫）
+  - 隐藏 `#bottombar`（全局播放控制条含进度条），**保留** `#music-nav`（三栏底部导航：发现/正在播放/我的）
+  - 空态引导从单按钮「导入媒体」改为两个大按钮：📥 自动扫描（推荐）+ 📁 选择文件（SAF 多选 EXTRA_ALLOW_MULTIPLE=true）
+  - 后台播放 Phase 1：删 `pauseTimers()/resumeTimers()`，`onPause` 条件跳过（isPlaying=true 时不暂停 WebView），加 `PARTIAL_WAKE_LOCK`，新增 `RhinoBridge.setPlaying()` JS 接口
+  - `onResume` 加 `wakeLock.isHeld` 检查防 "under-locked" 崩溃（ISS-20261009-019）
+  - proguard-rules.pro 保留 Log 调用 + RhinoBridge/MainActivity 类防 R8 优化
+  - 装机后用户验证自动扫描不再触发，但后台播放需真机按 Home 测试
 
 ### 🎵 歌曲列表改造（参考图：我的收藏列表界面）
 - 起因：用户上传参考图要求"音乐的页面按这个按。列表界面"

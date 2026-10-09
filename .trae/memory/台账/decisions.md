@@ -1,4 +1,4 @@
-﻿# 📜 决策台账 decisions.md
+# 📜 决策台账 decisions.md
 
 > 记录项目所有关键决策：**选了啥 / 为啥 / 备选方案 / 关联文件 / 相关坑**
 > 编号规则：`DEC-YYYYMMDD-NNN`，每天递增。已入 Skill 的决策移至「📦 归档区」。
@@ -21,6 +21,8 @@
 | DEC-20260914-003 | 2026-09-14 | UX 测试体系 | 4 个 Agent 分工 + 黑盒执行型 `ux-experience-tester` | 分析/审计/设计各有专长，再加一个能跑 Playwright 输出 PASS/FAIL+截图的执行型角色，闭环完整 | 单一大而全 Agent | .trae/agents/core/ux-experience-tester.md、.trae/skills/ux-test-playbook/SKILL.md | — | 可用户一句话触发 |
 | DEC-20260914-004 | 2026-09-14 | 台账系统 | 项目级 5 文件（context/decisions/issues/index/daily）+ 会话层（.session-memory.md）+ 用户级共享层（shared-issues/shared-decisions）三层组织 + 成长型归类加级 + 五步闭环 | 项目特有 vs 跨项目通用分开存；会话临时 vs 长期台账分开存；成长型避免台账臃肿；五步闭环防止遗漏 | 单一大文件（臃肿，查找慢）或只在对话里记（容易丢） | .trae/memory/台账/、AGENTS.md §📚台账系统 | → 本决策自身迭代：从 4 文件 → 5 文件，6 条规则 → 五步闭环 | 每次对话自动读写 |
 | DEC-20260914-005 | 2026-09-14 | Android 交接文档 | 新增 HANDOVER.md 作为 WebView 壳交接入口 | Android 壳迁移涉及大量具体细节（路径修复、console 桥接、测试状态），新 AI 接手时 3 分钟 TL;DR + 详细步骤比散落在对话历史里高效 | 靠对话历史恢复（易丢、耗时） | HANDOVER.md、clients/android-music/ | → ISS-20260914-001、ISS-20260916-001 | TL;DR + 详细技术栈 + 测试流程 |
+| DEC-20261009-002 | 2026-10-09 | 自动扫描策略 | **彻底砍掉自动扫描**——用户必须手动点工具栏「📥 自动扫描」或「📁 选择文件」 | 之前方案 1（只首次启动扫）→ 用户反馈仍自动扫（JS 层 setTimeout 漏删根因），干脆全砍；用户要"完全完掉" | ① 只首次启动扫（已被否决）② 间隔触发 24h ③ 增量扫描 | clients/android-music/.../MainActivity.kt、src/ui/library.js | → ISS-20261009-020 | 删 Kotlin postDelayed + JS setTimeout 双层根因 |
+| DEC-20261009-003 | 2026-10-09 | 音乐 App 底部 UI | **保留 #music-nav（三栏导航：发现/正在播放/我的），隐藏 #bottombar（全局播放控制条含进度条）** | 用户要"进度条消失"但"保留 3 大选项"——#bottombar 含进度条必须藏，#music-nav 是三栏导航必须留 | 全部藏（错，丢了三栏导航） | src/style.css L1290-1294 | — | `body.win-music #bottombar { display:none }` 一条规则 |
 
 ---
 

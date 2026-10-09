@@ -347,11 +347,11 @@ git push origin main   # 上次超时了，这次可能好了
 
 | 时间 | 动作 | commit |
 |---|---|---|
+| 2026-10-09 晚 | 🎵 **彻底砍掉自动扫描**：删 Kotlin postDelayed + JS setTimeout 根因；保留三栏导航 #music-nav，隐藏全局播放控制条 #bottombar（进度条消失）；空态改两按钮批量入口（自动扫描/选择文件）；后台播放 Phase 1（删 pauseTimers + WAKE_LOCK + setPlaying bridge）；onResume wakeLock.isHeld 防崩溃；proguard 保留 Log | 3187fd0 |
+| 2026-10-09 晚 | 🎵 pruneLost 连锁循环修复（deleteMedia 加 skipEmit）+ library.js 补 toast import + buildMusicHome 简化删 3 个 section + sr-row 加深区别 | 0848fdb |
 | 2026-10-09 下午5 | 🎵 手机端隐藏 .music-player 大面板（封面+未在播放+EQ/睡眠+歌词），只留纯歌曲列表 | 615da48 |
 | 2026-10-09 晚2 | 🎵 歌曲列表按参考图改造：songRow 组件 + Tab/工具条 + 真机验证点击播放正常 | b3e19d2 |
 | 2026-10-09 晚 | **SAF 严格过滤真机验证通过**：音乐 App 抽屉只剩音频 / 播放器只剩视频 | — |
-| 2026-10-09 下午 | buildMusicHome 补 stub，测试 10/10 全绿，commit 3 个 | dc4b2f7 |
-| 2026-10-09 下午 | Music MainActivity 补完整 RhinoBridge + MediaStore.Audio；store.js 按 GR_ROLE 分流 addMediaFromAndroid | b1d91ce |
 
 ---
 
