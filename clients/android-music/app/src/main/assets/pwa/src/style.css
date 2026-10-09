@@ -527,7 +527,7 @@ body.win-video.video-immersive #view { overflow: hidden !important; }
 body.win-music #sidebar { display: none !important; }
 body.win-music #music-nav { display: flex !important; }
 body.win-music #main { margin-left: 0 !important; width: 100% !important; }
-body.win-music #topbar { background: transparent; box-shadow: none; padding: 8px 16px; }
+body.win-music #topbar { box-shadow: none; padding: 8px 16px; }
 body.win-music #view { padding: 12px 16px 180px; }
 
 /* 🎵 底部导航栏 */
@@ -538,8 +538,8 @@ body.win-music #view { padding: 12px 16px 180px; }
   justify-content: space-around;
   align-items: center;
   height: 64px;
-  background: #fff;
-  border-top: 1px solid #eee;
+  background: #EAECEF;
+  border-top: 1px solid #DDE1E5;
   padding-bottom: env(safe-area-inset-bottom, 0);
   z-index: 100;
   box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
@@ -568,7 +568,7 @@ body.win-music #view { padding: 12px 16px 180px; }
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
 }
 .mh-card {
-  background: linear-gradient(135deg, #f0faf7, #fff);
+  background: #EAECEF;
   border: 1px solid #e6f5ef;
   border-radius: 16px; padding: 18px; cursor: pointer;
   transition: transform .15s, box-shadow .15s;
@@ -579,7 +579,8 @@ body.win-music #view { padding: 12px 16px 180px; }
 .mh-card-count { font-size: 20px; font-weight: 700; color: var(--kg, #00D8A6); }
 
 /* 🎵 可折叠 section */
-.mh-section { margin-bottom: 14px; background: #fff; border-radius: 14px; overflow: hidden; border: 1px solid #f0f0f0; }
+/* 🔶 ISS-20261009-023: 统一灰色，去掉强制白色 */
+.mh-section { margin-bottom: 14px; background: #EAECEF; border-radius: 14px; overflow: hidden; border: 1px solid #DDE1E5; }
 .mh-section-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; cursor: pointer;
@@ -727,6 +728,12 @@ body.win-video #app {
   grid-template-columns: 1fr !important;
   grid-template-areas: "main" "bottom" !important;
   grid-template-rows: minmax(0, 1fr) auto !important;
+}
+
+/* 🔶 ISS-20261009-022: Music role 也需要单列！之前只隐藏 sidebar 但 grid-track 还占 200px → 右侧 ▶⋯ 被挤出去 */
+body.win-music #app {
+  grid-template-columns: 1fr !important;
+  grid-template-areas: "main" "bottom" !important;
 }
 body.win-video #sidebar { display: none !important; width: 0 !important; min-width: 0 !important; max-width: 0 !important; grid-area: none !important; }
 body.win-video #view { margin-left: 0 !important; padding-left: 0 !important; }
@@ -996,53 +1003,61 @@ body.win-music #sidebar .brand-logo {
 .sr-list { display: flex; flex-direction: column; gap: 0; }
 .sr-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; min-height: 64px;
-  border-bottom: 1px solid rgba(0,0,0,.06);
-  cursor: pointer; transition: background .15s;
+  padding: 12px 16px; min-height: 68px;
+  border-bottom: 1px solid rgba(0,0,0,.04);
+  cursor: pointer; transition: background .12s;
 }
-.sr-row:hover { background: rgba(0,0,0,.03); }
-.sr-row:active { background: rgba(0,0,0,.06); }
+.sr-row:hover { background: rgba(0,0,0,.025); }
+.sr-row:active { background: rgba(0,0,0,.05); }
+.sr-row.sel { background: rgba(0,216,166,.06); }
+.sr-row.selectable { cursor: default; }
+.sr-row.selectable .sr-play { opacity: .5; pointer-events: auto; }
 
 .sr-cover {
-  width: 52px; height: 52px; flex-shrink: 0;
-  border-radius: 10px; overflow: hidden;
+  width: 56px; height: 56px; flex-shrink: 0;
+  border-radius: 6px; overflow: hidden;
   background: #eee; display: flex; align-items: center; justify-content: center;
   font-size: 26px; color: #999;
 }
 .sr-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-.sr-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sr-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .sr-name {
-  font-size: 15px; font-weight: 600; color: #1a1a1a;
+  font-size: 16px; font-weight: 600; color: #141414;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .sr-sub {
-  font-size: 12.5px; color: #8a8a8a;
+  font-size: 12.5px; color: #999;
   display: flex; gap: 6px; align-items: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* 徽标按参考图分三种 */
 .sr-bdg {
   font-size: 10px; font-weight: 700; letter-spacing: .3px;
   color: #00D8A6; background: rgba(0,216,166,.10);
   padding: 1px 5px; border-radius: 3px; flex-shrink: 0;
 }
+.sr-bdg.sr-vip { color: #fff; background: #E53935; padding: 1px 5px; border-radius: 3px; }
+.sr-bdg.sr-hires { color: #333; background: #EEE; padding: 1px 5px; border-radius: 3px; }
+.sr-bdg.sr-sq { color: #fff; background: #00D8A6; padding: 1px 5px; border-radius: 50%; }
 .sr-dur { font-size: 11px; color: #bbb; flex-shrink: 0; margin-left: auto; }
 
+/* ▶ 按参考图：灰底白三角（酷狗风） */
 .sr-play {
   width: 32px; height: 32px; flex-shrink: 0;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; color: #fff; background: #00D8A6;
+  font-size: 13px; color: #fff; background: #E0E0E0;
   transition: transform .12s, background .15s;
 }
-.sr-play:active { transform: scale(.92); }
+.sr-play:active { transform: scale(.92); background: #CCCCCC; }
 
 .sr-more {
   width: 32px; height: 32px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px; color: #aaa; border-radius: 6px;
+  font-size: 18px; color: #BBB; border-radius: 6px;
 }
-.sr-more:active { background: rgba(0,0,0,.06); }
+.sr-more:active { background: rgba(0,0,0,.05); }
 
 /* 收藏页顶部 header（Tab + 工具条） */
 .sr-page-header { padding: 6px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -1051,7 +1066,7 @@ body.win-music #sidebar .brand-logo {
   font-size: 15px; color: #999; cursor: pointer; padding: 4px 2px;
   border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
 }
-.sr-tab.active { color: #1a1a1a; border-bottom-color: #00D8A6; font-weight: 600; }
+.sr-tab.active { color: #141414; border-bottom-color: #00D8A6; font-weight: 600; }
 
 .sr-toolbar { display: flex; align-items: center; gap: 10px; }
 .sr-tool-play {
@@ -1065,6 +1080,11 @@ body.win-music #sidebar .brand-logo {
   width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
   color: #888; font-size: 14px; cursor: pointer;
 }
+
+/* 🔶 ISS-20261009-023: 用户说固定灰色就行，去掉强制白色背景 */
+/* body.win-music .sr-list { background: #fff; } */
+/* body.win-music .media-lib .lib-head { background: #fff; } */
+/* body.win-music .media-lib { background: #fff; } */
 
 /* 更多弹出菜单 */
 .sr-menu button {
@@ -1175,6 +1195,14 @@ body.win-video .vol {
   width: 230px; height: 230px; border-radius: 50%; pointer-events: none; z-index: -1;
   background: radial-gradient(circle, rgba(255, 255, 255, .05), transparent 70%);
 }
+/* 🔶 ISS-20261009-023: 用户说纯灰色就行 */
+body.win-music .empty::before,
+body.win-music .music-page .empty::before { background: transparent !important; width: 0 !important; height: 0 !important; }
+body.win-music .empty .big { filter: none !important; animation: none !important; }
+body.win-music .empty .cta { box-shadow: none !important; }
+body.win-music .empty .cta:hover { box-shadow: none !important; transform: none !important; }
+body.win-music .music-page .media-lib .empty .big { filter: none !important; }
+
 .music-page .empty::before { background: radial-gradient(circle, var(--kg-soft), transparent 70%); }
 .video-page .empty::before { background: radial-gradient(circle, var(--vd-soft), transparent 70%); }
 .empty .cta { box-shadow: 0 8px 22px rgba(0, 0, 0, .28); transition: transform .15s, box-shadow .15s, filter .15s; }
@@ -1208,3 +1236,37 @@ body.win-video .vol {
 }
 
 /* ---------- /UI 细节打磨 ---------- */
+
+/* 🔶 ISS-20261009-023: 用户要求纯灰色背景，所有容器类强制统一灰 */
+body.win-music,
+body.win-music #app,
+body.win-music #main,
+body.win-music #view,
+body.win-music #content,
+body.win-music .page,
+body.win-music .media-lib,
+body.win-music .mh-home,
+body.win-music .mh-cards,
+body.win-music .mh-hello,
+body.win-music .mh-sections,
+body.win-music .sr-list,
+body.win-music .music-page {
+  background: #EAECEF !important;
+}
+/* 去掉所有 linear-gradient / radial-gradient 背景 */
+body.win-music * {
+  background-image: none !important;
+}
+/* 但按钮/输入框/播放控件保留各自的背景 */
+body.win-music .cta,
+body.win-music .ghost-btn,
+body.win-music button,
+body.win-music input,
+body.win-music .sr-play,
+body.win-music .icon-btn,
+body.win-music .mn-item,
+body.win-music .mn-center,
+body.win-music .mn-cover {
+  background-image: initial !important;
+}
+/* .mh-card / .mh-section 保留各自灰色（不强制统一一个值） */

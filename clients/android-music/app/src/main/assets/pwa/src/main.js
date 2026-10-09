@@ -387,8 +387,8 @@ function showPage(name) {
   // 底栏播放模式徽章跟随当前界面（音乐/视频各自独立）
   app.refreshModeBadge?.()
 }
-// 各窗默认落点：Hub 主控台(首页)、Music 发现页(首页)、Video 视频
-showPage(isHub ? 'home' : (ROLE === 'music' ? 'home' : ROLE))
+// 各窗默认落点：Hub 主控台(首页)、Music 直接进音乐库、Video 视频
+showPage(isHub ? 'home' : (ROLE === 'music' ? 'music' : ROLE))
 
 // 底栏 + 队列 + 手势
 initBottomBar(app)
