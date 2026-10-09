@@ -99,7 +99,10 @@ class MainActivity : ComponentActivity() {
         setContentView(container)
 
         setupWebView()
-        webView.loadUrl("file:///android_asset/pwa/index.html")
+        // 🔶 WebView 缓存铁律：禁用所有缓存，每次加载都加版本戳强制刷新
+        webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        webView.clearCache(true)
+        webView.loadUrl("file:///android_asset/pwa/index.html?v=16.${System.currentTimeMillis()}")
     }
 
     @SuppressLint("SetJavaScriptEnabled")

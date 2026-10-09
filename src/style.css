@@ -565,18 +565,20 @@ body.win-music #view { padding: 12px 16px 180px; }
 
 /* 🎵 首页大卡片（本地 / 收藏） */
 .mh-cards {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px;
 }
 .mh-card {
-  background: #EAECEF;
-  border: 1px solid #e6f5ef;
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB;
   border-radius: 16px; padding: 18px; cursor: pointer;
   transition: transform .15s, box-shadow .15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
 .mh-card:active { transform: scale(0.97); }
 .mh-card-icon { font-size: 28px; margin-bottom: 6px; }
 .mh-card-label { font-size: 13px; color: #666; }
 .mh-card-count { font-size: 20px; font-weight: 700; color: var(--kg, #00D8A6); }
+.mh-card-hint { font-size: 11px; color: #9AA4B2; margin-top: 4px; }
 
 /* 🎵 可折叠 section */
 /* 🔶 ISS-20261009-023: 统一灰色，去掉强制白色 */
@@ -1255,7 +1257,6 @@ body.win-music #content,
 body.win-music .page,
 body.win-music .media-lib,
 body.win-music .mh-home,
-body.win-music .mh-cards,
 body.win-music .mh-hello,
 body.win-music .mh-sections,
 body.win-music .sr-list,
@@ -1292,3 +1293,35 @@ body.win-music .mn-cover {
 /* #music-nav = 三栏底部导航 ——保留 */
 body.win-music #bottombar { display: none !important; }
 /* 去掉底栏后 #main 需要占满剩余空间，但 #music-nav 还在，让 #app 正常 grid */
+
+/* 🔶 音乐 App 隐藏顶部/侧栏的导入按钮（已被首页卡片 + 底部工具栏替代） */
+body.win-music #import-folder-top { display: none !important; }
+body.win-music #import-folder { display: none !important; }
+body.win-music #import-files { display: none !important; }
+body.win-music .sidebar-foot { display: none !important; }
+/* 音乐 App 隐藏侧栏（用底部导航替代） */
+body.win-music aside { display: none !important; }
+body.win-music #app { grid-template-columns: 1fr !important; }
+
+/* 🎵 "我的"页（底部导航点"我的"显示） */
+.mh-mine { padding: 12px 16px; }
+.mh-mine-section { margin-bottom: 18px; background: #fff; border-radius: 14px; padding: 14px; border: 1px solid #E5E7EB; }
+.mh-mine-head { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #1f2937; }
+.mh-mine-count { font-size: 12px; color: #9AA4B2; font-weight: 400; }
+.mh-pl-list { display: flex; flex-direction: column; gap: 6px; }
+.mh-pl-item { padding: 10px 12px; background: #F9FAFB; border-radius: 10px; font-size: 14px; cursor: pointer; border: 1px solid #F3F4F6; }
+.mh-pl-item:active { background: #EEF2FF; }
+
+/* 🔶 DEC-20261009-005: 整页导入页（点导入进入整页，非弹窗）——两个大选项 */
+.imp-page { position: fixed; inset: 0; z-index: 90; background: #EAECEF !important; display: flex; flex-direction: column; animation: impIn .18s ease; }
+@keyframes impIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.imp-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; }
+.imp-head h3 { margin: 0; font-size: 18px; color: #111827; }
+.imp-body { flex: 1; padding: 8px 16px; display: flex; flex-direction: column; gap: 12px; }
+.imp-opt { display: flex; align-items: center; gap: 14px; background: #fff !important; border: 1px solid #E5E7EB; border-radius: 14px; padding: 18px 16px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.imp-opt:active { background: #F5F7FA !important; }
+.imp-opt-icon { font-size: 26px; width: 52px; height: 52px; display: grid; place-items: center; background: #F2F4F7 !important; border-radius: 12px; }
+.imp-opt-txt { flex: 1; min-width: 0; }
+.imp-opt-title { font-weight: 700; font-size: 16px; color: #111827; }
+.imp-opt-desc { font-size: 13px; color: #6B7280; margin-top: 2px; }
+.imp-opt-arrow { color: #9CA3AF; font-size: 22px; }

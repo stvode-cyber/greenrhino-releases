@@ -118,6 +118,41 @@ function buildHome(app) {
   return { el, show() { setTimeout(() => input.focus?.(), 60) } }
 }
 
+// 🔶 DEC-20261009-005: 整页导入页（用户确认方案：点导入 → 进入整页，不是弹窗）
+// 页面上两个大选项：扫描音乐 / 手动打开手机文件
+function doScan() {
+  if (window.RhinoBridge?.requestAutoImport) {
+    toast('开始扫描音乐文件...', 'info')
+    window.RhinoBridge.requestAutoImport()
+  } else {
+    toast('当前环境不支持自动扫描，请用"手动打开"', 'warn')
+  }
+}
+function openImportPage(app) {
+  const page = h('div', { class: 'imp-page' },
+    h('div', { class: 'imp-head' },
+      h('button', { class: 'icon-btn', onclick: () => close() }, '←'),
+      h('h3', {}, '导入音乐')),
+    h('div', { class: 'imp-body' },
+      h('div', { class: 'imp-opt', onclick: () => { close(); doScan() } },
+        h('div', { class: 'imp-opt-icon' }, '📥'),
+        h('div', { class: 'imp-opt-txt' },
+          h('div', { class: 'imp-opt-title' }, '扫描音乐'),
+          h('div', { class: 'imp-opt-desc' }, '自动扫描手机里所有音频，一键导入')),
+        h('div', { class: 'imp-opt-arrow' }, '›')),
+      h('div', { class: 'imp-opt', onclick: () => { close(); app.importFilesDialog() } },
+        h('div', { class: 'imp-opt-icon' }, '📁'),
+        h('div', { class: 'imp-opt-txt' },
+          h('div', { class: 'imp-opt-title' }, '手动打开手机文件'),
+          h('div', { class: 'imp-opt-desc' }, '从文件管理器挑选音乐，支持多选')),
+        h('div', { class: 'imp-opt-arrow' }, '›'))))
+  function close() { page.remove() }
+  document.body.appendChild(page)
+}
+// 暴露到 window 供 library.js 等子模块调用
+window.openImportPage = openImportPage
+window.doScan = doScan
+
 // 🔶 ISS-20261009-018: Music App 专属首页（参考图风格 — 问候 + 搜索 + 大卡片 + 可折叠 section）
 // 上一轮 UI 重构漏了函数体 → music role main.js init crash → SW 注册走不到（ISS-20261009-019）
 // 🔶 用户要求：首页只留问候+搜索+两张大卡片，去掉歌单/最近播放/收藏单曲三个 section
@@ -136,26 +171,24 @@ function buildMusicHome(app) {
   const cardFav = h('div', { class: 'mh-card', onclick: () => showPage('favorites') },
     h('div', { class: 'mh-card-icon' }, '⭐'),
     h('div', { class: 'mh-card-label' }, '我的收藏'), favN)
+  const cardImport = h('div', { class: 'mh-card', onclick: () => openImportPage(app) },
+    h('div', { class: 'mh-card-icon' }, '📥'),
+    h('div', { class: 'mh-card-label' }, '导入音乐'),
+    h('div', { class: 'mh-card-hint' }, '扫描 / 手动选择'))
 
-  // 空库引导：两个入口一步到位
+  // 空库引导：进整页导入页（两个选项）
   const emptyBox = h('div', { class: 'mh-empty-box', hidden: true },
     h('div', { class: 'mh-empty-big' }, '🎶'),
     h('p', {}, '还没有音乐，先导入几首歌吧'),
     h('div', { class: 'mh-empty-actions' },
-      h('button', {
-        class: 'cta', onclick: () => {
-          if (window.RhinoBridge?.requestAutoImport) window.RhinoBridge.requestAutoImport()
-          else toast('当前环境不支持自动扫描')
-        }
-      }, '📥 自动扫描'),
-      h('button', { class: 'ghost-btn', onclick: () => app.importFilesDialog() }, '📁 选择文件')))
+      h('button', { class: 'cta', onclick: () => openImportPage(app) }, '📥 导入音乐')))
 
   const el = h('div', { class: 'mh-home' },
     h('div', { class: 'mh-hello' },
       h('div', { class: 'mh-hi' }, hi + ' 👋'),
       h('div', { class: 'mh-sub' }, '今天也要开心听歌')),
     searchI,
-    h('div', { class: 'mh-cards' }, cardLocal, cardFav),
+    h('div', { class: 'mh-cards' }, cardLocal, cardFav, cardImport),
     emptyBox)
 
   async function refresh() {
@@ -177,7 +210,39 @@ function buildMusicHome(app) {
   })
 
   refresh()
-  return { el, show: refresh, refresh }
+
+  // "我的"页：歌单 + 收藏列表（底部导航点"我的"触发）
+  const mineEl = h('div', { class: 'mh-mine', hidden: true })
+  async function showMine() {
+    mineEl.innerHTML = ''
+    mineEl.hidden = false
+    el.hidden = true
+    const [favs, pls] = await Promise.all([getFavorites(), getPlaylists()])
+    // 收藏区
+    const favBox = h('div', { class: 'mh-mine-section' },
+      h('div', { class: 'mh-mine-head' }, '⭐ 我的收藏', h('span', { class: 'mh-mine-count' }, favs.length + ' 首')),
+      favs.length ? h('div', { class: 'sr-list' },
+        ...favs.map((it) => songRow(it, app, { selectable: false })))
+        : h('div', { class: 'empty' }, h('div', {}, '还没有收藏，去发现页点 ⭐ 吧')))
+    // 歌单区
+    const plBox = h('div', { class: 'mh-mine-section' },
+      h('div', { class: 'mh-mine-head' }, '📃 我的歌单', h('span', { class: 'mh-mine-count' }, pls.length + ' 个')),
+      pls.length ? h('div', { class: 'mh-pl-list' },
+        ...pls.map((pl) => h('div', { class: 'mh-pl-item', onclick: () => {
+          // 点歌单 → 播放该歌单
+          player.setQueue(pl.ids.map((id) => favs.find((f) => f.id === id)).filter(Boolean))
+          showPage('music')
+        } }, pl.name)))
+        : h('div', { class: 'empty' }, h('div', {}, '还没有歌单，播放时点"存为歌单"创建')))
+    mineEl.appendChild(favBox)
+    mineEl.appendChild(plBox)
+  }
+  function hideMine() { mineEl.hidden = true; el.hidden = false }
+
+  // 把 mineEl 加到 view（和 home.el 同级）
+  el.parentElement?.insertBefore(mineEl, el.nextSibling)
+
+  return { el, show: refresh, refresh, showMine, hideMine }
 }
 
 // ---------- 🎵 全屏播放页（大歌词居中 + 进度条 + 控制按钮） ----------
@@ -587,7 +652,7 @@ musicNav?.addEventListener('click', (e) => {
   const b = e.target.closest('.mn-item')
   if (!b) return
   const k = b.dataset.mn
-  if (k === 'discover') showPage('home')
+  if (k === 'discover') { home?.hideMine?.(); showPage('home') }
   else if (k === 'nowplaying') openMusicFullpage()
   else if (k === 'mine') home?.showMine?.()
   musicNav.querySelectorAll('.mn-item').forEach((x) => x.classList.toggle('active', x === b && k !== 'nowplaying'))

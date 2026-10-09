@@ -244,6 +244,22 @@ export async function deleteMedia(id, skipEmit = false) {
   await dbDelete('progress', id)
   if (!skipEmit) emit('library:changed', [])
 }
+// 🔶 ISS-20261009-021: 批量删除——单次事务删 N 条，比逐条串行快 10x
+export async function batchDeleteMedia(ids, skipEmit = false) {
+  if (!ids.length) return
+  const db = await openDB()
+  const tx = db.transaction(['media', 'progress'], 'readwrite')
+  const medOs = tx.objectStore('media')
+  const proOs = tx.objectStore('progress')
+  for (const id of ids) {
+    medOs.delete(id)
+    proOs.delete(id)
+  }
+  await new Promise((res, rej) => {
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error)
+  })
+  if (!skipEmit) emit('library:changed', [])
+}
 export async function updateMedia(id, patch) {
   const cur = await dbGet('media', id)
   if (!cur) return

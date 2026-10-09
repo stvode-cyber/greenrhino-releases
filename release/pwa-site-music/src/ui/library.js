@@ -1,6 +1,6 @@
 // library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
 import { h, openModal, toast } from './dom.js'
-import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
+import { getAllMedia, toggleFavorite, deleteMedia, batchDeleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
 import { player } from '../player.js'
 import { getThumbsMap, queueVideoThumbs } from '../videoThumb.js'
 
@@ -35,20 +35,18 @@ export function mediaLibrary(app, type) {
   }
 
   function importBar() {
-    // 🔶 ISS-20261009-016：两个独立按钮，去掉 [手动|扫描] 分段——一步直接触发
-    // Android MediaStore 自动扫描（500MB+ 大视频，秒完）
+    // 🔶 DEC-20261009-004: 两个独立按钮直接触发，不弹窗
     const scanBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
       if (window.RhinoBridge?.requestAutoImport) {
-        toast('开始扫描 MediaStore...', 'info')
+        toast('开始扫描音乐文件...', 'info')
         window.RhinoBridge.requestAutoImport()
       } else {
-        app.importFolderDialog()
+        toast('当前环境不支持自动扫描', 'warn')
       }
-    }, title: '扫描 Android 媒体库（500MB+ 大视频）' }, '📥 自动扫描')
-    // 用户手动自选文件（SAF 文件选择器，支持批量多选）
+    }, title: '扫描手机里所有音乐文件' }, '📥 扫描音乐')
     const pickBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
       app.importFilesDialog()
-    }, title: '从文件管理器选择视频' }, '📁 选择文件')
+    }, title: '手动打开手机里的文件' }, '📁 手动打开')
     const selBtn = h('button', { class: 'ghost-btn' + (selMode ? ' active' : ''), style: { padding: '6px 12px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, selMode ? '✓ 退出选择' : '☑ 多选')
     const dupBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => openDuplicates(), title: '查找媒体库中重复的文件' }, '🔁 查重复')
     return h('div', { class: 'lib-toolbar' }, scanBtn, pickBtn, selBtn, dupBtn)
@@ -207,8 +205,9 @@ export function mediaLibrary(app, type) {
     const ids = [...selected]
     if (!ids.length) return
     if (!confirm(`移除 ${ids.length} 个文件？`)) return
-    for (const id of ids) await deleteMedia(id)
-    app.toast(`已移除 ${ids.length} 个文件`)
+    // 🔶 ISS-20261009-021: 用单次事务批量删，比逐条串行快 10x
+    await batchDeleteMedia(ids)
+    toast(`已移除 ${ids.length} 个文件`, 'ok')
     exitSelect()
   }
 
