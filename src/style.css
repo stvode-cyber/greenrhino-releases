@@ -1236,3 +1236,37 @@ body.win-music .music-page .media-lib .empty .big { filter: none !important; }
 }
 
 /* ---------- /UI 细节打磨 ---------- */
+
+/* 🔶 ISS-20261009-023: 用户要求纯灰色背景，所有容器类强制统一灰 */
+body.win-music,
+body.win-music #app,
+body.win-music #main,
+body.win-music #view,
+body.win-music #content,
+body.win-music .page,
+body.win-music .media-lib,
+body.win-music .mh-home,
+body.win-music .mh-cards,
+body.win-music .mh-hello,
+body.win-music .mh-sections,
+body.win-music .sr-list,
+body.win-music .music-page {
+  background: #EAECEF !important;
+}
+/* 去掉所有 linear-gradient / radial-gradient 背景 */
+body.win-music * {
+  background-image: none !important;
+}
+/* 但按钮/输入框/播放控件保留各自的背景 */
+body.win-music .cta,
+body.win-music .ghost-btn,
+body.win-music button,
+body.win-music input,
+body.win-music .sr-play,
+body.win-music .icon-btn,
+body.win-music .mn-item,
+body.win-music .mn-center,
+body.win-music .mn-cover {
+  background-image: initial !important;
+}
+/* .mh-card / .mh-section 保留各自灰色（不强制统一一个值） */
