@@ -1195,6 +1195,14 @@ body.win-video .vol {
   width: 230px; height: 230px; border-radius: 50%; pointer-events: none; z-index: -1;
   background: radial-gradient(circle, rgba(255, 255, 255, .05), transparent 70%);
 }
+/* 🔶 ISS-20261009-023: 用户说纯灰色就行 */
+body.win-music .empty::before,
+body.win-music .music-page .empty::before { background: transparent !important; width: 0 !important; height: 0 !important; }
+body.win-music .empty .big { filter: none !important; animation: none !important; }
+body.win-music .empty .cta { box-shadow: none !important; }
+body.win-music .empty .cta:hover { box-shadow: none !important; transform: none !important; }
+body.win-music .music-page .media-lib .empty .big { filter: none !important; }
+
 .music-page .empty::before { background: radial-gradient(circle, var(--kg-soft), transparent 70%); }
 .video-page .empty::before { background: radial-gradient(circle, var(--vd-soft), transparent 70%); }
 .empty .cta { box-shadow: 0 8px 22px rgba(0, 0, 0, .28); transition: transform .15s, box-shadow .15s, filter .15s; }
