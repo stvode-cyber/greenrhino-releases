@@ -52,3 +52,28 @@
 ---
 
 *文件由 AI 自动管理，每次任务结束追加当天流水。*
+## 2026-10-09 （大改日 · 换电脑交接）
+
+### 时间线
+- **上午**: UI 重构（底部导航、新首页、全屏播放页）
+- **下午1**: 导入边界过滤漏洞排查 → 发现 3 个大漏洞 → store.js role 分流 + Music MainActivity 补 RhinoBridge
+- **下午2**: buildMusicHome 函数缺失暴露 → Playwright headless smoke test 救了 E2E
+- **下午3**: 测试 10/10 全绿 → commit 3 个 → git push 超时
+- **下午4**: 写交接文档（本 context.md + daily.md）
+
+### 关键发现
+1. Music App 之前完全没有 MediaStore.Audio 扫描！是 SAF 专用壳 → RhinoBridge 补
+2. addMediaFromAndroid 硬编码 VIDEO_EXT + 500MB → music role 音频 entry 全被跳过
+3. buildMusicHome 调用了没定义 → music role init crash → SW 注册走不到 → E2E 3 条全超时
+4. **教训**: UI 大改后必须 python -m http.server + Playwright headless smoke test
+
+### 踩坑
+- EPERM rmSync release 目录（被 python http.server 占着）→ Get-Process python | Stop-Process -Force
+- GitHub push Connection timed out（300s）→ 等网络恢复
+
+### 下一步（换电脑后新 AI 要做）
+1. 真机验证 MediaStore.Audio 扫描
+2. buildMusicHome stub 迭代（点击跳转、展开/收起动画、真实数量）
+3. 全屏播放页 openMusicFullpage 实现
+4. 推 GitHub + Cloudflare Pages 部署
+5. 打 release tag + 写 changelog
