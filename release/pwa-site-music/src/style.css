@@ -1002,6 +1002,9 @@ body.win-music #sidebar .brand-logo {
 }
 .sr-row:hover { background: rgba(0,0,0,.03); }
 .sr-row:active { background: rgba(0,0,0,.06); }
+.sr-row.sel { background: rgba(0,216,166,.08); }
+.sr-row.selectable { cursor: default; }
+.sr-row.selectable .sr-play { opacity: .5; pointer-events: auto; }
 
 .sr-cover {
   width: 52px; height: 52px; flex-shrink: 0;

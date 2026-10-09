@@ -102,19 +102,36 @@ export function mediaLibrary(app, type) {
       el.appendChild(selbar)
       return
     }
-    const grid = h('div', { class: 'grid' + (selMode ? ' selecting' : '') })
-    for (const item of list) {
-      grid.appendChild(mediaCard(item, app, selMode ? {
-        selectable: true,
-        selected: selected.has(item.id),
-        onToggle: (it, node) => {
-          if (selected.has(it.id)) { selected.delete(it.id); node.classList.remove('sel') }
-          else { selected.add(it.id); node.classList.add('sel') }
-          updateSelBar()
-        }
-      } : {}))
+    // 🔶 按 type 分支渲染：music → songRow 列表（参考图风格），video → mediaCard 网格
+    if (type === 'music') {
+      const listBox = h('div', { class: 'sr-list' + (selMode ? ' selecting' : '') })
+      for (const item of list) {
+        listBox.appendChild(songRow(item, app, selMode ? {
+          selectable: true,
+          selected: selected.has(item.id),
+          onToggle: (it, node) => {
+            if (selected.has(it.id)) { selected.delete(it.id); node.classList.remove('sel') }
+            else { selected.add(it.id); node.classList.add('sel') }
+            updateSelBar()
+          }
+        } : {}))
+      }
+      el.appendChild(listBox)
+    } else {
+      const grid = h('div', { class: 'grid' + (selMode ? ' selecting' : '') })
+      for (const item of list) {
+        grid.appendChild(mediaCard(item, app, selMode ? {
+          selectable: true,
+          selected: selected.has(item.id),
+          onToggle: (it, node) => {
+            if (selected.has(it.id)) { selected.delete(it.id); node.classList.remove('sel') }
+            else { selected.add(it.id); node.classList.add('sel') }
+            updateSelBar()
+          }
+        } : {}))
+      }
+      el.appendChild(grid)
     }
-    el.appendChild(grid)
     el.appendChild(selbar)
     updateSelBar()
   }
@@ -140,7 +157,8 @@ export function mediaLibrary(app, type) {
     btns[3].disabled = n === 0
     btns[2].style.opacity = n === 0 ? '0.4' : '1'
     btns[3].style.opacity = n === 0 ? '0.4' : '1'
-    const total = el.querySelectorAll('.grid .card').length
+    const rowSel = type === 'music' ? '.sr-list .sr-row' : '.grid .card'
+    const total = el.querySelectorAll(rowSel).length
     btns[0].textContent = (total && n >= total) ? '取消全选' : '全选'
   }
   function toggleSelect() {
@@ -156,7 +174,8 @@ export function mediaLibrary(app, type) {
     refresh()
   }
   function toggleAll() {
-    const cards = [...el.querySelectorAll('.grid .card')]
+    const rowSel = type === 'music' ? '.sr-list .sr-row' : '.grid .card'
+    const cards = [...el.querySelectorAll(rowSel)]
     const total = cards.length
     if (selected.size >= total) { selected.clear(); cards.forEach(c => c.classList.remove('sel')) }
     else { for (const c of cards) { const id = c.dataset.id; if (id) selected.add(id); c.classList.add('sel') } }
@@ -334,8 +353,11 @@ function emptyState(app, type) {
 }
 
 // ---------- 🎵 参考图歌曲列表行（左封面 / 中歌名+歌手+标签 / 右 ▶ / 最右 ⋯）----------
-export function songRow(item, app) {
-  // 封面：56x56 圆角，无封面则 emoji 🎵
+export function songRow(item, app, opts) {
+  opts = opts || {}
+  const selMode = !!opts.selectable
+
+  // 封面：52x52 圆角，无封面则 emoji 🎵
   const coverBox = h('div', { class: 'sr-cover' }, TYPE_ICON[item.type] || '🎵')
   const img = item.cover || item.thumb
   if (img) {
@@ -360,19 +382,18 @@ export function songRow(item, app) {
   // 中间文字块
   const info = h('div', { class: 'sr-info' }, name, sub)
 
-  // 右侧播放按钮 ▶（圆形，stopPropagation 防触发行点击）
+  // 右侧播放按钮 ▶
   const playBtn = h('div', { class: 'sr-play', title: '播放' }, '▶')
   playBtn.addEventListener('click', (e) => {
     e.stopPropagation()
     app.playItem ? app.playItem(item) : (player.current = item, player.play())
   })
 
-  // 更多菜单 ⋯（竖向三点）
+  // 更多菜单 ⋯
   const favDot = item.favorite ? '❤️' : '🤍'
   const moreBtn = h('div', { class: 'sr-more', title: '更多' }, '⋯')
   moreBtn.addEventListener('click', (e) => {
     e.stopPropagation()
-    // 弹出轻量操作菜单
     const menu = h('div', { class: 'sr-menu' },
       h('button', { onclick: () => { toggleFavorite(item.id); toast(item.favorite ? '已取消收藏' : '已收藏') } }, favDot, item.favorite ? '取消收藏' : '收藏'),
       h('button', { onclick: () => { navigator.clipboard?.writeText(item.title || item.name || ''); toast('歌名已复制') } }, '📋 复制歌名')
@@ -380,8 +401,14 @@ export function songRow(item, app) {
     openModal(menu, { title: item.title || item.name })
   })
 
-  const row = h('div', { class: 'sr-row' }, coverBox, info, playBtn, moreBtn)
-  row.addEventListener('click', () => { app.playItem ? app.playItem(item) : (player.current = item, player.play()) })
+  const classes = ['sr-row']
+  if (selMode) classes.push('selectable')
+  if (opts.selected) classes.push('sel')
+  const row = h('div', { class: classes.join(' '), 'data-id': item.id }, coverBox, info, playBtn, moreBtn)
+  row.addEventListener('click', () => {
+    if (selMode && opts.onToggle) { opts.onToggle(item, row); return }
+    app.playItem ? app.playItem(item) : (player.current = item, player.play())
+  })
 
   return row
 }
