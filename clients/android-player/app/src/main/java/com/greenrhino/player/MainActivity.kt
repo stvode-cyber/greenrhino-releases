@@ -84,8 +84,8 @@ class MainActivity : ComponentActivity() {
                     MediaStore.Video.Media.SIZE
                 )
                 // 🔶 ISS-20261009-002：只扫 800MB 以上的大视频（小视频如微信/抖音缓存让用户手动导入）
-                // Kotlin 里 Long 字面量 L 后缀：800 * 1024 * 1024 = 838860800
-                val minSize = 800L * 1024L * 1024L
+                // Kotlin 里 Long 字面量 L 后缀：500 * 1024 * 1024 = 524288000
+                val minSize = 500L * 1024L * 1024L
                 val selection = "${MediaStore.Video.Media.SIZE} >= ?"
                 val selectionArgs = arrayOf(minSize.toString())
                 val sort = "${MediaStore.Video.Media.DATE_ADDED} DESC"
@@ -102,7 +102,17 @@ class MainActivity : ComponentActivity() {
                         val name = cur.getString(idxName) ?: "video_$id"
                         val dur = cur.getLong(idxDur)
                         val size = cur.getLong(idxSize)
-                        val uriStr = Uri.parse("${MediaStore.Video.Media.EXTERNAL_CONTENT_URI}/$id").toString()
+                        val uri = Uri.parse("${MediaStore.Video.Media.EXTERNAL_CONTENT_URI}/$id")
+                        // 🔶 ISS-20261009-013：文件系统存在性校验
+                        // Android MediaStore 有缓存：用户删了本地文件，MediaStore 表条目可能还在
+                        // 这里用 openFileDescriptor 真正试打开，能开才算存在
+                        val uriStr = uri.toString()
+                        val fd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null }
+                        if (fd == null) {
+                            android.util.Log.d("GreenRhino", "scanMediaStore SKIP (file gone): $name")
+                            continue
+                        }
+                        try { fd.close() } catch (_: Exception) {}
                         val obj = org.json.JSONObject().apply {
                             put("id", id); put("name", name); put("uri", uriStr)
                             put("duration", dur); put("size", size)
@@ -254,8 +264,7 @@ class MainActivity : ComponentActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 android.util.Log.d("GreenRhino", "onPageFinished: $url")
-                // 🔶 页面加载完 → 延迟 2s 自动扫描 MediaStore（等 main.js 初始化）
-                webView.postDelayed({ requestMediaPermission() }, 2000)
+                // 🔶 ISS-20261009-014: 删除自动扫描 postDelayed——用户点"扫描"分段才手动触发
             }
 
         }
@@ -273,6 +282,18 @@ class MainActivity : ComponentActivity() {
                         // 🔶 ISS-20261009-009：显式加多选支持（即使 WebView input.multiple=true）
                         it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                         it.addCategory(Intent.CATEGORY_OPENABLE)
+                        // 🔶 ISS-20261009-012：展开 video/* → 具体视频 MIME 列表
+                        // 有些 Android SAF 对 video/* 支持差（只显示 mp4），显式列全所有视频格式
+                        val acceptTypes = params?.acceptTypes
+                        if (acceptTypes != null && acceptTypes.any { it == "video/*" }) {
+                            it.type = "*/*"
+                            it.putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                                "video/mp4", "video/x-matroska", "video/webm", "video/quicktime",
+                                "video/x-msvideo", "video/mp2t", "video/x-flv", "video/x-ms-wmv",
+                                "video/3gpp", "video/3gpp2", "video/ogg", "video/rmvb",
+                                "video/m4v", "video/avi"
+                            ))
+                        }
                         fileChooserLauncher.launch(it)
                     } ?: run { filePathCallback = null; return false }
                 } catch (e: Exception) {
@@ -425,7 +446,31 @@ class MainActivity : ComponentActivity() {
             android.util.Log.d("GreenRhino", "RhinoBridge.requestAutoImport() from JS")
             runOnUiThread { requestMediaPermission() }
         }
+        // 🔶 ISS-20261009-015：手动导入 video 时查 MediaStore content:// URI，避免存 blob 到 IndexedDB（500MB+ 巨慢）
+        // 返回 JSON: { uri: "content://...", duration: 123456 } 或 null（MediaStore 里找不到）
+        @JavascriptInterface
+        fun lookupMediaUri(name: String, size: Long): String {
+            return try {
+                val sel = "${MediaStore.Video.Media.DISPLAY_NAME} = ? AND ${MediaStore.Video.Media.SIZE} = ?"
+                val args = arrayOf(name, size.toString())
+                contentResolver.query(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DURATION),
+                    sel, args, null
+                )?.use { cur ->
+                    if (cur.moveToFirst()) {
+                        val idIdx = cur.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                        val durIdx = cur.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                        val id = cur.getLong(idIdx)
+                        val dur = cur.getLong(durIdx)
+                        val uri = "${MediaStore.Video.Media.EXTERNAL_CONTENT_URI}/$id"
+                        org.json.JSONObject().put("uri", uri).put("duration", dur).toString()
+                    } else null
+                } ?: "null"
+            } catch (e: Exception) { "null" }
+        }
     }
 }
+
 
 

@@ -1,5 +1,5 @@
 ﻿// main.js — 应用装配与编排
-import { h, toast, openModal } from './ui/dom.js'
+import { h, toast, openModal, formatTime } from './ui/dom.js'
 import { player } from './player.js'
 import {
   addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile
@@ -59,7 +59,7 @@ const playlists = isMusic ? buildPlaylists(app, 'music') : null
 const recent = isHub ? buildRecent(app) : null
 const stats = isHub ? buildStats(app) : null
 const cloud = isHub ? buildCloud(app) : null
-const home = isHub ? buildHome(app) : null
+const home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : null)
 const pages = {}
 for (const [k, p] of Object.entries({ home, music, video, favorites, playlists, recent, stats, cloud })) {
   if (p) { pages[k] = p; view.appendChild(p.el) }
@@ -259,7 +259,9 @@ function makeFileInput() {
 function importFilesDialog() {
   const input = makeFileInput()
   input.multiple = true
-  input.accept = 'audio/*,video/*'
+  // 🔶 ISS-20261009-012：按 role 过滤 MIME type → SAF 只显示对应分类 tab
+  // player role 只要视频 tab，music role 只要音频 tab，hub 全量
+  input.accept = ROLE === 'video' ? 'video/*' : ROLE === 'music' ? 'audio/*' : 'audio/*,video/*'
   input.onchange = () => doImport([...input.files], '手动添加')
   input.click()
 }
@@ -325,7 +327,8 @@ async function importFiles(files, folder = '导入', onProgress) {
 // §12 文件已丢失 →「重新定位」：让用户重新选择一个文件替换丢失的 blob
 function relocateMedia(id) {
   const input = makeFileInput()
-  input.accept = 'audio/*,video/*'
+  // 🔶 ISS-20261009-012：同 importFilesDialog，按 role 过滤
+  input.accept = ROLE === 'video' ? 'video/*' : ROLE === 'music' ? 'audio/*' : 'audio/*,video/*'
   input.onchange = async () => {
     const file = input.files[0]
     if (!file) return
@@ -565,3 +568,6 @@ window.__hostOpen = async (list) => {
     } else { importOverlay.hide(); toast('没有可播放的媒体文件', 'err') }
   } catch (e) { console.error('__hostOpen error', e) }
 }
+
+
+

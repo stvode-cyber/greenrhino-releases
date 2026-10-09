@@ -1,4 +1,4 @@
-// player.js — 统一播放引擎（音频 Web Audio 图 + 视频原生）
+﻿// player.js — 统一播放引擎（音频 Web Audio 图 + 视频原生）
 import { getProgress, saveProgress, getSettings, recordPlayback } from './store.js'
 import { srtToVtt } from './lrc.js'
 
@@ -190,7 +190,8 @@ class PlayerEngine {
     // 在线预览（接管主播放器后的在线曲目）：直接用远程 URL，不经过 blob 对象 URL
     if (item && item._onlineUrl) return item._onlineUrl
     if (this._urlCache.has(item.id)) return this._urlCache.get(item.id)
-    const url = URL.createObjectURL(item.blob)
+    const url = item.uri || URL.createObjectURL(item.blob)
+    console.error('[gr] _urlFor id=' + item?.id?.slice(0,10) + ' url=' + (url?.slice(0,80) || 'null') + ' isContent=' + (url?.startsWith?.('content://') || false))
     this._urlCache.set(item.id, url)
     return url
   }
@@ -220,8 +221,9 @@ class PlayerEngine {
 
   // ---------- 播放控制 ----------
   async playItem(item, { crossfade = false, autoplay = true } = {}) {
-    // §12 文件已丢失：blob 缺失或为空，不尝试加载（避免 URL.createObjectURL(null) 崩溃），直接上报。在线预览除外。
-    if (!item?._online && (!item || !item.blob || item.blob.size === 0)) { this.emit('lost', item); return }
+    // §12 文件已丢失：blob 和 uri 都没有才报丢失（Android MediaStore 自动导入的 item 用 uri 不用 blob）
+    const hasSrc = item?.uri || item?.blob
+    if (!item?._online && (!item || !hasSrc)) { this.emit('lost', item); return }
     // 编解码能力预检：浏览器原生不支持的格式（如 APE、部分特殊编码）提前明确提示，避免静默无反应
     const _mime = item.mime || guessMime(item.name, item.type)
     const _isVid = item.type === 'video' || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(item.name || '')
@@ -288,6 +290,7 @@ class PlayerEngine {
   async _playVideo(item, autoplay = true) {
     if (!this.videoEl) { this.emit('error', '视频播放器未就绪'); return }
     this._videoErrShown = false
+    this._videoMetaLoaded = false  // 🔶 ISS-20261009-008：每次换视频重置 loadedmetadata 标记
     const switching = !this.current || item.id !== this.current.id
     // 同一视频循环重播且已转码：直接复用转码 URL 从头播。
     // 否则会重新把 src 设回不兼容的 HEVC blob，再次触发解码失败→转码（8s 测试片每轮循环都卡顿重载）。
@@ -506,6 +509,7 @@ class PlayerEngine {
     // display:none→显示 会打断视频再次触发 playing，形成无限 playing 风暴，视频永远卡在开头。
     el.addEventListener('playing', () => { this._startBlackWatchdog() })
     el.addEventListener('loadedmetadata', () => {
+      this._videoMetaLoaded = true  // 🔶 ISS-20261009-008：标记元数据加载成功（用来区分文件不存在 vs 编码不兼容）
       if (this._videoResumeTo) { try { el.currentTime = this._videoResumeTo } catch {} ; this._videoResumeTo = 0 }
       this.emit('loaded', this.current); this._saveProgressThrottled()
       // HEVC/不兼容编码快速判定：metadata 已加载但视频轨解不出（videoWidth=0）。
@@ -525,18 +529,30 @@ class PlayerEngine {
       }
     })
     el.addEventListener('error', () => {
-      console.log('[gr] video error fired, code=' + (this.videoEl && this.videoEl.error ? this.videoEl.error.code : '?'))
+      const code = this.videoEl && this.videoEl.error ? this.videoEl.error.code : '?'
+      console.log('[gr] video error fired, code=' + code + ' _videoMetaLoaded=' + this._videoMetaLoaded)
       if (this._videoErrShown) return
       this._videoErrShown = true
-      // 直接报错（如 MEDIA_ERR_SRC_NOT_SUPPORTED）多半是 HEVC/10bit 编码：交给内置转码
-      this._startTranscode(this.current, this._videoDiag())
+      // 🔶 ISS-20261009-008：区分"文件不存在"vs"编码不兼容"
+      // 关键条件：loadedmetadata 是否触发过
+      //   文件不存在 → code=4 且 _videoMetaLoaded=false（还没加载到元数据就挂了）
+      //   编码不兼容 → code=3 或 code=4 但 _videoMetaLoaded=true（元数据加载成功了）
+      const cur = this.current
+      if (!this._videoMetaLoaded && code === 4) {
+        // MEDIA_ERR_SRC_NOT_SUPPORTED 且没触发过 loadedmetadata → 源根本打不开 → 文件不存在/URI 失效
+        console.log('[gr] video src unreachable (meta never loaded) -> emit lost')
+        this.emit('lost', cur)
+      } else {
+        // 其他情况 → 编码不兼容（H.265/10bit 等）→ 交给转码管线（Android 上已跳过转码直接 emit error）
+        this._startTranscode(cur, this._videoDiag())
+      }
     })
     el.volume = this.volume
     el.muted = this.muted
   }
 
   _onVideoTime() {
-    if (this._ab && this._ab.b > 0 && this.videoEl.currentTime >= this._ab.b) this.videoEl.currentTime = this._ab.a
+    if (this._ab && this._ab.b > 0 && isFinite(this._ab.a) && this.videoEl.currentTime >= this._ab.b) { this.videoEl.currentTime = this._ab.a || 0 }
     this._saveProgressThrottled()
     this.emit('time', { time: this.videoEl.currentTime, duration: this.videoEl.duration || 0 })
   }
@@ -688,15 +704,20 @@ class PlayerEngine {
     sessionStorage.setItem('__grBlackReload', '1')
     setTimeout(() => location.reload(), ms)
   }
-  // 编码不支持（HEVC/10bit）自动转码：WebView2 与原生 MediaElement 都解不了该视频轨，
-  // 交给 C# 用内置 ffmpeg 转成 H.264 再原生播放。本地文件直接给路径；库内 Blob 走分片传输。
+  // 编码不支持（HEVC/10bit）自动转码：仅 Windows C# WebView2 有 ffmpeg 转码能力。
+  // Android WebView 无转码管线 → 直接报 error，不浪费时间尝试转码。
   _startTranscode(item, diag) {
     if (!item || this._transcodeStarted) return
     this._transcodeStarted = true
     // 立即暂停 web 端黑屏视频：停止双声轨，也停止可能存在的 playing 事件风暴
     try { if (this.videoEl && !this.videoEl.paused) this.videoEl.pause() } catch {}
-    const path = item.localPath
     const name = item.name || '该视频'
+    // 🔶 ISS-20261009-006：Android 上没有 chrome.webview → 没有转码能力 → 直接报编码不兼容
+    if (!window.chrome || !window.chrome.webview) {
+      this.emit('error', `「${name}」编码不兼容(H.265/HEVC)，WebView 无法解码，请改用 H.264 编码的 MP4。`, item)
+      return
+    }
+    const path = item.localPath
     this.emit('transcode', `检测到不兼容编码，正在转码「${name}」为 H.264，请稍候…`)
     if (path) {
       try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'videoTranscode', path, diag })) } catch {}

@@ -1,4 +1,4 @@
-// settings.js — 设置模态（主题/音量/续播/EQ/存储/导入记录）
+﻿// settings.js — 设置模态（主题/音量/续播/EQ/存储/导入记录）
 import { h, toast, openModal } from './dom.js'
 import { player, EQ_FREQS, EQ_PRESETS } from '../player.js'
 import { getSettings, saveSettings, getAllMedia, dbDelete, dbClear, dbGetAll, getImportRecords, exportSyncData, importSyncData } from '../store.js'
@@ -52,7 +52,7 @@ export async function openSettings(app, focus = '') {
     app.toast('缩略图缓存已清理'); refreshStorage(storageInfo)
   } }, '清理缩略图')
   const clearBtn = h('button', { class: 'opt', style: { color: 'var(--danger)' }, onclick: async () => {
-    if (!confirm('确定清空整个媒体库？此操作不可恢复。')) return
+    if (!confirm('清空媒体库？')) return
     const all = await getAllMedia()
     for (const m of all) { await dbDelete('media', m.id); await dbDelete('progress', m.id) }
     app.toast('媒体库已清空'); refreshStorage(storageInfo); app.refreshCurrent()
@@ -181,3 +181,4 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme)
   saveSettings({ theme }); player.emit('theme', theme)
 }
+

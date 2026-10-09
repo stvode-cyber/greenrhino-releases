@@ -85,11 +85,22 @@ export function buildQueue(app) {
   const off = player.on('queue:changed', renderList)
   const off2 = player.on('trackchanged', renderList)
 
-  function open() { drawer.hidden = false; requestAnimationFrame(() => drawer.classList.add('open')); renderList() }
+  // 🔶 背景遮罩（点一下关闭 queue drawer）
+  const backdrop = h('div', { class: 'drawer-backdrop', onclick: close })
+  document.body.appendChild(backdrop)
+
+  function open() {
+    drawer.hidden = false; backdrop.hidden = false
+    requestAnimationFrame(() => { drawer.classList.add('open'); backdrop.classList.add('open') })
+    renderList()
+  }
   function close() {
     kw = ''; searchBox.value = ''
-    drawer.classList.remove('open'); setTimeout(() => { drawer.hidden = true }, 250)
+    drawer.classList.remove('open'); backdrop.classList.remove('open')
+    setTimeout(() => { drawer.hidden = true; backdrop.hidden = true }, 250)
   }
+  // ESC 关闭 + 点击遮罩关闭（手机上返回键也能关）
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !drawer.hidden) close() })
 
   return { open, close, refresh: renderList, cleanup: () => { off(); off2() } }
 }

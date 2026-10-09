@@ -1,4 +1,4 @@
-// store.js — IndexedDB 持久化 + 状态管理（事件总线）
+﻿// store.js — IndexedDB 持久化 + 状态管理（事件总线）
 // 媒体文件以 Blob 形式存入 IndexedDB，实现真正离线、重启可续播。
 
 // 数据库按窗口角色隔离：拆分后 音乐/视频播放器 是独立 App，数据互不可见。
@@ -85,6 +85,12 @@ export async function addMediaFiles(files, folder = '未分类', onProgress) {
   const items = []
   const total = files.length
   let done = 0
+  let skippedDup = 0; let skippedRole = 0
+  // 🔶 ISS-20261009-010 对称修复：addMediaFromAndroid 有跨来源去重（name::size Set），
+  // addMediaFiles 也必须加——否则 MediaStore 先扫了（存 uri+id_A），再手动选同一个文件（存 blob+id_B），
+  // 两条 hashId 公式不同 → dbGet(id_B) 查不到 → 重复入库！
+  const existing = await dbGetAll('media')
+  const existingKeys = new Set(existing.map(e => `${e.name}::${e.size || 0}`))
   for (const file of files) {
     // 注意：必须与 clients/windows/GreenRhino/MainWindow.xaml.cs 的 MediaExts 保持一致，
     // 否则 C# 接受双击、web 端却 continue 丢弃，表现为「双击没反应/放不了」。
@@ -92,48 +98,80 @@ export async function addMediaFiles(files, folder = '未分类', onProgress) {
     const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(file.name)
     const isAudio = file.type.startsWith('audio/') || /\.(mp3|flac|wav|m4a|aac|ogg|oga|opus|wma|mp2|mp1|aiff|mka|ape)$/i.test(file.name)
     if (!isVideo && !isAudio) { done++; onProgress?.(done, total, '正在导入'); continue }
+    // 🔶 ISS-20261009-017：按 role 硬过滤——music App 拒绝视频，video App 拒绝音频
+    const role = window.winRole || window.__winRole || 'hub'
+    if (role === 'music' && isVideo) { skippedRole++; done++; onProgress?.(done, total, '跳过(音乐App不导入视频)'); continue }
+    if (role === 'video' && isAudio)  { skippedRole++; done++; onProgress?.(done, total, '跳过(播放器不导入音频)'); continue }
     const type = isVideo ? 'video' : 'music'
+    // 🔶 ISS-20261009-002 双保险：player role 自动扫只进 800MB+，但手动导入允许小文件（用户自选）
     const id = hashId(file.name + file.size + (file.lastModified || 0) + type)
     const exists = await dbGet('media', id)
     if (exists) { done++; onProgress?.(done, total, '正在导入'); continue }
+    // 🔶 ISS-20261009-010：跨来源去重——MediaStore 已存过同名同体积的，跳过
+    const dupKey = `${file.name}::${file.size || 0}`
+    if (existingKeys.has(dupKey)) { skippedDup++; done++; onProgress?.(done, total, '跳过(库已存在)'); continue }
+    existingKeys.add(dupKey)  // 本轮内也要去重
+    // 🔶 ISS-20261009-015：player role + Android + video → 查 MediaStore content:// URI
+    // 存 URI（几十字节）vs 存 blob（500MB+）→ 导入瞬间完成！
+    let uri = ''
+    let duration = 0
+    if (type === 'video' && window.winRole === 'player' && window.RhinoBridge?.lookupMediaUri) {
+      try {
+        const raw = RhinoBridge.lookupMediaUri(file.name, file.size)
+        if (raw && raw !== 'null') {
+          const parsed = JSON.parse(raw)
+          if (parsed?.uri) { uri = parsed.uri; duration = parsed.duration || 0 }
+        }
+      } catch (e) { console.warn('[gr] lookupMediaUri failed:', e.message) }
+    }
     const item = {
       id, name: file.name, type, mime: file.type || (type === 'video' ? 'video/mp4' : 'audio/mpeg'),
-      size: file.size, addedAt: Date.now(), folder, artist: '', album: '', title: '', duration: 0,
-      blob: file, favorite: false, playCount: 0, lastPlayedAt: 0
+      size: file.size, addedAt: Date.now(), folder, artist: '', album: '', title: '', duration,
+      blob: uri ? null : file, uri, favorite: false, playCount: 0, lastPlayedAt: 0,
+      source: uri ? 'android_mediastore' : 'manual_import'
     }
     await dbPut('media', item, id)
     items.push(item)
     done++; onProgress?.(done, total, '正在导入')
   }
+  console.error('[gr] addMediaFiles: kept=' + items.length + ' skippedDup=' + skippedDup + ' skippedRole=' + skippedRole + ' (MIN_SIZE=N/A，手动导入允许小文件)')
   if (items.length) emit('library:changed', items)
   return items
 }
 
 // 🔶 Android MediaStore 自动导入（JSON 数组，有 uri 字段）
 // 不同于 addMediaFiles 接收 File blob，这里存 content:// URI
-export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
+// ISS-20261009-013: pruneLost=true 时自动清库——Kotlin 扫完（含文件系统存在性校验），
+// 前端对比扫出来的 vs 库里已有的 source='android_mediastore' 条目，
+// 库里有但本次 MediaStore 没扫到的 = 用户删了本地文件 → 自动 deleteMedia
+export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描', pruneLost = true) {
   if (!Array.isArray(jsonItems) || !jsonItems.length) return []
-  // 🔶 双层保险：只收视频（player role 不需要音乐）+ 800MB 以上（小视频用户手动导入）
+  // 🔶 双层保险：只收视频（player role 不需要音乐）+ 500MB 以上（小视频用户手动导入）
   const VIDEO_EXT = /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv|3gp|rmvb)$/i
-  const MIN_SIZE = 800 * 1024 * 1024  // 800MB
+  const MIN_SIZE = 500 * 1024 * 1024  // 500MB（自动扫描阈值，手动导入不受限）
   const items = []
   let skippedSmall = 0
-  let skippedDup = 0
+  let skippedDup = 0; let skippedRole = 0
   // 🔶 ISS-20261009-010：先拉全库 name+size 建 Set → 跨来源去重
   // （addMediaFiles 用 file.name+size+lastModified+type 做 hashId，
   //   addMediaFromAndroid 用 'android:'+j.id+j.uri 做 hashId → 两个不同 ID 同一文件会重复存）
   const existing = await dbGetAll('media')
   const existingKeys = new Set(existing.map(e => `${e.name}::${e.size || 0}`))
+  // 🔶 ISS-20261009-013：同时收集现有 android_mediastore ID Set → pruneLost 对比用
+  const existingAndroidIds = new Set(existing.filter(e => e.source === 'android_mediastore').map(e => e.id))
+  // 🔶 收集本次扫描的 ID Set → pruneLost 对比用
+  const scannedIds = new Set()
   for (const j of jsonItems) {
     if (!j || !j.name) continue
     if (!VIDEO_EXT.test(j.name)) continue
-    // 🔶 ISS-20261009-002：前端兜底再过滤 800MB（Kotlin 原生层已过滤，这层是双保险）
+    // 🔶 ISS-20261009-002：前端兜底再过滤 500MB（Kotlin 原生层已过滤，这层是双保险）
     if (j.size && j.size < MIN_SIZE) { skippedSmall++; continue }
     // 🔶 ISS-20261009-010：跨来源去重——库里已有同名同体积的（不管来源），跳过
     const dupKey = `${j.name}::${j.size || 0}`
     if (existingKeys.has(dupKey)) { skippedDup++; continue }
     existingKeys.add(dupKey)  // 本轮内也要去重（MediaStore 可能一次扫出两条同名的）
     const id = hashId('android:' + j.id + ':' + j.uri)
+    scannedIds.add(id)  // 🔶 ISS-20261009-013：记录扫到的 ID
     // 幂等覆盖：同来源同文件再扫一次 → hashId 相同 → dbPut 覆盖更新（不重复）
     const item = {
       id, name: j.name, type: 'video', mime: 'video/mp4',
@@ -146,8 +184,20 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描') {
     await dbPut('media', item, id)
     items.push(item)
   }
-  console.error('[gr] addMediaFromAndroid: kept=' + items.length + ' skippedSmall=' + skippedSmall + ' skippedDup=' + skippedDup + ' (MIN_SIZE=800MB)')
-  if (items.length) emit('library:changed', items)
+  // 🔶 ISS-20261009-013：pruneLost——库里 android_mediastore 条目但本次没扫到的 = 文件已删
+  let prunedCount = 0
+  if (pruneLost && existingAndroidIds.size) {
+    for (const eid of existingAndroidIds) {
+      if (!scannedIds.has(eid)) {
+        await deleteMedia(eid)
+        prunedCount++
+        android.util.Log?.d?.('GreenRhino', 'pruneLost: removed android_mediastore id=' + eid)
+      }
+    }
+    if (prunedCount) console.error('[gr] addMediaFromAndroid pruned (files deleted): ' + prunedCount)
+  }
+  console.error('[gr] addMediaFromAndroid: kept=' + items.length + ' skippedSmall=' + skippedSmall + ' skippedDup=' + skippedDup + ' (MIN_SIZE=500MB, pruned=' + prunedCount + ')')
+  if (items.length || prunedCount) emit('library:changed', items)
   return items
 }
 
@@ -350,3 +400,5 @@ export async function importSyncData(json) {
   emit('favorites:changed')
   return count
 }
+
+

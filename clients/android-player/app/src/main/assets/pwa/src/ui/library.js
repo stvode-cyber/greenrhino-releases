@@ -1,4 +1,4 @@
-// library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
+﻿// library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
 import { h, openModal } from './dom.js'
 import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
 import { player } from '../player.js'
@@ -35,31 +35,23 @@ export function mediaLibrary(app, type) {
   }
 
   function importBar() {
-    const seg = h('div', { class: 'seg', style: { fontSize: '12px' } })
-    const mk = (mode, label) => h('button', {
-      class: importMode === mode ? 'active' : '',
-      onclick: () => { importMode = mode; seg.querySelectorAll('button').forEach(b => b.classList.remove('active')); seg.querySelector(`[data-m="${mode}"]`)?.classList.add('active') },
-      'data-m': mode
-    }, label)
-    seg.append(mk('manual', '手动'), mk('scan', '扫描'))
-    // 🔶 ISS-20261009-007：scan 模式调 Android MediaStore 自动扫描（RhinoBridge 存在才调）
-    // 手动扫描不清 __grFirstScanDone 标记（让它一直能扫但启动不自动扫）
-    const btn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
-      if (importMode === 'scan') {
-        if (window.RhinoBridge?.requestAutoImport) {
-          toast('开始扫描 MediaStore...', 'info')
-          window.RhinoBridge.requestAutoImport()
-        } else {
-          // 非 Android 环境 fallback 到选文件夹
-          app.importFolderDialog()
-        }
+    // 🔶 ISS-20261009-016：两个独立按钮，去掉 [手动|扫描] 分段——一步直接触发
+    // Android MediaStore 自动扫描（500MB+ 大视频，秒完）
+    const scanBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
+      if (window.RhinoBridge?.requestAutoImport) {
+        toast('开始扫描 MediaStore...', 'info')
+        window.RhinoBridge.requestAutoImport()
       } else {
-        app.importFilesDialog()
+        app.importFolderDialog()
       }
-    } }, '＋ 导入')
+    }, title: '扫描 Android 媒体库（500MB+ 大视频）' }, '📥 自动扫描')
+    // 用户手动自选文件（SAF 文件选择器，支持批量多选）
+    const pickBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
+      app.importFilesDialog()
+    }, title: '从文件管理器选择视频' }, '📁 选择文件')
     const selBtn = h('button', { class: 'ghost-btn' + (selMode ? ' active' : ''), style: { padding: '6px 12px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, selMode ? '✓ 退出选择' : '☑ 多选')
     const dupBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => openDuplicates(), title: '查找媒体库中重复的文件' }, '🔁 查重复')
-    return h('div', { class: 'lib-toolbar' }, seg, btn, selBtn, dupBtn)
+    return h('div', { class: 'lib-toolbar' }, scanBtn, pickBtn, selBtn, dupBtn)
   }
 
   let refreshGen = 0 // 并发守卫：refresh 内有多个 await（getAllMedia / getThumbsMap），
@@ -138,11 +130,18 @@ export function mediaLibrary(app, type) {
 
   function updateSelBar() {
     const n = selected.size
-    selbar.style.display = n > 0 ? 'flex' : 'none'
+    // 🔶 ISS-20261009-011: selMode 下常驻显示 selbar（之前 n=0 就隐藏 → 用户选了多选取不到操作按钮）
+    selbar.style.display = selMode ? 'flex' : 'none'
     selbar.querySelector('.selcount').textContent = `已选 ${n}`
-    const allBtn = selbar.querySelector('button')
+    const btns = selbar.querySelectorAll('button')
+    // btns[0] 全选 / btns[1] 已选span / btns[2] 加入歌单 / btns[3] 删除 / btns[4] 取消
+    // 没选中时禁用有破坏性的按钮（加入歌单、删除），全选/取消一直可用
+    btns[2].disabled = n === 0
+    btns[3].disabled = n === 0
+    btns[2].style.opacity = n === 0 ? '0.4' : '1'
+    btns[3].style.opacity = n === 0 ? '0.4' : '1'
     const total = el.querySelectorAll('.grid .card').length
-    allBtn.textContent = (total && n >= total) ? '取消全选' : '全选'
+    btns[0].textContent = (total && n >= total) ? '取消全选' : '全选'
   }
   function toggleSelect() {
     selMode = !selMode
@@ -188,7 +187,7 @@ export function mediaLibrary(app, type) {
   async function batchDelete() {
     const ids = [...selected]
     if (!ids.length) return
-    if (!confirm(`确认从媒体库移除选中的 ${ids.length} 个文件？此操作不可撤销`)) return
+    if (!confirm(`移除 ${ids.length} 个文件？`)) return
     for (const id of ids) await deleteMedia(id)
     app.toast(`已移除 ${ids.length} 个文件`)
     exitSelect()
@@ -219,7 +218,7 @@ export function mediaLibrary(app, type) {
         body.appendChild(card)
       }
       body.appendChild(h('button', { class: 'cta', style: { width: '100%', marginTop: '4px' }, onclick: async () => {
-        if (!confirm(`一键移除全部 ${totalDup} 个副本（每组保留最新一个）？`)) return
+        if (!confirm(`移除全部副本？`)) return
         for (const g of groups) for (let i = 1; i < g.length; i++) await deleteMedia(g[i].id)
         app.toast(`已清理 ${totalDup} 个副本`); close(); refresh()
       } }, `🧹 一键清理全部 ${totalDup} 个副本`))
@@ -309,7 +308,7 @@ export function mediaCard(item, app, opts = {}) {
     const badge = h('div', { class: 'lost-badge' }, '⚠ 文件已丢失')
     const actions = h('div', { class: 'lost-actions' },
       h('button', { class: 'ghost-btn', onclick: (e) => { e.stopPropagation(); app.relocateMedia(item.id) } }, '重新定位'),
-      h('button', { class: 'ghost-btn danger', onclick: (e) => { e.stopPropagation(); if (confirm(`从媒体库移除「${item.name}」？`)) { deleteMedia(item.id); app.toast('已移除') } } }, '从库移除')
+      h('button', { class: 'ghost-btn danger', onclick: (e) => { e.stopPropagation(); if (confirm(`移除？`)) { deleteMedia(item.id); app.toast('已移除') } } }, '从库移除')
     )
     node.appendChild(badge)
     node.appendChild(actions)
@@ -318,7 +317,7 @@ export function mediaCard(item, app, opts = {}) {
     node.addEventListener('click', (e) => { if (e.target.closest('.fav')) return; app.playItem(item) })
     node.addEventListener('contextmenu', (e) => {
       e.preventDefault()
-      if (confirm(`从媒体库移除「${item.name}」？`)) { deleteMedia(item.id); app.toast('已移除') }
+      if (confirm(`移除？`)) { deleteMedia(item.id); app.toast('已移除') }
     })
   }
   return node
@@ -333,3 +332,4 @@ function emptyState(app, type) {
     h('button', { class: 'cta', onclick: () => app.importFilesDialog() }, '导入媒体')
   )
 }
+

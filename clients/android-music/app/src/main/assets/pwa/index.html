@@ -45,12 +45,26 @@
         <div class="search-box">
           <input id="search" type="search" placeholder="搜索音乐 / 视频…" autocomplete="off" />
         </div>
+        <button id="import-folder-top" class="ghost-btn" title="导入文件夹">📁 导入</button>
       </header>
       <section id="view"><!-- 动态视图 --></section>
     </main>
 
-    <!-- 常驻底栏 -->
+    <!-- 常驻底栏（播放控制） -->
     <footer id="bottombar"><!-- 由 JS 构建 --></footer>
+
+    <!-- 🎵 音乐 App 专属底部导航（hub/player role 隐藏） -->
+    <nav id="music-nav" hidden>
+      <button class="mn-item active" data-mn="discover">
+        <span class="mn-ico">🏠</span><span class="mn-label">发现</span>
+      </button>
+      <button class="mn-item mn-center" data-mn="nowplaying" title="正在播放">
+        <span class="mn-cover">🎵</span>
+      </button>
+      <button class="mn-item" data-mn="mine">
+        <span class="mn-ico">👤</span><span class="mn-label">我的</span>
+      </button>
+    </nav>
   </div>
 
   <!-- 抽屉 / 引导 / 提示 容器 -->

@@ -1,4 +1,4 @@
-package com.greenrhino.music
+﻿package com.greenrhino.music
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -18,6 +18,7 @@ import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsControllerCompat
 
 /**
@@ -34,7 +35,8 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
-    private val FILE_CHOOSER_REQUEST = 1001
+            private lateinit var fileChooserLauncher: androidx.activity.result.ActivityResultLauncher<Intent>
+
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,6 +120,18 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+// 🔶 ISS-20261009-017: 现代 ActivityResultLauncher（替代废弃的 startActivityForResult）
+        fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val uris = mutableListOf<Uri>()
+            if (result.resultCode == RESULT_OK) {
+                result.data?.data?.let { uris.add(it) }
+                result.data?.clipData?.let { clip ->
+                    for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
+                }
+            }
+            filePathCallback?.onReceiveValue(uris.toTypedArray())
+            filePathCallback = null
+        }
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                 if (consoleMessage != null) {
@@ -145,7 +159,21 @@ class MainActivity : ComponentActivity() {
                 filePathCallback = callback
                 val intent: Intent? = params?.createIntent()
                 try {
-                    intent?.let { startActivityForResult(it, FILE_CHOOSER_REQUEST) } ?: run { filePathCallback = null; return false }
+                    intent?.let {
+                        it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        it.addCategory(Intent.CATEGORY_OPENABLE)
+                        // 🔶 ISS-20261009-017：music role 只允许音频，展开 audio/* → 具体 MIME
+                        val acceptTypes = params?.acceptTypes
+                        if (acceptTypes != null && acceptTypes.any { it == "audio/*" }) {
+                            it.type = "*/*"
+                            it.putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                                "audio/mpeg", "audio/mp3", "audio/flac", "audio/wav",
+                                "audio/mp4", "audio/aac", "audio/ogg", "audio/opus",
+                                "audio/x-ms-wma", "audio/x-mp3", "audio/itt", "audio/x-aiff"
+                            ))
+                        }
+                        fileChooserLauncher.launch(it)
+                    } ?: run { filePathCallback = null; return false }
                 } catch (e: Exception) {
                     filePathCallback = null
                     return false
@@ -166,16 +194,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == FILE_CHOOSER_REQUEST) {
-            val result = if (resultCode == RESULT_OK && data != null) {
-                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-            } else null
-            filePathCallback?.onReceiveValue(result)
-            filePathCallback = null
-        }
-    }
+    
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
@@ -206,4 +225,8 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+
+
+
 

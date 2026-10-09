@@ -1,4 +1,4 @@
-// cloud.js — 账号云盘客户端（注册送 5GB / 上传 / 列举 / 下载 / 删除）
+﻿// cloud.js — 账号云盘客户端（注册送 5GB / 上传 / 列举 / 下载 / 删除）
 // 后端：server/cloud_api.py（零依赖 Python stdlib HTTP 服务，默认 8787 端口，CORS 已开放）
 // 部署：本机运行 `python server/cloud_api.py` 即可；生产可设 OSS 环境变量走阿里云。
 import { h, toast } from './dom.js'
@@ -211,7 +211,7 @@ export function buildCloud(app) {
   }
 
   async function remove(f) {
-    if (!confirm(`确定删除「${f.name}」？`)) return
+    if (!confirm(`删除？`)) return
     try {
       await api('/api/files/' + encodeURIComponent(f.id), { method: 'DELETE' })
       notify('已删除 ' + f.name)
@@ -233,3 +233,4 @@ export function buildCloud(app) {
     refresh() { if (loadSession()) reload() }
   }
 }
+

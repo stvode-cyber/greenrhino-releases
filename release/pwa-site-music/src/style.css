@@ -522,6 +522,136 @@ body.win-video:not(.video-playing):not(.video-immersive) #view { overflow-y: aut
 body.win-video.video-playing #view,
 body.win-video.video-immersive #view { overflow: hidden !important; }
 
+/* ---------- 🎵 音乐 App 专属 UI（参考网易云/QQ 音乐风格）---------- */
+/* 侧边栏换成底部导航 */
+body.win-music #sidebar { display: none !important; }
+body.win-music #music-nav { display: flex !important; }
+body.win-music #main { margin-left: 0 !important; width: 100% !important; }
+body.win-music #topbar { background: transparent; box-shadow: none; padding: 8px 16px; }
+body.win-music #view { padding: 12px 16px 180px; }
+
+/* 🎵 底部导航栏 */
+#music-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: none;
+  justify-content: space-around;
+  align-items: center;
+  height: 64px;
+  background: #fff;
+  border-top: 1px solid #eee;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 100;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+}
+#music-nav .mn-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: none; border: none; padding: 4px 16px; gap: 2px;
+  color: #999; font-size: 11px; cursor: pointer; transition: color .15s;
+}
+#music-nav .mn-item.active { color: var(--kg, #00D8A6); }
+#music-nav .mn-ico { font-size: 22px; line-height: 1; }
+#music-nav .mn-label { font-size: 11px; }
+/* 中间 mini player 大按钮 */
+#music-nav .mn-center {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--kg, #00D8A6), #00B88E);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,216,166,0.35);
+  transform: translateY(-12px);
+  color: #fff;
+}
+#music-nav .mn-center .mn-cover { font-size: 24px; }
+
+/* 🎵 首页大卡片（本地 / 收藏） */
+.mh-cards {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
+}
+.mh-card {
+  background: linear-gradient(135deg, #f0faf7, #fff);
+  border: 1px solid #e6f5ef;
+  border-radius: 16px; padding: 18px; cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+}
+.mh-card:active { transform: scale(0.97); }
+.mh-card-icon { font-size: 28px; margin-bottom: 6px; }
+.mh-card-label { font-size: 13px; color: #666; }
+.mh-card-count { font-size: 20px; font-weight: 700; color: var(--kg, #00D8A6); }
+
+/* 🎵 可折叠 section */
+.mh-section { margin-bottom: 14px; background: #fff; border-radius: 14px; overflow: hidden; border: 1px solid #f0f0f0; }
+.mh-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; cursor: pointer;
+}
+.mh-section-title { font-size: 15px; font-weight: 600; color: #222; }
+.mh-section-count { font-size: 12px; color: #999; margin-left: 8px; }
+.mh-section-arrow { color: #bbb; font-size: 12px; transition: transform .2s; }
+.mh-section.collapsed .mh-section-arrow { transform: rotate(-90deg); }
+.mh-section-body { padding: 0 16px 14px; max-height: 400px; overflow-y: auto; transition: max-height .25s; }
+.mh-section.collapsed .mh-section-body { max-height: 0; padding-bottom: 0; overflow: hidden; }
+
+/* 🎵 歌单横排列表 */
+.mh-plays { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 8px; }
+.mh-play { flex-shrink: 0; width: 110px; text-align: center; cursor: pointer; }
+.mh-play-cover {
+  width: 100px; height: 100px; border-radius: 10px; background: linear-gradient(135deg, #00D8A6, #00B88E);
+  display: flex; align-items: center; justify-content: center; font-size: 32px; color: #fff;
+  margin: 0 auto 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.mh-play-name { font-size: 12px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mh-empty { text-align: center; padding: 24px; color: #bbb; font-size: 13px; }
+
+/* 🎵 全屏播放页（歌词居中） */
+.player-fullpage {
+  position: fixed; inset: 0; background: #fff; z-index: 200;
+  display: flex; flex-direction: column;
+  animation: fadeIn .2s;
+}
+.player-fullpage .pfp-top {
+  display: flex; align-items: center; padding: 14px 16px; gap: 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.player-fullpage .pfp-title { flex: 1; font-size: 16px; font-weight: 600; text-align: center; }
+.player-fullpage .pfp-back, .player-fullpage .pfp-list {
+  background: none; border: none; font-size: 22px; cursor: pointer; color: #333;
+}
+.player-fullpage .pfp-lyrics {
+  flex: 1; overflow-y: auto; padding: 30px 20px;
+  text-align: center; font-size: 16px; line-height: 2; color: #333;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.player-fullpage .pfp-lyrics .pfp-artist { font-size: 13px; color: #999; margin-top: -10px; margin-bottom: 8px; }
+.player-fullpage .pfp-lyrics .pfp-empty { color: #ccc; font-size: 14px; }
+.player-fullpage .pfp-bottom {
+  padding: 12px 20px 24px; border-top: 1px solid #f0f0f0;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
+}
+.player-fullpage .pfp-seek {
+  width: 100%; -webkit-appearance: none; appearance: none;
+  height: 3px; border-radius: 2px; background: #eee; outline: none;
+}
+.player-fullpage .pfp-seek::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--kg, #00D8A6); cursor: pointer;
+}
+.player-fullpage .pfp-times { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-top: 4px; }
+.player-fullpage .pfp-ctrl {
+  display: flex; justify-content: space-around; align-items: center;
+  margin-top: 12px;
+}
+.player-fullpage .pfp-ctrl button {
+  background: none; border: none; font-size: 20px; cursor: pointer; color: #333; padding: 8px;
+}
+.player-fullpage .pfp-ctrl .pfp-play {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--kg, #00D8A6); color: #fff; font-size: 22px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,216,166,0.35);
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
 .vp-page {
   position: relative;
   width: 100%;

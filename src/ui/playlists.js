@@ -1,4 +1,4 @@
-// playlists.js — 歌单页（智能列表 + 保存当前队列 / 详情 / 拖拽重排 / 删除）
+﻿// playlists.js — 歌单页（智能列表 + 保存当前队列 / 详情 / 拖拽重排 / 删除）
 import { h, openModal, toast } from './dom.js'
 import { getPlaylists, savePlaylist, deletePlaylist, getMedia, getAllMedia } from '../store.js'
 import { player } from '../player.js'
@@ -85,7 +85,7 @@ function playlistCard(pl, app, only) {
     h('div', { class: 'meta' },
       h('div', { class: 'name' }, pl.name),
       h('div', { class: 'sub' }, `${pl.ids.length} 首`)),
-    h('div', { class: 'fav', title: '删除', onclick: async (e) => { e.stopPropagation(); if (confirm('删除该歌单？')) { await deletePlaylist(pl.id); app.toast('已删除') } } }, '🗑'))
+    h('div', { class: 'fav', title: '删除', onclick: async (e) => { e.stopPropagation(); if (confirm('删除？')) { await deletePlaylist(pl.id); app.toast('已删除') } } }, '🗑'))
   node.addEventListener('click', () => openDetail(pl, app, only))
   return node
 }
@@ -158,3 +158,4 @@ async function openDetail(pl, app, only) {
     body)
   const close = openModal(modal)
 }
+

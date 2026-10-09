@@ -1,8 +1,8 @@
-// main.js — 应用装配与编排
-import { h, toast, openModal } from './ui/dom.js'
+﻿// main.js — 应用装配与编排
+import { h, toast, openModal, formatTime } from './ui/dom.js'
 import { player } from './player.js'
 import {
-  addMediaFiles, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile
+  addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile
 } from './store.js'
 import { parseTags, guessFromFilename } from './metadata.js'
 import { initBottomBar } from './ui/bottombar.js'
@@ -18,6 +18,7 @@ import { buildQueue } from './ui/queue.js'
 import { openSettings } from './ui/settings.js'
 import { openHelp } from './help.js'
 import { initGestures } from './ui/gestures.js'
+import { queueVideoThumbs } from './videoThumb.js'
 
 // store.js 事件总线
 const app = {
@@ -58,7 +59,7 @@ const playlists = isMusic ? buildPlaylists(app, 'music') : null
 const recent = isHub ? buildRecent(app) : null
 const stats = isHub ? buildStats(app) : null
 const cloud = isHub ? buildCloud(app) : null
-const home = isHub ? buildHome(app) : null
+const home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : null)
 const pages = {}
 for (const [k, p] of Object.entries({ home, music, video, favorites, playlists, recent, stats, cloud })) {
   if (p) { pages[k] = p; view.appendChild(p.el) }
@@ -140,7 +141,52 @@ initBottomBar(app)
 const queue = buildQueue(app)
 initGestures(app)
 
-// 移动端侧栏开关
+// 🔶 Android MediaStore 自动导入回调（Native 扫描完回喂 JS）
+// 🔶 Android MediaStore 自动导入——分批累积再一次性落库
+let __mediaBatchBuf = []
+window.__mediaBatch = async (items, status) => {
+  console.error('[gr] __mediaBatch called items=' + (items?.length || 0) + ' status=' + status + ' __mediaBatchBuf.length=' + __mediaBatchBuf.length)
+  if (items?.length) __mediaBatchBuf.push(...items)
+  if (status === 'ok') {
+    const all = __mediaBatchBuf
+    __mediaBatchBuf = []
+    console.error('[gr] __mediaBatch final buf.length=' + all.length)
+    // 🔶 ISS-20261009-007：首次扫描成功后写标记，后续启动不再自动扫
+    localStorage.setItem('__grFirstScanDone', '1')
+    if (!all.length) { toast('扫描完成但没发现视频', 'info'); return }
+    toast(`自动扫描到 ${all.length} 个视频/音频，导入中...`, 'ok')
+    const added = await addMediaFromAndroid(all)
+    console.error('[gr] addMediaFromAndroid added.length=' + added.length)
+    toast(`导入完成：新增 ${added.length} 个`, 'ok')
+    // 🔶 ISS-20261008-006：给新导入的视频排队抽帧生成封面
+    const newVideos = added.filter(i => i.type === 'video')
+    if (newVideos.length) queueVideoThumbs(newVideos)
+  }
+}
+// 兼容旧单批入口
+window.__mediaImported = (items, status) => window.__mediaBatch(items, status)
+
+// 🔶 App 启动时自动请求 Android MediaStore 扫描（RhinoBridge 存在才调）
+// 🔶 ISS-20261009-007：只在"第一次打开"自动扫，之后用户手动点扫描按钮才触发
+// localStorage 标记 __grFirstScanDone：存在即表示已扫过，跳过自动扫
+const _firstScanDone = localStorage.getItem('__grFirstScanDone')
+setTimeout(() => {
+  if (window.RhinoBridge?.requestAutoImport && !_firstScanDone) {
+    console.log('[gr] 首次启动 → 自动请求 Android MediaStore 扫描')
+    try { window.RhinoBridge.requestAutoImport() } catch(e) { console.error(e) }
+  } else if (_firstScanDone) {
+    console.log('[gr] __grFirstScanDone 已存在 → 跳过自动扫描（用户可手动点"扫描"按钮）')
+  }
+}, 1500);
+
+// 🔶 ISS-20261008-006：启动时对已存在的视频也排队抽帧（兜底，防止之前导入的没封面）
+setTimeout(async () => {
+  try {
+    const all = await getAllMedia()
+    const videos = all.filter(i => i.type === 'video')
+    if (videos.length) queueVideoThumbs(videos)
+  } catch {}
+}, 3000);
 const sidebar = document.getElementById('sidebar')
 document.getElementById('menu-toggle').addEventListener('click', () => sidebar.classList.toggle('open'))
 
@@ -213,7 +259,9 @@ function makeFileInput() {
 function importFilesDialog() {
   const input = makeFileInput()
   input.multiple = true
-  input.accept = 'audio/*,video/*'
+  // 🔶 ISS-20261009-012：按 role 过滤 MIME type → SAF 只显示对应分类 tab
+  // player role 只要视频 tab，music role 只要音频 tab，hub 全量
+  input.accept = ROLE === 'video' ? 'video/*' : ROLE === 'music' ? 'audio/*' : 'audio/*,video/*'
   input.onchange = () => doImport([...input.files], '手动添加')
   input.click()
 }
@@ -279,7 +327,8 @@ async function importFiles(files, folder = '导入', onProgress) {
 // §12 文件已丢失 →「重新定位」：让用户重新选择一个文件替换丢失的 blob
 function relocateMedia(id) {
   const input = makeFileInput()
-  input.accept = 'audio/*,video/*'
+  // 🔶 ISS-20261009-012：同 importFilesDialog，按 role 过滤
+  input.accept = ROLE === 'video' ? 'video/*' : ROLE === 'music' ? 'audio/*' : 'audio/*,video/*'
   input.onchange = async () => {
     const file = input.files[0]
     if (!file) return
@@ -368,6 +417,7 @@ document.getElementById('search').addEventListener('input', (e) => {
 })
 document.getElementById('import-files').addEventListener('click', importFilesDialog)
 document.getElementById('import-folder').addEventListener('click', importFolderDialog)
+const _ift = document.getElementById('import-folder-top'); if (_ift) _ift.addEventListener('click', importFolderDialog)
 
 // 维护 currentList 供队列上下文使用（音乐/视频各自页内库刷新后同步）
 async function syncCurrentList() { app.currentList = await getAllMedia() }
@@ -430,11 +480,15 @@ function trySkipInQueue(badItem, label) {
     setTimeout(() => { player.next(true); _skipGuard = false }, 1000)
   }
 }
+// 🔶 ISS-20261009-004：player role 下 video error/lost 由 videoPlayer.js 全权处理（删库+toast）
+// 避免 3 个 handler 叠 toast 污染画面
 player.on('error', (msg, item) => {
+  if (item?.type === 'video' && window.__winRole === 'video') { trySkipInQueue(item, '格式不支持'); return }
   toast(msg || '该格式暂不支持播放', 'err')
   trySkipInQueue(item, '格式不支持')
 })
 player.on('lost', (item) => {
+  if (item?.type === 'video' && window.__winRole === 'video') return
   toast(`「${item?.title || item?.name || '该文件'}」文件已丢失`, 'err')
   app.refreshCurrent() // 让媒体库标灰显示
   trySkipInQueue(item, '文件已丢失')
@@ -514,3 +568,6 @@ window.__hostOpen = async (list) => {
     } else { importOverlay.hide(); toast('没有可播放的媒体文件', 'err') }
   } catch (e) { console.error('__hostOpen error', e) }
 }
+
+
+
