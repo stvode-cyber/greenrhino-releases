@@ -174,24 +174,58 @@ class MainActivity : ComponentActivity() {
             ): Boolean {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
-                val intent: Intent? = params?.createIntent()
-                try {
-                    intent?.let {
-                        it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                        it.addCategory(Intent.CATEGORY_OPENABLE)
-                        // 🔶 ISS-20261009-017：music role 只允许音频，展开 audio/* → 具体 MIME
-                        val acceptTypes = params?.acceptTypes
-                        if (acceptTypes != null && acceptTypes.any { it == "audio/*" }) {
-                            it.type = "*/*"
-                            it.putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                // 🔶 诊断：WebView 实际传了什么 acceptTypes
+                val rawAccept = params?.acceptTypes?.joinToString(",") ?: "(null)"
+                val mode = params?.mode ?: 0  // 0=open 1=open_multiple
+                Log.d("GreenRhino", "onShowFileChooser acceptTypes=[$rawAccept] mode=$mode title=${params?.title}")
+
+                // 🔶 强制构建严格的音乐 SAF Intent —— 绕开 params.createIntent() 的松散类型
+                val acceptTypes = params?.acceptTypes
+                val wantAudioOnly = acceptTypes != null && acceptTypes.any {
+                    it == "audio/*" || it.equals("audio", ignoreCase = true)
+                }
+                val wantVideoOnly = acceptTypes != null && acceptTypes.any {
+                    it == "video/*" || it.equals("video", ignoreCase = true)
+                }
+
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    // 默认 type + 精确 MIME 列表，让 SAF 自动锁定到对应 tab
+                    when {
+                        wantAudioOnly -> {
+                            type = "audio/*"
+                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
                                 "audio/mpeg", "audio/mp3", "audio/flac", "audio/wav",
                                 "audio/mp4", "audio/aac", "audio/ogg", "audio/opus",
-                                "audio/x-ms-wma", "audio/x-mp3", "audio/itt", "audio/x-aiff"
+                                "audio/x-ms-wma", "audio/x-mp3", "audio/x-aiff",
+                                "audio/aacp", "audio/mp1", "audio/mp2", "audio/m4a"
                             ))
+                            Log.d("GreenRhino", "SAF 严格锁定 audio-only MIME 列表")
                         }
-                        fileChooserLauncher.launch(it)
-                    } ?: run { filePathCallback = null; return false }
+                        wantVideoOnly -> {
+                            type = "video/*"
+                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                                "video/mp4", "video/x-matroska", "video/webm", "video/quicktime",
+                                "video/x-msvideo", "video/mp2t", "video/3gpp", "video/x-ms-wmv"
+                            ))
+                            Log.d("GreenRhino", "SAF 严格锁定 video-only MIME 列表")
+                        }
+                        else -> {
+                            putExtras(params?.createIntent()?.extras ?: Bundle())
+                            type = when {
+                                acceptTypes?.contains("image/*") == true -> "image/*"
+                                acceptTypes?.contains("video/*") == true -> "video/*"
+                                else -> "*/*"
+                            }
+                            Log.d("GreenRhino", "SAF 兜底 type=$type")
+                        }
+                    }
+                }
+                try {
+                    fileChooserLauncher.launch(intent)
                 } catch (e: Exception) {
+                    Log.e("GreenRhino", "SAF launch failed: ${e.message}", e)
                     filePathCallback = null
                     return false
                 }

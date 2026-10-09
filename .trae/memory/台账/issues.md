@@ -55,6 +55,7 @@
 | ISS-20260914-007 | 2026-09-14 | Huawei AppGallery 截图用 390×800 → 比例不达标被拒 | 改用符合 0.75~1.77 比例的截图 | 截图前没查华为商店截图规范 | **每个应用商店的截图规范要先查再出图，不要凭感觉** | #appstore-screenshot | clients/huawei-music/listing/ |
 | ISS-20260914-008 | 2026-09-14 | GitHub Actions 残留废弃 workflow（build-ios.yml）→ 仓库首页显示红叉 | 删除未使用的 workflow | 早期方案废弃了但忘记删 CI | **废弃方案的配套 CI/配置一并删除，别留尾巴** | #ci-cleanup | .github/workflows/ |
 | ISS-20260914-009 | 2026-09-14 | koa-connect wrapper 导致 auth middleware 迁移时 ctx 泄漏 | 放弃 wrapper，原生 Koa 重写 | Express 和 Koa 的 ctx 模型不兼容，wrapper 无法完整桥接 | **跨框架迁移时不要用 wrapper 偷懒，原生重写更可靠** | #frame-dont-use-wrapper | server/auth.js |
+| ISS-20261009-021 | 2026-10-09 | SAF 弹窗混所有文件类型（图片/视频/音频/文档 tab 全出），用户抱怨"导入打开混太多文件" | 绕开 `params.createIntent()`，完全手动构建 `Intent(ACTION_OPEN_DOCUMENT)`：`type="audio/*"`+15 种音频 MIME 白名单（音乐）/ `type="video/*"`+12 种视频 MIME 白名单（播放器），保留 `EXTRA_ALLOW_MULTIPLE`，加 acceptTypes 诊断日志 | WebView `FileChooserParams.createIntent()` 只按 accept 字符串粗略映射 type 且不传 EXTRA_MIME_TYPES，SAF 拿到 `*/*` 就展示全部文档 root | **SAF Intent 必须手动构建：type 锁定大分类 + EXTRA_MIME_TYPES 精确白名单；禁止直接用 params.createIntent() 默认产物。验证方法：开抽屉看分类列表是否只剩目标类型** | #saf-mime-filter #android-webview | clients/android-music/.../MainActivity.kt onShowFileChooser、clients/android-player/.../MainActivity.kt onShowFileChooser |
 
 ### P2 — 次要/偶发
 

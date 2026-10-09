@@ -1,10 +1,12 @@
-﻿// main.js — 应用装配与编排
+// main.js — 应用装配与编排
 import { h, toast, openModal, formatTime } from './ui/dom.js'
 import { player } from './player.js'
 import {
-  addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile
+  addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile,
+  getFavorites, getPlaylists, getRecent, toggleFavorite
 } from './store.js'
 import { parseTags, guessFromFilename } from './metadata.js'
+import { parseLRC } from './lrc.js'
 import { initBottomBar } from './ui/bottombar.js'
 import { buildMusic } from './ui/music.js'
 import { buildVideoPlayer } from './ui/videoPlayer.js'
@@ -80,9 +82,9 @@ if (ROLE === 'video') {
   document.body.classList.add('win-video')
   document.documentElement.dataset.theme = 'dark'   // 同步设深色主题，等不起异步 getSettings
 }
-// 音乐窗口：强制深色主题（酷狗沉浸绿在浅色下不成立），并挂载 win-music 供酷狗样式作用
+// 音乐窗口：浅色主题（参考图白底 + 酷狗绿点缀），挂载 win-music 供专属样式作用
 if (ROLE === 'music') {
-  document.documentElement.dataset.theme = 'dark'
+  document.documentElement.dataset.theme = 'light'
   document.body.classList.add('win-music')
 }
 
@@ -115,6 +117,268 @@ function buildHome(app) {
   return { el, show() { setTimeout(() => input.focus?.(), 60) } }
 }
 
+// 🔶 ISS-20261009-018: Music App 专属首页（参考图风格 — 问候 + 搜索 + 大卡片 + 可折叠 section）
+// 上一轮 UI 重构漏了函数体 → music role main.js init crash → SW 注册走不到（ISS-20261009-019）
+function buildMusicHome(app) {
+  const hourNow = new Date().getHours()
+  const hi = hourNow < 5 ? '夜深了' : hourNow < 11 ? '早上好' : hourNow < 14 ? '中午好' : hourNow < 18 ? '下午好' : '晚上好'
+
+  const searchI = h('input', { class: 'hub-input mh-search', type: 'search', placeholder: '搜索本地音乐…', autocomplete: 'off' })
+  const localN = h('span', { class: 'mh-card-count' }, '0')
+  const favN = h('span', { class: 'mh-card-count' }, '0')
+
+  const cardLocal = h('div', { class: 'mh-card', onclick: () => showPage('music') },
+    h('div', { class: 'mh-card-icon' }, '🎵'),
+    h('div', { class: 'mh-card-label' }, '本地音乐'), localN)
+  const cardFav = h('div', { class: 'mh-card', onclick: () => showPage('favorites') },
+    h('div', { class: 'mh-card-icon' }, '⭐'),
+    h('div', { class: 'mh-card-label' }, '我的收藏'), favN)
+
+  // 三个可折叠 section（点头部折叠）
+  const plBody = h('div', { class: 'mh-section-body' })
+  const rcBody = h('div', { class: 'mh-section-body' })
+  const fvBody = h('div', { class: 'mh-section-body' })
+  const plSec = makeSection('🎧 我创建的歌单', plBody)
+  const rcSec = makeSection('🔥 最近播放', rcBody)
+  const fvSec = makeSection('❤️ 收藏的单曲', fvBody)
+
+  // 空库引导：两个入口一步到位
+  const emptyBox = h('div', { class: 'mh-empty-box', hidden: true },
+    h('div', { class: 'mh-empty-big' }, '🎶'),
+    h('p', {}, '还没有音乐，先导入几首歌吧'),
+    h('div', { class: 'mh-empty-actions' },
+      h('button', {
+        class: 'cta', onclick: () => {
+          if (window.RhinoBridge?.requestAutoImport) window.RhinoBridge.requestAutoImport()
+          else toast('当前环境不支持自动扫描')
+        }
+      }, '📥 自动扫描'),
+      h('button', { class: 'ghost-btn', onclick: () => app.importFilesDialog() }, '📁 选择文件')))
+
+  const el = h('div', { class: 'mh-home' },
+    h('div', { class: 'mh-hello' },
+      h('div', { class: 'mh-hi' }, hi + ' 👋'),
+      h('div', { class: 'mh-sub' }, '今天也要开心听歌')),
+    searchI,
+    h('div', { class: 'mh-cards' }, cardLocal, cardFav),
+    emptyBox,
+    h('div', { class: 'mh-sections' }, plSec, rcSec, fvSec))
+
+  function makeSection(title, body) {
+    const count = h('span', { class: 'mh-section-count' }, '')
+    const node = h('div', { class: 'mh-section' },
+      h('div', { class: 'mh-section-head' },
+        h('span', {}, h('span', { class: 'mh-section-title' }, title), count),
+        h('span', { class: 'mh-section-arrow' }, '▼')),
+      body)
+    node.querySelector('.mh-section-head').addEventListener('click', () => node.classList.toggle('collapsed'))
+    node._count = count
+    return node
+  }
+
+  // 单曲行：点击直接播放
+  function trackRow(m) {
+    const row = h('div', { class: 'q-item mh-row' },
+      h('div', { class: 'qi' }, '🎵'),
+      h('div', { class: 'qt' },
+        h('div', { class: 'n' }, m.title || m.name),
+        h('div', { class: 's' }, m.artist || m.album || '')))
+    row.addEventListener('click', () => playItem(m))
+    return row
+  }
+
+  // 歌单横卡：点击整单直接播放
+  function playlistChip(pl, items) {
+    const chip = h('div', { class: 'mh-play' },
+      h('div', { class: 'mh-play-cover' }, '📃'),
+      h('div', { class: 'mh-play-name' }, pl.name))
+    chip.addEventListener('click', () => {
+      const real = items.filter((x) => x && !x._missing && x.type === 'music')
+      if (real.length) playList(real, real[0])
+      else toast('歌单里的文件都不在了')
+    })
+    return chip
+  }
+
+  async function refresh() {
+    const [all, favs, pls, recents] = await Promise.all([
+      getAllMedia(), getFavorites(), getPlaylists(), getRecent(6)
+    ])
+    const songs = all.filter((m) => m.type === 'music')
+    localN.textContent = songs.length
+    favN.textContent = favs.length
+    emptyBox.hidden = songs.length > 0
+
+    // 歌单
+    plBody.innerHTML = ''
+    if (!pls.length) {
+      plBody.appendChild(h('div', { class: 'mh-empty' }, '还没创建歌单 · 歌单页可把当前队列存成歌单'))
+      plSec._count.textContent = ''
+    } else {
+      const rail = h('div', { class: 'mh-plays' })
+      for (const pl of pls.slice(0, 10)) {
+        const items = []
+        for (const id of pl.ids || []) items.push(await getMedia(id))
+        rail.appendChild(playlistChip(pl, items))
+      }
+      plBody.appendChild(rail)
+      plSec._count.textContent = `${pls.length} 个`
+    }
+
+    // 最近播放
+    rcBody.innerHTML = ''
+    const rcSongs = recents.filter((m) => m.type === 'music').slice(0, 5)
+    if (!rcSongs.length) rcBody.appendChild(h('div', { class: 'mh-empty' }, '还没有播放记录'))
+    else rcSongs.forEach((m) => rcBody.appendChild(trackRow(m)))
+
+    // 收藏单曲
+    fvBody.innerHTML = ''
+    const fvSongs = favs.filter((m) => m.type === 'music').slice(0, 5)
+    if (!fvSongs.length) fvBody.appendChild(h('div', { class: 'mh-empty' }, '点 ♥ 把喜欢的歌收进来'))
+    else {
+      fvSongs.forEach((m) => fvBody.appendChild(trackRow(m)))
+      if (favs.length > 5) {
+        fvBody.appendChild(h('div', { class: 'mh-more', onclick: () => showPage('favorites') }, `查看全部 ${favs.length} 首 ›`))
+      }
+    }
+  }
+
+  // 底部导航「我的」：展开全部 section 并滚到歌单区
+  function showMine() {
+    if (app.page !== 'home') showPage('home')
+    ;[plSec, rcSec, fvSec].forEach((s) => s.classList.remove('collapsed'))
+    requestAnimationFrame(() => plSec.scrollIntoView({ behavior: 'smooth' }))
+  }
+
+  // 搜索：输入即过滤音乐页，回车跳过去看结果
+  searchI.addEventListener('input', (e) => { app.search = e.target.value.trim(); music?.refresh?.() })
+  searchI.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      app.search = searchI.value.trim()
+      music?.refresh()
+      showPage('music')
+    }
+  })
+
+  refresh()
+  return { el, show: refresh, refresh, showMine }
+}
+
+// ---------- 🎵 全屏播放页（大歌词居中 + 进度条 + 控制按钮） ----------
+const MODE_ORDER = ['loop', 'order', 'random', 'one']
+function modeIcon(m) {
+  return m === 'random' ? '🔀' : m === 'one' ? '🔂' : m === 'order' ? '▶' : '🔁'
+}
+function openMusicFullpage() {
+  if (document.getElementById('music-fullpage')) return
+  let item = player.current
+
+  const titleEl = h('div', { class: 'pfp-title' }, item?.title || item?.name || '未在播放')
+  const artistEl = h('div', { class: 'pfp-artist' }, item?.artist || item?.album || '')
+  const linesWrap = h('div', { class: 'pfp-lines' })
+  const lyricsEl = h('div', { class: 'pfp-lyrics' }, linesWrap)
+  if (!item?.lyric) {
+    lyricsEl.appendChild(h('div', { class: 'pfp-empty' }, item ? '暂无歌词 · 可在音乐页点「搜歌词」在线匹配' : '🎵 先选一首歌开始吧'))
+  }
+
+  const seek = h('input', { class: 'pfp-seek', type: 'range', min: 0, max: 1000, value: 0 })
+  const curT = h('span', {}, '0:00')
+  const durT = h('span', {}, formatTime(item ? player.getDuration() || 0 : 0))
+  const playBtn = h('button', {
+    class: 'pfp-play',
+    onclick: () => { if (!item) toast('先选一首歌'); else player.toggle() }
+  }, player.isPlaying() ? '⏸' : '▶')
+  const favBtn = h('button', {
+    title: '收藏',
+    onclick: async () => {
+      if (!item) return
+      const f = await toggleFavorite(item.id)
+      favBtn.textContent = f ? '❤️' : '🤍'
+    }
+  }, item?.favorite ? '❤️' : '🤍')
+  const modeBtn = h('button', {
+    title: '播放模式',
+    onclick: () => {
+      const cur = player.playModes[player.mode] || 'loop'
+      const next = MODE_ORDER[(MODE_ORDER.indexOf(cur) + 1) % MODE_ORDER.length]
+      player.setPlayMode(next, player.mode)
+      modeBtn.textContent = modeIcon(next)
+    }
+  }, modeIcon(player.playModes[player.mode] || 'loop'))
+
+  const fp = h('div', { id: 'music-fullpage', class: 'player-fullpage' },
+    h('div', { class: 'pfp-top' },
+      h('button', { class: 'pfp-back', 'aria-label': '返回', onclick: close }, '‹'),
+      titleEl,
+      h('button', { class: 'pfp-list', 'aria-label': '播放列表', onclick: () => app.openQueue() }, '≡')),
+    lyricsEl,
+    h('div', { class: 'pfp-bottom' },
+      seek,
+      h('div', { class: 'pfp-times' }, curT, durT),
+      h('div', { class: 'pfp-ctrl' },
+        modeBtn,
+        h('button', { title: '上一首', onclick: () => player.prev() }, '⏮'),
+        playBtn,
+        h('button', { title: '下一首', onclick: () => player.next(true) }, '⏭'),
+        favBtn)))
+  document.body.appendChild(fp)
+
+  let lyrics = item?.lyric ? parseLRC(item.lyric) : []
+  let lastIdx = -2
+  function renderLines() {
+    linesWrap.innerHTML = ''
+    lyrics.forEach((l) => {
+      const line = h('div', { class: 'pfp-line' }, l.text || '♪')
+      line.addEventListener('click', () => player.seek(l.time))
+      linesWrap.appendChild(line)
+    })
+  }
+  renderLines()
+
+  const offTime = player.on('time', ({ time }) => {
+    const dur = player.getDuration() || 0
+    if (document.activeElement !== seek) seek.value = dur ? Math.round((time / dur) * 1000) : 0
+    curT.textContent = formatTime(time)
+    if (!lyrics.length) return
+    let idx = -1
+    for (let i = 0; i < lyrics.length; i++) {
+      if (lyrics[i].time <= time + 0.2) idx = i
+      else break
+    }
+    if (idx === lastIdx) return
+    lastIdx = idx
+    console.error('[pfp] time=' + time.toFixed(2) + ' idx=' + idx + ' lyrics=' + lyrics.length + ' first=' + lyrics[0]?.time + ' line0class=' + linesWrap.children[0]?.className)
+    const lines = linesWrap.querySelectorAll('.pfp-line')
+    lines.forEach((l, i) => l.classList.toggle('active', i === idx))
+    lines[idx]?.scrollIntoView({ block: 'center' })
+  })
+  const offTrack = player.on('trackchanged', (it) => {
+    item = it
+    lastIdx = -2
+    titleEl.textContent = it.title || it.name || '未在播放'
+    artistEl.textContent = it.artist || it.album || ''
+    favBtn.textContent = it.favorite ? '❤️' : '🤍'
+    lyrics = it.lyric ? parseLRC(it.lyric) : []
+    lyricsEl.innerHTML = ''
+    if (lyrics.length) { lyricsEl.appendChild(linesWrap); renderLines() }
+    else lyricsEl.appendChild(h('div', { class: 'pfp-empty' }, '暂无歌词 · 可在音乐页点「搜歌词」在线匹配'))
+    durT.textContent = formatTime(player.getDuration() || 0)
+  })
+  const offPlay = player.on('play', () => { playBtn.textContent = '⏸' })
+  const offPause = player.on('pause', () => { playBtn.textContent = '▶' })
+
+  // 拖进度条：实时跳转
+  seek.addEventListener('input', () => {
+    const dur = player.getDuration() || 0
+    if (dur) { const t = dur * seek.value / 1000; player.seek(t); curT.textContent = formatTime(t) }
+  })
+
+  function close() {
+    offTime(); offTrack(); offPlay(); offPause()
+    fp.remove()
+  }
+}
+
 function showPage(name) {
   if (!pages[name]) return // 弹窗角色下该视图未构建，直接忽略（避免操作无关媒体崩溃）
   app.page = name
@@ -133,8 +397,8 @@ function showPage(name) {
   // 底栏播放模式徽章跟随当前界面（音乐/视频各自独立）
   app.refreshModeBadge?.()
 }
-// 各窗默认落点：Hub 主控台(首页)、Music 音乐、Video 视频
-showPage(isHub ? 'home' : ROLE)
+// 各窗默认落点：Hub 主控台(首页)、Music 发现页(首页)、Video 视频
+showPage(isHub ? 'home' : (ROLE === 'music' ? 'home' : ROLE))
 
 // 底栏 + 队列 + 手势
 initBottomBar(app)
@@ -166,18 +430,8 @@ window.__mediaBatch = async (items, status) => {
 // 兼容旧单批入口
 window.__mediaImported = (items, status) => window.__mediaBatch(items, status)
 
-// 🔶 App 启动时自动请求 Android MediaStore 扫描（RhinoBridge 存在才调）
-// 🔶 ISS-20261009-007：只在"第一次打开"自动扫，之后用户手动点扫描按钮才触发
-// localStorage 标记 __grFirstScanDone：存在即表示已扫过，跳过自动扫
-const _firstScanDone = localStorage.getItem('__grFirstScanDone')
-setTimeout(() => {
-  if (window.RhinoBridge?.requestAutoImport && !_firstScanDone) {
-    console.log('[gr] 首次启动 → 自动请求 Android MediaStore 扫描')
-    try { window.RhinoBridge.requestAutoImport() } catch(e) { console.error(e) }
-  } else if (_firstScanDone) {
-    console.log('[gr] __grFirstScanDone 已存在 → 跳过自动扫描（用户可手动点"扫描"按钮）')
-  }
-}, 1500);
+// 🔶 ISS-20261009-007：所有扫描一律用户手动触发（工具栏「📥 自动扫描」），
+// 启动时绝不自动请求权限/扫描。之前 JS 端 setTimeout 首次自动扫的残留已删除。
 
 // 🔶 ISS-20261008-006：启动时对已存在的视频也排队抽帧（兜底，防止之前导入的没封面）
 setTimeout(async () => {
@@ -192,8 +446,8 @@ document.getElementById('menu-toggle').addEventListener('click', () => sidebar.c
 
 // ---------- 主题 + 续播恢复 ----------
 getSettings().then(async (s) => {
-  // 音乐窗口固定深色（酷狗沉浸绿）；其余尊重用户设置
-  document.documentElement.setAttribute('data-theme', ROLE === 'music' ? 'dark' : (s.theme || 'dark'))
+  // 音乐窗口固定浅色（白底 + 品牌绿点缀）；其余尊重用户设置
+  document.documentElement.setAttribute('data-theme', ROLE === 'music' ? 'light' : (s.theme || 'dark'))
   app.mode = s.lastMode || 'music'
   // 恢复音乐/视频各自的播放模式（旧版只存单一 playMode 时按此迁移）
   player.setPlayModes(s.playModes || { music: s.playMode || 'loop', video: 'order' })
@@ -409,6 +663,18 @@ document.getElementById('nav').addEventListener('click', (e) => {
   else if (isHub && (v === 'music' || v === 'video')) openRoleWindow(v)
   else showPage(v)
   sidebar.classList.remove('open')
+})
+
+// 🎵 音乐 App 底部三栏导航：发现（首页）/ 中间大按钮（全屏播放页）/ 我的
+const musicNav = document.getElementById('music-nav')
+musicNav?.addEventListener('click', (e) => {
+  const b = e.target.closest('.mn-item')
+  if (!b) return
+  const k = b.dataset.mn
+  if (k === 'discover') showPage('home')
+  else if (k === 'nowplaying') openMusicFullpage()
+  else if (k === 'mine') home?.showMine?.()
+  musicNav.querySelectorAll('.mn-item').forEach((x) => x.classList.toggle('active', x === b && k !== 'nowplaying'))
 })
 document.getElementById('search').addEventListener('input', (e) => {
   app.search = e.target.value.trim()

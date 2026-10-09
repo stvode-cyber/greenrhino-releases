@@ -60,6 +60,29 @@
 - **下午2**: buildMusicHome 函数缺失暴露 → Playwright headless smoke test 救了 E2E
 - **下午3**: 测试 10/10 全绿 → commit 3 个 → git push 超时
 - **下午4**: 写交接文档（本 context.md + daily.md）
+- **晚**: SAF 严格过滤真机验证 ✅ 双 App 通过（详见下方「晚间验证」）
+- **晚2**: 🎵 歌曲列表按参考图改造（详见下方「歌曲列表改造」）
+
+### 🎵 歌曲列表改造（参考图：我的收藏列表界面）
+- 起因：用户上传参考图要求"音乐的页面按这个按。列表界面"
+- 参考图结构：[56×56圆角封面] [歌名/歌手/VIP标签/时长] [▶圆形播放按钮] [⋯更多菜单] + 顶部 Tab（单曲/歌手/专辑/视频）+ 工具条
+- 改动文件：
+  - `src/ui/library.js` — 新增 `songRow(item, app)` 通用列表行组件（封面+歌名+歌手+格式标签+时长+▶+⋯）
+  - `src/ui/favorites.js` — 弃 `mediaCard` 网格，换 `songRow` 列表行 + Tab + 工具条 header
+  - `src/main.js` — `import songRow`；删 `buildMusicHome` 内自建 `trackRow` 函数；「最近播放」「收藏单曲」两处调用换 `songRow(m, app)`
+  - `src/style.css` — 加 `.sr-row` / `.sr-cover` / `.sr-name` / `.sr-sub` / `.sr-bdg` / `.sr-dur` / `.sr-play` / `.sr-more` / `.sr-tabs` / `.sr-toolbar` / `.sr-menu` 全部样式
+- 真机验证（moto X50 Ultra）：✅ 「情歌王」歌曲行完全按参考图渲染，封面图有、格式标签 FLAC 绿色、时长 0:00、▶圆形绿按钮、⋯菜单都在；点击歌曲行触发 playItem 跳到 music 播放页 + mini player 正常
+
+### 晚间验证（SAF 严格过滤 · 真机 moto X50 Ultra）
+- 起因：用户要求"导入打开就只能看到音乐格式的，不要混太多文件"
+- 改法：双 App `onShowFileChooser` 绕开 `params.createIntent()`，手动构建 `Intent(ACTION_OPEN_DOCUMENT)`，type 锁大分类 + EXTRA_MIME_TYPES 精确白名单
+- 验证方法：adb 截图 + uiautomator dump（SAF 是原生 UI 可 dump；WebView NAF 不可 dump，截图量坐标）
+- 结果：
+  - 🎵 音乐 App SAF 抽屉 = 最近 / **音频** / 下载 / moto X50 Ultra（无图片无视频）；音频页全是歌手文件夹（邰正宵/陈奕迅/戴佩妮…）
+  - 🎬 播放器 App SAF 抽屉 = 最近 / **视频** / 下载 / moto X50 Ultra（无图片无音频）；最近页只有一个视频文件
+- 新坑入台账：ISS-20261009-021（#saf-mime-filter #android-webview）
+- 技巧沉淀：WebView 内部 NAF 点不中 → 改用屏幕截图按比例换算坐标（display 460×1023 ↔ device 1220×2712，scale 2.652）；SAF 原生界面直接 uiautomator dump 拿 bounds 精确点击
+- 发现的设备状况：手机 6 个用户 profile（主用户+5 分身），`am start` 播放器弹"选择应用程序"歧义框 → 需显式 `--user 0` 或手动选第一个
 
 ### 关键发现
 1. Music App 之前完全没有 MediaStore.Audio 扫描！是 SAF 专用壳 → RhinoBridge 补

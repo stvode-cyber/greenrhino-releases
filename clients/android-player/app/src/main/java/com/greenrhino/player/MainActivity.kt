@@ -1,4 +1,4 @@
-﻿package com.greenrhino.player
+package com.greenrhino.player
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
@@ -276,29 +277,44 @@ class MainActivity : ComponentActivity() {
             ): Boolean {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
-                val intent: Intent? = params?.createIntent()
-                try {
-                    intent?.let {
-                        // 🔶 ISS-20261009-009：显式加多选支持（即使 WebView input.multiple=true）
-                        it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                        it.addCategory(Intent.CATEGORY_OPENABLE)
-                        // 🔶 ISS-20261009-012：展开 video/* → 具体视频 MIME 列表
-                        // 有些 Android SAF 对 video/* 支持差（只显示 mp4），显式列全所有视频格式
-                        val acceptTypes = params?.acceptTypes
-                        if (acceptTypes != null && acceptTypes.any { it == "video/*" }) {
-                            it.type = "*/*"
-                            it.putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                val rawAccept = params?.acceptTypes?.joinToString(",") ?: "(null)"
+                Log.d("GreenRhino", "onShowFileChooser acceptTypes=[$rawAccept]")
+
+                val acceptTypes = params?.acceptTypes
+                val wantAudioOnly = acceptTypes != null && acceptTypes.any { it == "audio/*" }
+                val wantVideoOnly = acceptTypes != null && acceptTypes.any { it == "video/*" }
+
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    when {
+                        wantVideoOnly -> {
+                            type = "video/*"
+                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
                                 "video/mp4", "video/x-matroska", "video/webm", "video/quicktime",
                                 "video/x-msvideo", "video/mp2t", "video/x-flv", "video/x-ms-wmv",
-                                "video/3gpp", "video/3gpp2", "video/ogg", "video/rmvb",
-                                "video/m4v", "video/avi"
+                                "video/3gpp", "video/3gpp2", "video/ogg", "video/m4v"
                             ))
+                            Log.d("GreenRhino", "SAF 严格锁定 video-only MIME 列表")
                         }
-                        fileChooserLauncher.launch(it)
-                    } ?: run { filePathCallback = null; return false }
+                        wantAudioOnly -> {
+                            type = "audio/*"
+                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                                "audio/mpeg", "audio/flac", "audio/wav", "audio/mp4",
+                                "audio/aac", "audio/ogg", "audio/opus", "audio/x-ms-wma"
+                            ))
+                            Log.d("GreenRhino", "SAF 严格锁定 audio-only MIME 列表")
+                        }
+                        else -> {
+                            putExtras(params?.createIntent()?.extras ?: Bundle())
+                            type = if (acceptTypes?.contains("video/*") == true) "video/*" else "*/*"
+                        }
+                    }
+                }
+                try {
+                    fileChooserLauncher.launch(intent)
                 } catch (e: Exception) {
-                    filePathCallback = null
-                    return false
+                    filePathCallback = null; return false
                 }
                 return true
             }

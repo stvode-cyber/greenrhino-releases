@@ -1,4 +1,4 @@
-﻿# 🛩️ 绿角犀项目驾驶舱（context.md）
+# 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
 > 最后更新：2026-10-09
@@ -283,6 +283,15 @@ music 版查 MediaStore.Audio.Media；player 版查 MediaStore.Video.Media。
 - 修复：按 GR_ROLE 分流
 - **预防**：所有新 store.js 函数必须先看 GR_ROLE 分流还是写死
 
+### ISS-20261009-021: SAF params.createIntent() 类型松散 → 弹窗混所有文件 ✅ 已修 + 真机验证过
+- 根因：WebView `FileChooserParams.createIntent()` 粗略映射 type，不传 EXTRA_MIME_TYPES
+- 修复：双 App 手动构建 `Intent(ACTION_OPEN_DOCUMENT)`：type 锁 audio/*/video/* + 精确 MIME 白名单
+- **真机验证（2026-10-09 晚，moto X50 Ultra）**：
+  - 🎵 音乐 App SAF 抽屉只剩「音频」分类（无图片/视频），音频页全是歌手文件夹 ✅
+  - 🎬 播放器 App SAF 抽屉只剩「视频」分类（无图片/音频），最近页只有视频文件 ✅
+- **预防**：SAF Intent 必须手动构建，禁止用 params.createIntent() 默认产物；验证方法 = 开抽屉看分类列表
+- 注意：抽屉里「下载」「moto X50 Ultra」root 是 SAF 系统强制显示无法移除，但 MIME 白名单全局生效（不匹配的文件灰色不可选）
+
 ---
 
 ## 📝 发布 Checklist
@@ -341,11 +350,11 @@ git push origin main   # 上次超时了，这次可能好了
 
 | 时间 | 动作 | commit |
 |---|---|---|
+| 2026-10-09 晚2 | 🎵 歌曲列表按参考图改造：songRow 组件 + Tab/工具条 + 真机验证点击播放正常 | — |
+| 2026-10-09 晚 | **SAF 严格过滤真机验证通过**：音乐 App 抽屉只剩音频 / 播放器只剩视频；adb uiautomator dump 拿精确坐标破解 WebView NAF 点击难题 | — |
 | 2026-10-09 下午 | buildMusicHome 补 stub，测试 10/10 全绿，commit 3 个，push GitHub 超时 | dc4b2f7 |
 | 2026-10-09 下午 | Music MainActivity 补完整 RhinoBridge + MediaStore.Audio + requestMediaPermission；store.js 按 GR_ROLE 分流 addMediaFromAndroid | b1d91ce |
 | 2026-10-09 下午 | 手动 Python server 跑 Playwright headless 验证 SW 注册 ✅ (count=1, caches=['gr-music-v16']) | — |
-| 2026-10-09 上午 | store.js addMediaFromAndroid 硬编码 VIDEO_EXT + 500MB 漏洞识别；Music App MediaStore 扫描完全缺失 | — |
-| 2026-10-09 上午 | UI 重构（底部导航、新首页、全屏播放页）→ buildMusicHome stub 被 commit 覆盖 | 9af8358 |
 
 ---
 

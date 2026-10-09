@@ -602,6 +602,38 @@ body.win-music #view { padding: 12px 16px 180px; }
 .mh-play-name { font-size: 12px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mh-empty { text-align: center; padding: 24px; color: #bbb; font-size: 13px; }
 
+/* 搜索框：浅色覆盖（.hub-input 默认深色） */
+.mh-search { margin-bottom: 16px; }
+body.win-music .hub-input {
+  color: #333; background: #f5f6f8; border: 1px solid #ececec;
+  padding: 12px 18px;
+}
+body.win-music .hub-input::placeholder { color: #aaa; }
+body.win-music .hub-input:focus { border-color: var(--kg, #00D8A6); }
+
+/* 问候区 */
+.mh-hello { margin: 6px 2px 16px; }
+.mh-hi { font-size: 22px; font-weight: 700; color: #222; }
+.mh-sub { font-size: 13px; color: #999; margin-top: 4px; }
+
+/* 首页单曲行 */
+.mh-row { cursor: pointer; }
+.mh-more { text-align: center; color: #999; font-size: 12px; padding: 10px; cursor: pointer; }
+
+/* 空库引导 */
+.mh-empty-box { text-align: center; padding: 44px 20px; }
+.mh-empty-big { font-size: 48px; margin-bottom: 12px; }
+.mh-empty-box p { color: #999; font-size: 14px; margin: 0 0 18px; }
+.mh-empty-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.mh-empty-actions .cta {
+  background: var(--kg, #00D8A6); color: #04231A; border: none; border-radius: 999px;
+  padding: 10px 22px; cursor: pointer; font-size: 14px;
+}
+.mh-empty-actions .ghost-btn {
+  background: #fff; border: 1px solid #eee; border-radius: 999px;
+  padding: 10px 22px; cursor: pointer; color: #666; font-size: 14px;
+}
+
 /* 🎵 全屏播放页（歌词居中） */
 .player-fullpage {
   position: fixed; inset: 0; background: #fff; z-index: 200;
@@ -649,6 +681,13 @@ body.win-music #view { padding: 12px 16px 180px; }
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 12px rgba(0,216,166,0.35);
 }
+/* 歌词行 */
+.player-fullpage .pfp-lines { width: 100%; margin: auto 0; }
+.player-fullpage .pfp-line {
+  padding: 7px 4px; color: #aaa; cursor: pointer;
+  transition: color .2s; line-height: 1.8;
+}
+.player-fullpage .pfp-line.active { color: var(--kg, #00D8A6); font-weight: 600; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 

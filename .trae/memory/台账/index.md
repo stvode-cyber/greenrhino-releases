@@ -52,6 +52,7 @@
 | 模块 | 关键决策 | 踩过的坑 |
 |---|---|---|
 | 整体方案 | DEC-20260914-001（TWA → WebView 原生壳） | ISS-20260914-002（错依赖 LauncherActivity）、ISS-20260914-003（GMS 缺失） |
+| MainActivity onShowFileChooser | — | ISS-20261009-021（params.createIntent() 类型松散 → SAF 混文件；手动构建 Intent + MIME 白名单） |
 | assetlinks.json | — | ISS-20260914-004（占位符域名） |
 | Huawei 上架 | — | ISS-20260914-007（截图比例不达标） |
 | index.html 资源路径 | DEC-20260914-002（相对路径） | ISS-20260914-001（绝对路径 WebView 404）、🔥ISS-20260916-003（相对路径 regex） |
@@ -127,8 +128,8 @@
 | 指标 | 值 |
 |---|---|
 | 活跃决策 | 8 条 |
-| 活跃坑 | 11 条（P0: 5 / P1: 5 / P2: 1） |
+| 活跃坑 | 12 条（P0: 5 / P1: 6 / P2: 1） |
 | 归档坑 | 12 条 |
 | 活跃问题群 | 3 个（#android-webview 🔥、#twa-gms、#relative-path 🔥） |
 | 归档问题群 | 3 个（#gradle-directory、#playwright-mirror、#harmonyos-install） |
-| 最后更新 | 2026-09-30 |
+| 最后更新 | 2026-10-09 |

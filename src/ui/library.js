@@ -1,4 +1,4 @@
-﻿// library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
+// library.js — 媒体库网格组件（按类型拆分：音乐/视频各自独立页）+ 多选与批量操作
 import { h, openModal } from './dom.js'
 import { getAllMedia, toggleFavorite, deleteMedia, getPlaylists, savePlaylist, findDuplicates } from '../store.js'
 import { player } from '../player.js'
@@ -331,5 +331,58 @@ function emptyState(app, type) {
     h('div', { style: { marginTop: '6px', color: 'var(--text-3)' } }, `把${isMusic ? '音乐' : '视频'}拖进来，或点击下方按钮导入`),
     h('button', { class: 'cta', onclick: () => app.importFilesDialog() }, '导入媒体')
   )
+}
+
+// ---------- 🎵 参考图歌曲列表行（左封面 / 中歌名+歌手+标签 / 右 ▶ / 最右 ⋯）----------
+export function songRow(item, app) {
+  // 封面：56x56 圆角，无封面则 emoji 🎵
+  const coverBox = h('div', { class: 'sr-cover' }, TYPE_ICON[item.type] || '🎵')
+  const img = item.cover || item.thumb
+  if (img) {
+    coverBox.innerHTML = ''
+    coverBox.appendChild(h('img', { src: img, alt: '', loading: 'lazy' }))
+  }
+
+  // 歌名 + 歌手
+  const name = h('div', { class: 'sr-name' }, item.title || item.name)
+  const ext = (item.name || '').includes('.') ? (item.name.split('.').pop() || '').toUpperCase() : ''
+  const duration = item.duration != null && isFinite(item.duration) ? item.duration : null
+  const durStr = duration != null
+    ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}`
+    : ''
+  const subParts = []
+  if (item.artist) subParts.push(item.artist)
+  else if (item.album) subParts.push(item.album)
+  const bdg = ext ? h('span', { class: 'sr-bdg' }, ext) : null
+  const dur = durStr ? h('span', { class: 'sr-dur' }, durStr) : null
+  const sub = h('div', { class: 'sr-sub' }, ...subParts, bdg, dur)
+
+  // 中间文字块
+  const info = h('div', { class: 'sr-info' }, name, sub)
+
+  // 右侧播放按钮 ▶（圆形，stopPropagation 防触发行点击）
+  const playBtn = h('div', { class: 'sr-play', title: '播放' }, '▶')
+  playBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    app.playItem ? app.playItem(item) : (player.current = item, player.play())
+  })
+
+  // 更多菜单 ⋯（竖向三点）
+  const favDot = item.favorite ? '❤️' : '🤍'
+  const moreBtn = h('div', { class: 'sr-more', title: '更多' }, '⋯')
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    // 弹出轻量操作菜单
+    const menu = h('div', { class: 'sr-menu' },
+      h('button', { onclick: () => { toggleFavorite(item.id); toast(item.favorite ? '已取消收藏' : '已收藏') } }, favDot, item.favorite ? '取消收藏' : '收藏'),
+      h('button', { onclick: () => { navigator.clipboard?.writeText(item.title || item.name || ''); toast('歌名已复制') } }, '📋 复制歌名')
+    )
+    openModal(menu, { title: item.title || item.name })
+  })
+
+  const row = h('div', { class: 'sr-row' }, coverBox, info, playBtn, moreBtn)
+  row.addEventListener('click', () => { app.playItem ? app.playItem(item) : (player.current = item, player.play()) })
+
+  return row
 }
 
