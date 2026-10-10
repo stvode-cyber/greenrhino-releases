@@ -87,6 +87,9 @@ if (ROLE === 'video') {
 if (ROLE === 'music') {
   document.documentElement.dataset.theme = 'light'
   document.body.classList.add('win-music')
+  var _tb2 = document.getElementById('topbar'); if (_tb2) _tb2.remove()
+  var _as2 = document.querySelector('aside'); if (_as2) _as2.remove()
+  var _bb2 = document.getElementById('bottombar'); if (_bb2) _bb2.remove()
 }
 
 // 打开另一角色窗口：原生壳经消息交给 C# 创建/聚焦弹窗；纯浏览器退回页内切换
@@ -118,40 +121,21 @@ function buildHome(app) {
   return { el, show() { setTimeout(() => input.focus?.(), 60) } }
 }
 
-// 🔶 DEC-20261009-005: 整页导入页（用户确认方案：点导入 → 进入整页，不是弹窗）
-// 页面上两个大选项：扫描音乐 / 手动打开手机文件
+// 🔶 DEC-20261009-005: 所有导入入口直接触发，不走中间层
+// 📥 扫描音乐（MediaStore 全量扫） / 📁 手动打开（SAF 文件选择器）
 function doScan() {
   if (window.RhinoBridge?.requestAutoImport) {
     toast('开始扫描音乐文件...', 'info')
     window.RhinoBridge.requestAutoImport()
   } else {
-    toast('当前环境不支持自动扫描，请用"手动打开"', 'warn')
+    toast('当前环境不支持自动扫描', 'warn')
   }
 }
-function openImportPage(app) {
-  const page = h('div', { class: 'imp-page' },
-    h('div', { class: 'imp-head' },
-      h('button', { class: 'icon-btn', onclick: () => close() }, '←'),
-      h('h3', {}, '导入音乐')),
-    h('div', { class: 'imp-body' },
-      h('div', { class: 'imp-opt', onclick: () => { close(); doScan() } },
-        h('div', { class: 'imp-opt-icon' }, '📥'),
-        h('div', { class: 'imp-opt-txt' },
-          h('div', { class: 'imp-opt-title' }, '扫描音乐'),
-          h('div', { class: 'imp-opt-desc' }, '自动扫描手机里所有音频，一键导入')),
-        h('div', { class: 'imp-opt-arrow' }, '›')),
-      h('div', { class: 'imp-opt', onclick: () => { close(); app.importFilesDialog() } },
-        h('div', { class: 'imp-opt-icon' }, '📁'),
-        h('div', { class: 'imp-opt-txt' },
-          h('div', { class: 'imp-opt-title' }, '手动打开手机文件'),
-          h('div', { class: 'imp-opt-desc' }, '从文件管理器挑选音乐，支持多选')),
-        h('div', { class: 'imp-opt-arrow' }, '›'))))
-  function close() { page.remove() }
-  document.body.appendChild(page)
+function doOpenFiles(app) {
+  app.importFilesDialog()
 }
-// 暴露到 window 供 library.js 等子模块调用
-window.openImportPage = openImportPage
 window.doScan = doScan
+window.doOpenFiles = doOpenFiles
 
 // 🔶 ISS-20261009-018: Music App 专属首页（参考图风格 — 问候 + 搜索 + 大卡片 + 可折叠 section）
 // 上一轮 UI 重构漏了函数体 → music role main.js init crash → SW 注册走不到（ISS-20261009-019）
@@ -171,17 +155,18 @@ function buildMusicHome(app) {
   const cardFav = h('div', { class: 'mh-card', onclick: () => showPage('favorites') },
     h('div', { class: 'mh-card-icon' }, '⭐'),
     h('div', { class: 'mh-card-label' }, '我的收藏'), favN)
-  const cardImport = h('div', { class: 'mh-card', onclick: () => openImportPage(app) },
-    h('div', { class: 'mh-card-icon' }, '📥'),
-    h('div', { class: 'mh-card-label' }, '导入音乐'),
-    h('div', { class: 'mh-card-hint' }, '扫描 / 手动选择'))
+  const cardImport = h('div', { class: 'mh-card', onclick: () => doOpenFiles(app) },
+    h('div', { class: 'mh-card-icon' }, '📁'),
+    h('div', { class: 'mh-card-label' }, '打开手机文件'),
+    h('div', { class: 'mh-card-hint' }, '从文件管理器选歌'))
 
-  // 空库引导：进整页导入页（两个选项）
+  // 空库引导：两直触按钮
   const emptyBox = h('div', { class: 'mh-empty-box', hidden: true },
     h('div', { class: 'mh-empty-big' }, '🎶'),
     h('p', {}, '还没有音乐，先导入几首歌吧'),
     h('div', { class: 'mh-empty-actions' },
-      h('button', { class: 'cta', onclick: () => openImportPage(app) }, '📥 导入音乐')))
+      h('button', { class: 'cta', onclick: () => doScan() }, '📥 扫描音乐'),
+      h('button', { class: 'ghost-btn', onclick: () => doOpenFiles(app) }, '📁 打开手机文件')))
 
   const el = h('div', { class: 'mh-home' },
     h('div', { class: 'mh-hello' },
@@ -211,13 +196,23 @@ function buildMusicHome(app) {
 
   refresh()
 
-  // "我的"页：歌单 + 收藏列表（底部导航点"我的"触发）
+  // "我的"页：最近播放 + 歌单 + 收藏列表（底部导航点"我的"触发）
   const mineEl = h('div', { class: 'mh-mine', hidden: true })
   async function showMine() {
     mineEl.innerHTML = ''
     mineEl.hidden = false
     el.hidden = true
-    const [favs, pls] = await Promise.all([getFavorites(), getPlaylists()])
+    const [favs, pls, recent] = await Promise.all([getFavorites(), getPlaylists(), getRecent(30)])
+    const recBox = h('div', { class: 'mh-mine-section' },
+      h('div', { class: 'mh-mine-head' }, '🕐 最近播放', h('span', { class: 'mh-mine-count' }, recent.length + ' 首')),
+      recent.length ? h('div', { class: 'sr-list' },
+        ...recent.map(function(it) {
+          var row = songRow(it, app, { selectable: false })
+          var sub = row.querySelector('.sr-sub')
+          if (sub && it.playCount) sub.textContent = '播放 ' + it.playCount + ' 次'
+          return row
+        }))
+        : h('div', { class: 'empty' }, h('div', {}, '还没有播放记录')))
     // 收藏区
     const favBox = h('div', { class: 'mh-mine-section' },
       h('div', { class: 'mh-mine-head' }, '⭐ 我的收藏', h('span', { class: 'mh-mine-count' }, favs.length + ' 首')),
@@ -234,6 +229,7 @@ function buildMusicHome(app) {
           showPage('music')
         } }, pl.name)))
         : h('div', { class: 'empty' }, h('div', {}, '还没有歌单，播放时点"存为歌单"创建')))
+    mineEl.appendChild(recBox)
     mineEl.appendChild(favBox)
     mineEl.appendChild(plBox)
   }
@@ -290,8 +286,8 @@ function openMusicFullpage() {
   const fp = h('div', { id: 'music-fullpage', class: 'player-fullpage' },
     h('div', { class: 'pfp-top' },
       h('button', { class: 'pfp-back', 'aria-label': '返回', onclick: close }, '‹'),
-      titleEl,
-      h('button', { class: 'pfp-list', 'aria-label': '播放列表', onclick: () => app.openQueue() }, '≡')),
+      h('div', { class: 'pfp-title-wrap' }, titleEl, artistEl),
+      h('button', { class: 'pfp-list', 'aria-label': '播放列表', onclick: () => app.openQueue() }, '📋 列表')),
     lyricsEl,
     h('div', { class: 'pfp-bottom' },
       seek,
@@ -378,8 +374,8 @@ function showPage(name) {
   // 底栏播放模式徽章跟随当前界面（音乐/视频各自独立）
   app.refreshModeBadge?.()
 }
-// 各窗默认落点：Hub 主控台(首页)、Music 直接进音乐库、Video 视频
-showPage(isHub ? 'home' : (ROLE === 'music' ? 'music' : ROLE))
+// 各窗默认落点：Hub 主控台(首页)、Music 进问候首页、Video 视频
+showPage(isHub ? 'home' : (ROLE === 'music' ? 'home' : ROLE))
 
 // 底栏 + 队列 + 手势
 initBottomBar(app)
@@ -423,7 +419,7 @@ setTimeout(async () => {
   } catch {}
 }, 3000);
 const sidebar = document.getElementById('sidebar')
-document.getElementById('menu-toggle').addEventListener('click', () => sidebar.classList.toggle('open'))
+document.getElementById('menu-toggle')?.addEventListener('click', () => sidebar?.classList.toggle('open'))
 
 // ---------- 主题 + 续播恢复 ----------
 getSettings().then(async (s) => {
@@ -635,15 +631,15 @@ function openWelcome() {
 
 // ---------- 导航 / 顶栏 ----------
 // 音乐/视频切换：Hub 点导航弹独立窗口；弹窗内只有本类型的单向入口（仅 Hub 显示 music/video 项）。
-document.getElementById('nav').addEventListener('click', (e) => {
+document.getElementById('nav')?.addEventListener('click', (e) => {
   const btn = e.target.closest('.nav-item')
   if (!btn) return
-  if (btn.dataset.action === 'help') { openHelp(); sidebar.classList.remove('open'); return }
+  if (btn.dataset.action === 'help') { openHelp(); sidebar?.classList.remove('open'); return }
   const v = btn.dataset.view
   if (v === 'settings') openSettings(app)
   else if (isHub && (v === 'music' || v === 'video')) openRoleWindow(v)
   else showPage(v)
-  sidebar.classList.remove('open')
+  sidebar?.classList.remove('open')
 })
 
 // 🎵 音乐 App 底部三栏导航：发现（首页）/ 中间大按钮（全屏播放页）/ 我的
@@ -657,13 +653,13 @@ musicNav?.addEventListener('click', (e) => {
   else if (k === 'mine') home?.showMine?.()
   musicNav.querySelectorAll('.mn-item').forEach((x) => x.classList.toggle('active', x === b && k !== 'nowplaying'))
 })
-document.getElementById('search').addEventListener('input', (e) => {
+document.getElementById('search')?.addEventListener('input', (e) => {
   app.search = e.target.value.trim()
   music?.refresh()
   video?.refresh()
 })
-document.getElementById('import-files').addEventListener('click', importFilesDialog)
-document.getElementById('import-folder').addEventListener('click', importFolderDialog)
+document.getElementById('import-files')?.addEventListener('click', importFilesDialog)
+document.getElementById('import-folder')?.addEventListener('click', importFolderDialog)
 const _ift = document.getElementById('import-folder-top'); if (_ift) _ift.addEventListener('click', importFolderDialog)
 
 // 维护 currentList 供队列上下文使用（音乐/视频各自页内库刷新后同步）

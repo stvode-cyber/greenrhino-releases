@@ -1312,7 +1312,7 @@ body.win-music #app { grid-template-columns: 1fr !important; }
 .mh-pl-item { padding: 10px 12px; background: #F9FAFB; border-radius: 10px; font-size: 14px; cursor: pointer; border: 1px solid #F3F4F6; }
 .mh-pl-item:active { background: #EEF2FF; }
 
-/* 🔶 DEC-20261009-005: 整页导入页（点导入进入整页，非弹窗）——两个大选项 */
+
 .imp-page { position: fixed; inset: 0; z-index: 90; background: #EAECEF !important; display: flex; flex-direction: column; animation: impIn .18s ease; }
 @keyframes impIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 .imp-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; }
@@ -1325,3 +1325,42 @@ body.win-music #app { grid-template-columns: 1fr !important; }
 .imp-opt-title { font-weight: 700; font-size: 16px; color: #111827; }
 .imp-opt-desc { font-size: 13px; color: #6B7280; margin-top: 2px; }
 .imp-opt-arrow { color: #9CA3AF; font-size: 22px; }
+
+
+/* 🔶 DEC-20261010-001: 导航条中间按钮——正在播放封面+歌名同步 */
+#music-nav .mn-center .mn-cover {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 18px;
+  background: linear-gradient(135deg, #00D8A6, #00B894);
+  color: #fff;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 2px 6px rgba(0,216,166,.4);
+  transition: transform .2s;
+  flex-shrink: 0;
+}
+#music-nav .mn-center.playing .mn-cover {
+  animation: mnSpin 3s linear infinite;
+}
+@keyframes mnSpin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+#music-nav .mn-center .mn-title {
+  position: absolute;
+  bottom: -1px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; max-width: 56px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #6B7280;
+}
+#music-nav .mn-center { position: relative; }
+
+/* 🔶 音乐 App 隐藏全局 topbar（☰ 菜单 + 搜索 + 📁 导入），首页自建问候+搜索 */
+body.win-music #topbar { display: none !important; }
+body.win-music #main { padding-top: 0 !important; }
+
+/* 🔶 全屏播放页：标题+歌手竖排 + 列表按钮醒目 */
+.pfp-title-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+.pfp-title-wrap .pfp-title { text-align: center; }
+.pfp-title-wrap .pfp-artist { text-align: center; font-size: 13px; opacity: .7; margin-top: 2px; }
+.pfp-list { font-size: 13px; padding: 6px 12px; border-radius: 18px; background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.18); }
+.pfp-list:active { background: rgba(255,255,255,.22); }

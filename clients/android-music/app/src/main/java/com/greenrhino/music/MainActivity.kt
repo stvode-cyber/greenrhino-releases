@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("GreenRhino", "=== onCreate START ===")
 
         // 沉浸式全屏
         WindowCompat.setDecorFitsSystemWindows(window, false)

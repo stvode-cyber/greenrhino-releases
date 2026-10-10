@@ -11,6 +11,7 @@ const PLAYMODE_LABEL = {
 
 export function initBottomBar(app) {
   const bar = document.getElementById('bottombar')
+  if (!bar) return   // music role 已 remove bottombar，跳过全局底栏构建
   const cover = h('div', { class: 'cover' }, '🎵')
   const title = h('div', { class: 'n' }, '未在播放')
   const sub = h('div', { class: 's' }, '—')
