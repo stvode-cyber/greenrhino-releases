@@ -1,7 +1,7 @@
 # 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
-> 最后更新：2026-10-09
+> 最后更新：2026-10-10（含未完成 bug 标注）
 
 ---
 
@@ -347,11 +347,15 @@ git push origin main   # 上次超时了，这次可能好了
 
 | 时间 | 动作 | commit |
 |---|---|---|
-| 2026-10-10 午 | 🎵 **ROLE .remove() DOM 崩溃链 全修**：assets 同步（ISS-022）+ 6 处 null check（ISS-023）+ python server 锁 release 目录 EPERM（ISS-024）；npm run test:all 10/10 全绿（单元 6 + E2E 4）；MainActivity.kt 清诊断代码；Playwright probe 确认 SW=1 cache=gr-music-v16 bodyClass=win-music topbar/sidebar/bottombar 全 false errors=0 | 4f77f69 |
+| 2026-10-10 中午 | 🎵 **ROLE .remove() DOM 崩溃链 全修 + 真机验证**：assets 同步（ISS-022）+ 6 处 null check（ISS-023）+ python server 锁 release 目录 EPERM（ISS-024）；npm run test:all 10/10 全绿；真机截图确认首页完全正确（早上好+3白色卡片+灰色背景#EAECEF+底部三栏导航）；MainActivity.kt 清诊断代码；session-memory.md 完整交接（含未完成 bug） | 4432ca1 |
+| 2026-10-10 午 | 🎵 ROLE .remove() DOM 崩溃链 全修：assets 同步（ISS-022）+ 6 处 null check（ISS-023）+ python server 锁 release 目录 EPERM（ISS-024）；npm run test:all 10/10 全绿 | 4f77f69 |
 | 2026-10-09 深夜 | 🎵 **整页导入页上线**：点「导入音乐」进整页（扫描音乐/手动打开手机文件两个大选项），弃用弹窗；wrangler 部署双站点；test:all 全绿；APK 装机；5 个应用分身旧数据全清（ISS-022 "没生效"假象病根） | dc4073a |
 | 2026-10-09 晚 | 🎵 **彻底砍掉自动扫描**：删 Kotlin postDelayed + JS setTimeout 根因；保留三栏导航 #music-nav，隐藏全局播放控制条 #bottombar（进度条消失）；空态改批量导入入口；后台播放 Phase 1（删 pauseTimers + WAKE_LOCK + setPlaying bridge）；onResume wakeLock.isHeld 防崩溃 | 3187fd0 |
 | 2026-10-09 晚 | 🎵 pruneLost 连锁循环修复（deleteMedia 加 skipEmit）+ library.js 补 toast import + buildMusicHome 简化删 3 个 section + sr-row 加深区别 | 0848fdb |
-| 2026-10-09 下午5 | 🎵 手机端隐藏 .music-player 大面板（封面+未在播放+EQ/睡眠+歌词），只留纯歌曲列表 | 615da48 |
+
+### 🚨 未完成 Bug（下一位 AI 接手先看）
+
+**全屏播放页「📋 列表」按钮点了没显示**：queue drawer 可能被 body.win-music 的 CSS 规则覆盖了 background/z-index，或者 queue.size=0。详见 `.session-memory.md` 底部排查路径。
 
 ---
 
