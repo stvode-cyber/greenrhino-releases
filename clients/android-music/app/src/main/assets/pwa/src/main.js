@@ -589,6 +589,7 @@ function playItem(item) {
   const ctx = (app.currentList || []).filter((i) => i.type === item.type)
   const queueList = ctx.length ? ctx : [item]
   player.setQueue(queueList, item.id)
+  console.error('[gr-diag] playItem queue.size=' + queueList.length + ' curList.size=' + app.currentList.length + ' type=' + item.type)
   player.playItem(item, { crossfade: player.isPlaying() })
 }
 function playList(items, first) {

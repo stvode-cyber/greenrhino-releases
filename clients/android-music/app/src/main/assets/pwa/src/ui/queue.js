@@ -90,6 +90,7 @@ export function buildQueue(app) {
   document.body.appendChild(backdrop)
 
   function open() {
+    alert('[gr-diag] queue.size=' + player.queue.length + ' drawer.hidden=' + drawer.hidden + ' hasOpen=' + drawer.classList.contains('open'))
     drawer.hidden = false; backdrop.hidden = false
     requestAnimationFrame(() => { drawer.classList.add('open'); backdrop.classList.add('open') })
     renderList()
