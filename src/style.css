@@ -175,6 +175,9 @@ body.win-music .app-version { color: var(--kg); border-color: var(--kg-soft); ba
 .media-lib .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .lib-head { margin-bottom: 12px; }
 .lib-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* 🔶 selMode 下顶部工具栏：取消按钮 + 已选择 N 项 */
+.lib-toolbar.lib-toolbar-sel { justify-content: space-between; gap: 16px; }
+.lib-sel-count { color: var(--kg, #00D8A6); font-weight: 600; font-size: 14px; }
 
 .music-player { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 .music-player .album-wrap { flex: none; }
@@ -307,6 +310,9 @@ body.win-music .app-version { color: var(--kg); border-color: var(--kg-soft); ba
 /* 歌单详情内的拖拽重排反馈 */
 .q-item.pl-row { cursor: grab; }
 .q-item.pl-row:active { cursor: grabbing; }
+/* 🔶 selMode 下 pl-row 选中态 */
+.q-item.pl-row.sel { background: rgba(0,216,166,.08); }
+.q-item.pl-row.sel .sr-chk { background: var(--kg, #00D8A6); border-color: var(--kg, #00D8A6); color: #fff; }
 .q-item.dragging { opacity: .4; }
 .q-item.dragover { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
 .q-item.missing .n { color: var(--text-3); font-style: italic; }
@@ -1016,6 +1022,16 @@ body.win-music #sidebar .brand-logo {
 .card.playing { box-shadow: 0 0 0 2px var(--kg, #00D8A6) inset; border-radius: 8px; }
 .sr-row.selectable { cursor: default; }
 .sr-row.selectable .sr-play { opacity: .5; pointer-events: auto; }
+/* 🔶 selMode 下左侧圆形勾选框（和 .grid.selecting .card .chk 风格一致） */
+.sr-chk {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid rgba(0,0,0,.25); background: transparent;
+  color: transparent; font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-right: 10px; box-sizing: border-box;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sr-row.sel .sr-chk { background: var(--kg, #00D8A6); border-color: var(--kg, #00D8A6); color: #fff; }
 /* 🔶 用户要求：列表行加深区别，在 #EAECEF 灰底上能一眼看清每行边界 */
 .sr-list .sr-row {
   border-bottom: 1px solid rgba(0,0,0,.07);

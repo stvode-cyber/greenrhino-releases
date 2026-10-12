@@ -1,6 +1,6 @@
 ﻿// playlists.js — 歌单页（智能列表 + 保存当前队列 / 详情 / 拖拽重排 / 删除）
 import { h, openModal, toast } from './dom.js'
-import { getPlaylists, savePlaylist, deletePlaylist, getMedia, getAllMedia } from '../store.js'
+import { getPlaylists, savePlaylist, deletePlaylist, getMedia, getAllMedia, batchDeleteMedia } from '../store.js'
 import { player } from '../player.js'
 import { mediaCard } from './library.js'
 
@@ -113,34 +113,155 @@ async function openDetail(pl, app, only) {
   const items = []
   for (const id of ids) { const m = await getMedia(id); items.push(m || { id, type: 'music', _missing: true }) }
   let dragId = null
+  let selMode = false
+  const selected = new Set()
 
   const list = h('div', { class: 'dlist' })
+  const selbar = h('div', { class: 'selbar', style: { display: 'none' } },
+    h('button', { class: 'ghost-btn', onclick: () => toggleAll() }, '全选'),
+    h('span', { class: 'selcount' }, '已选 0'),
+    h('button', { class: 'ghost-btn', onclick: () => batchRemoveFromPl() }, '从歌单移除'),
+    h('button', { class: 'ghost-btn', onclick: () => openAddToOtherPlaylist() }, '＋ 加入其他歌单'),
+    h('button', { class: 'ghost-btn danger', onclick: () => batchDelete() }, '🗑 删除'),
+    h('button', { class: 'ghost-btn', onclick: () => exitSelect() }, '取消')
+  )
+
+  function enterSelectMode(firstId) {
+    selMode = true
+    selected.clear()
+    if (firstId) selected.add(firstId)
+    render()
+    refreshTopBar()
+    updateSelBar()
+  }
+  function exitSelect() {
+    selMode = false
+    selected.clear()
+    render()
+    refreshTopBar()
+    updateSelBar()
+  }
+  function updateSelBar() {
+    const n = selected.size
+    selbar.style.display = selMode ? 'flex' : 'none'
+    selbar.querySelector('.selcount').textContent = `已选 ${n}`
+    const topCount = body.querySelector('.lib-sel-count')
+    if (topCount) topCount.textContent = `已选择 ${n} 项`
+    const btns = selbar.querySelectorAll('button')
+    for (let i = 2; i <= 4; i++) { btns[i].disabled = n === 0; btns[i].style.opacity = n === 0 ? '0.4' : '1' }
+    const total = list.querySelectorAll('.pl-row').length
+    btns[0].textContent = (total && n >= total) ? '取消全选' : '全选'
+  }
+  function toggleAll() {
+    const rows = [...list.querySelectorAll('.pl-row')]
+    const total = rows.length
+    if (selected.size >= total) { selected.clear(); rows.forEach(r => r.classList.remove('sel')) }
+    else { for (const r of rows) { const id = r.dataset.id; if (id) selected.add(id); r.classList.add('sel') } }
+    updateSelBar()
+  }
+  async function batchRemoveFromPl() {
+    const removeIds = [...selected]
+    if (!removeIds.length) return
+    if (!confirm(`从歌单「${pl.name}」中移除 ${removeIds.length} 项？（文件仍保留在媒体库）`)) return
+    ids = ids.filter((x) => !removeIds.includes(x))
+    await persist(); render(); refreshHeader(); exitSelect()
+    toast(`已从歌单移除 ${removeIds.length} 项`)
+  }
+  async function openAddToOtherPlaylist() {
+    const addIds = [...selected]
+    if (!addIds.length) return
+    const pls = await getPlaylists()
+    const body2 = h('div', { class: 'mb' })
+    body2.appendChild(h('button', { class: 'ghost-btn', style: { width: '100%', marginBottom: '8px' }, onclick: async () => {
+      const name = prompt('新歌单名称：', '歌单 ' + new Date().toLocaleDateString())
+      if (!name) return
+      await savePlaylist({ id: 'pl-' + Date.now(), name, ids: [...addIds], at: Date.now() })
+      app.toast('已新建歌单并加入'); close2()
+    } }, '＋ 新建歌单'))
+    pls.filter(x => x.id !== pl.id).forEach(op => body2.appendChild(h('button', { class: 'ghost-btn', style: { width: '100%', marginBottom: '8px' }, onclick: async () => {
+      const merged = [...new Set([...op.ids, ...addIds])]
+      await savePlaylist({ ...op, ids: merged })
+      app.toast(`已加入「${op.name}」`); close2()
+    } }, `${op.name}（${op.ids.length}）`)))
+    const modal2 = h('div', { class: 'modal' },
+      h('div', { class: 'mh' }, h('h3', {}, '加入其他歌单'), h('button', { class: 'icon-btn', onclick: () => close2() }, '✕')), body2)
+    const close2 = openModal(modal2)
+  }
+  async function batchDelete() {
+    const ids2 = [...selected]
+    if (!ids2.length) return
+    if (!confirm(`从媒体库彻底删除 ${ids2.length} 个文件？（会同时从歌单移除）`)) return
+    await batchDeleteMedia(ids2)
+    ids = ids.filter((x) => !ids2.includes(x))
+    await persist(); render(); refreshHeader(); exitSelect()
+    toast(`已删除 ${ids2.length} 个文件`, 'ok')
+  }
+
   function render() {
     list.innerHTML = ''
     if (!ids.length) { list.appendChild(h('div', { class: 'empty' }, '歌单为空')); return }
     ids.forEach((id) => {
       const m = items.find((x) => x.id === id) || { id, type: 'music', _missing: true }
-      // 弹窗角色（音乐窗）里其他类型的项灰显、不可播放（避免跨类型顶到别的窗口页面）
       const match = !only || m._missing || m.type === only
-      const row = h('div', {
-        class: 'q-item pl-row' + (m._missing ? ' missing' : '') + (match ? '' : ' pl-dim'),
-        draggable: 'true',
-        ondragstart: (e) => { dragId = id; e.dataTransfer.effectAllowed = 'move'; e.currentTarget.classList.add('dragging') },
-        ondragend: (e) => { dragId = null; e.currentTarget.classList.remove('dragging') },
-        ondragover: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('dragover') },
-        ondragleave: (e) => { e.currentTarget.classList.remove('dragover') },
-        ondrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); reorder(id) }
-      },
+      // selMode 下禁用拖拽、加勾选框、点选 toggle
+      const rowChildren = []
+      if (selMode) {
+        rowChildren.push(h('div', { class: 'sr-chk' }, '✓'))
+      }
+      rowChildren.push(
         h('div', { class: 'qi' }, m._missing ? '📄' : (m.type === 'video' ? '🎬' : '🎵')),
         h('div', { class: 'qt' },
           h('div', { class: 'n' }, m.title || m.name || '未知文件'),
-          h('div', { class: 's' }, m._missing ? '文件已丢失' : (m.artist || m.album || ''))),
-        h('div', { class: 'qx', title: '从歌单移除', onclick: async (e) => {
+          h('div', { class: 's' }, m._missing ? '文件已丢失' : (m.artist || m.album || '')))
+      )
+      if (!selMode) {
+        rowChildren.push(h('div', { class: 'qx', title: '从歌单移除', onclick: async (e) => {
           e.stopPropagation()
           ids = ids.filter((x) => x !== id)
           await persist(); render(); refreshHeader()
         } }, '✕'))
-      if (!m._missing && match) row.addEventListener('click', () => { const real = items.filter((x) => !x._missing && (!only || x.type === only)); app.playList(real, m) })
+      }
+      const row = h('div', {
+        class: 'q-item pl-row' + (m._missing ? ' missing' : '') + (match ? '' : ' pl-dim') + (selected.has(id) ? ' sel' : ''),
+        'data-id': id,
+        // selMode 下禁用拖拽
+        draggable: selMode ? 'false' : 'true',
+        ondragstart: selMode ? undefined : (e) => { dragId = id; e.dataTransfer.effectAllowed = 'move'; e.currentTarget.classList.add('dragging') },
+        ondragend: selMode ? undefined : () => { dragId = null; e.currentTarget.classList.remove('dragging') },
+        ondragover: selMode ? undefined : (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('dragover') },
+        ondragleave: selMode ? undefined : (e) => { e.currentTarget.classList.remove('dragover') },
+        ondrop: selMode ? undefined : (e) => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); reorder(id) }
+      }, ...rowChildren)
+
+      if (selMode) {
+        row.addEventListener('click', () => {
+          if (selected.has(id)) { selected.delete(id); row.classList.remove('sel') }
+          else { selected.add(id); row.classList.add('sel') }
+          updateSelBar()
+        })
+      } else {
+        // 长按 600ms 进入多选（和 library.js / favorites.js 统一）
+        let holdTimer = null, sx = 0, sy = 0, triggered = false
+        row.addEventListener('touchstart', (e) => {
+          const t = e.touches[0]; sx = t.clientX; sy = t.clientY; triggered = false
+          holdTimer = setTimeout(() => { triggered = true; enterSelectMode(id) }, 600)
+        }, { passive: true })
+        const cancelHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null } }
+        row.addEventListener('touchmove', (e) => {
+          if (!holdTimer) return
+          const t = e.touches[0]
+          if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) cancelHold()
+        }, { passive: true })
+        row.addEventListener('touchend', () => cancelHold(), { passive: true })
+        row.addEventListener('touchcancel', () => cancelHold(), { passive: true })
+        row.addEventListener('click', () => {
+          if (triggered) { triggered = false; return }
+          if (!m._missing && match) {
+            const real = items.filter((x) => !x._missing && (!only || x.type === only))
+            app.playList(real, m)
+          }
+        })
+      }
       list.appendChild(row)
     })
   }
@@ -166,11 +287,22 @@ async function openDetail(pl, app, only) {
 
   render()
   const titleEl = h('span', {}, `${pl.name} · ${ids.length} 首`)
-  const body = h('div', { class: 'mb' },
-    h('div', { class: 'row', style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' } },
-      h('button', { class: 'ghost-btn', onclick: playAll }, '▶ 播放全部'),
-      h('div', { class: 'hint', style: { color: 'var(--text-3)', fontSize: '12px' } }, '拖拽 ≡ 可重排顺序')),
-    list)
+  // 顶部工具栏：selMode → 取消 + 已选择 N 项；正常 → ▶ 播放全部 + 拖拽提示
+  const topBar = h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' } })
+  function refreshTopBar() {
+    topBar.innerHTML = ''
+    if (selMode) {
+      topBar.appendChild(h('button', { class: 'ghost-btn', onclick: () => exitSelect() }, '取消'))
+      topBar.appendChild(h('span', { class: 'lib-sel-count', style: { color: 'var(--kg,#00D8A6)', fontWeight: 600 } }, `已选择 ${selected.size} 项`))
+      topBar.style.justifyContent = 'space-between'
+    } else {
+      topBar.appendChild(h('button', { class: 'ghost-btn', onclick: playAll }, '▶ 播放全部'))
+      topBar.appendChild(h('div', { class: 'hint', style: { color: 'var(--text-3)', fontSize: '12px', flex: 1 } }, '拖拽 ≡ 可重排 · 长按歌曲进入多选'))
+      topBar.style.justifyContent = 'flex-start'
+    }
+  }
+  refreshTopBar()
+  const body = h('div', { class: 'mb' }, topBar, list, selbar)
   const modal = h('div', { class: 'modal' },
     h('div', { class: 'mh' }, h('h3', {}, titleEl), h('button', { class: 'icon-btn', onclick: () => close() }, '✕')),
     body)

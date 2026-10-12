@@ -35,7 +35,14 @@ export function mediaLibrary(app, type) {
   }
 
   function importBar() {
-    // 🔶 DEC-20261009-004: 两个独立按钮直接触发，不弹窗
+    // 🔶 selMode 下：顶部变成「取消 · 已选择 N」（参考微信多选交互）
+    if (selMode) {
+      return h('div', { class: 'lib-toolbar lib-toolbar-sel' },
+        h('button', { class: 'ghost-btn', style: { padding: '6px 14px' }, onclick: () => exitSelect() }, '取消'),
+        h('span', { class: 'lib-sel-count' }, `已选择 ${selected.size} 项`)
+      )
+    }
+    // 正常模式：4 个按钮
     const scanBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
       if (window.RhinoBridge?.requestAutoImport) {
         toast('开始扫描音乐文件...', 'info')
@@ -47,7 +54,7 @@ export function mediaLibrary(app, type) {
     const pickBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => {
       app.importFilesDialog()
     }, title: '手动打开手机里的文件' }, '📁 手动打开')
-    const selBtn = h('button', { class: 'ghost-btn' + (selMode ? ' active' : ''), style: { padding: '6px 12px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, selMode ? '✓ 退出选择' : '☑ 多选')
+    const selBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => toggleSelect(), title: '多选批量操作' }, '☑ 多选')
     const dupBtn = h('button', { class: 'ghost-btn', style: { padding: '6px 12px' }, onclick: () => openDuplicates(), title: '查找媒体库中重复的文件' }, '🔁 查重复')
     return h('div', { class: 'lib-toolbar' }, scanBtn, pickBtn, selBtn, dupBtn)
   }
@@ -178,12 +185,13 @@ export function mediaLibrary(app, type) {
 
   function updateSelBar() {
     const n = selected.size
-    // 🔶 ISS-20261009-011: selMode 下常驻显示 selbar（之前 n=0 就隐藏 → 用户选了多选取不到操作按钮）
+    // 🔶 ISS-20261009-011: selMode 下常驻显示 selbar
     selbar.style.display = selMode ? 'flex' : 'none'
     selbar.querySelector('.selcount').textContent = `已选 ${n}`
+    // 🔶 同步更新顶部「已选择 N 项」
+    const topCount = el.querySelector('.lib-sel-count')
+    if (topCount) topCount.textContent = `已选择 ${n} 项`
     const btns = selbar.querySelectorAll('button')
-    // btns[0] 全选 / btns[1] 已选span / btns[2] 加入歌单 / btns[3] 删除 / btns[4] 取消
-    // 没选中时禁用有破坏性的按钮（加入歌单、删除），全选/取消一直可用
     btns[2].disabled = n === 0
     btns[3].disabled = n === 0
     btns[2].style.opacity = n === 0 ? '0.4' : '1'
@@ -468,11 +476,15 @@ export function songRow(item, app, opts) {
     openModal(menu, { title: item.title || item.name })
   })
 
+  // 🔶 selMode 下左侧圆形勾选框（和 mediaCard .chk 风格一致）
+  const chk = h('div', { class: 'sr-chk' }, '✓')
   const classes = ['sr-row']
   if (selMode) classes.push('selectable')
   if (opts.selected) classes.push('sel')
-  if (player.current?.id === item.id) classes.push('playing') // 🔶 正在播放高亮
-  const row = h('div', { class: classes.join(' '), 'data-id': item.id }, coverBox, info, playBtn, moreBtn)
+  if (player.current?.id === item.id) classes.push('playing')
+  // selMode 下 children = [chk, coverBox, info]；正常 = [coverBox, info, playBtn, moreBtn]
+  const rowChildren = selMode ? [chk, coverBox, info] : [coverBox, info, playBtn, moreBtn]
+  const row = h('div', { class: classes.join(' '), 'data-id': item.id }, ...rowChildren)
 
   // 🔶 长按手势：600ms 不移动 → 触发 onLongPress（用于批量选择入口）
   let holdTimer = null, sx = 0, sy = 0, triggered = false
