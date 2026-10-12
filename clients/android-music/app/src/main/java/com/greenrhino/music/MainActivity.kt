@@ -25,6 +25,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsControllerCompat
 import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 /**
  * 绿角犀音乐 · Android WebView 壳（路线 A）
@@ -67,7 +74,7 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d("GreenRhino", "=== onCreate START ===")
+        Log.e("GreenRhino", "🟢 MainActivity.onCreate CALLED! pid=${android.os.Process.myPid()} user=${android.os.Process.myUserHandle()}")
 
         // 沉浸式全屏
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -103,7 +110,10 @@ class MainActivity : ComponentActivity() {
         // 🔶 WebView 缓存铁律：禁用所有缓存，每次加载都加版本戳强制刷新
         webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
         webView.clearCache(true)
-        webView.loadUrl("file:///android_asset/pwa/index.html?v=16.${System.currentTimeMillis()}")
+        // 🔶 云同步：通过 URL 参数告诉前端本机局域网后端地址（优先级 2，见 cloud.js getCloudBase()）
+        // 换网络后 IP 会变，改这一行即可。默认 192.168.1.132 是当前开发机
+        val cloudBase = "http://192.168.1.132:8787"
+        webView.loadUrl("file:///android_asset/pwa/index.html?v=16.${System.currentTimeMillis()}&cloud=$cloudBase")
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -151,6 +161,16 @@ class MainActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                view?.evaluateJavascript(
+                    "JSON.stringify({" +
+                    "role: window.__winRole," +
+                    "appVersion: window.__appVersion," +
+                    "grModuleRan: window.__grModuleRan," +
+                    "viewChildCount: document.getElementById('view')?.children?.length" +
+                    "})"
+                ) { result ->
+                    Log.d("GreenRhino", "onPageFinished: $result")
+                }
             }
         }
 
@@ -169,17 +189,15 @@ class MainActivity : ComponentActivity() {
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                 if (consoleMessage != null) {
-                    val level = when (consoleMessage.messageLevel()) {
-                        ConsoleMessage.MessageLevel.ERROR -> "E"
-                        ConsoleMessage.MessageLevel.WARNING -> "W"
-                        ConsoleMessage.MessageLevel.DEBUG -> "D"
-                        else -> "D"
+                    val tag = "GreenRhino/JS"
+                    val msg = "[${consoleMessage.lineNumber()}] ${consoleMessage.message()}"
+                    when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.ERROR -> Log.e(tag, msg)
+                        ConsoleMessage.MessageLevel.WARNING -> Log.w(tag, msg)
+                        ConsoleMessage.MessageLevel.DEBUG -> Log.d(tag, msg)
+                        ConsoleMessage.MessageLevel.LOG -> Log.i(tag, msg)
+                        else -> Log.d(tag, msg)
                     }
-                    Log.println(
-                        level[0].code,
-                        "GreenRhino/JS",
-                        "[${consoleMessage.lineNumber()}] ${consoleMessage.message()}"
-                    )
                 }
                 return true
             }
@@ -449,6 +467,107 @@ class MainActivity : ComponentActivity() {
                 Log.e("GreenRhino", "lookupMediaUri(audio) EXCEPTION: ${e.message}")
             }
             return ""
+        }
+
+        // 🔶 Android 本地歌词代理：双源聚合 LRCLIB（国际） + 歌词迷 gecimi（国内兜底）
+        // 避免 WebView 直接请求 lrclib.net 被跨域/国内网络拦截
+        @android.webkit.JavascriptInterface
+        fun getLyric(title: String, artist: String): String {
+            if (title.isBlank()) return ""
+            Log.d("GreenRhino", "🎤 getLyric(title=$title, artist=$artist)")
+            // 在后台线程执行网络请求（@JavascriptInterface 不阻塞 JS 调用线程）
+            val result = java.util.concurrent.CompletableFuture<String>()
+            Thread {
+                try {
+                    // ① LRCLIB（开源，时间轴完整）
+                    val lrc = fetchLrclib(title, artist)
+                    if (lrc.isNotBlank()) {
+                        Log.d("GreenRhino", "✅ getLyric: LRCLIB hit (${lrc.length} chars)")
+                        result.complete(lrc.trim())
+                        return@Thread
+                    }
+                    // ② 歌词迷 gecimi（国内兜底）
+                    val lrc2 = fetchGecimi(title, artist)
+                    if (lrc2.isNotBlank()) {
+                        Log.d("GreenRhino", "✅ getLyric: gecimi hit (${lrc2.length} chars)")
+                        result.complete(lrc2.trim())
+                        return@Thread
+                    }
+                    Log.d("GreenRhino", "❌ getLyric: both sources missed for '$title'")
+                    result.complete("")
+                } catch (e: Exception) {
+                    Log.e("GreenRhino", "❌ getLyric EXCEPTION: ${e.message}")
+                    result.complete("")
+                }
+            }.start()
+            val ret = try { result.get(8, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) { "" }
+            Log.d("GreenRhino", "🎤 getLyric returning ${if (ret.isBlank()) "EMPTY" else "${ret.length} chars"}")
+            return ret
+        }
+
+        private fun fetchLrclib(title: String, artist: String): String {
+            return try {
+                val q = StringBuilder("https://lrclib.net/api/search?track_name=")
+                q.append(URLEncoder.encode(title, "UTF-8"))
+                if (artist.isNotBlank()) q.append("&artist_name=").append(URLEncoder.encode(artist, "UTF-8"))
+                val arr = httpGetJsonArray(q.toString()) ?: return ""
+                for (i in 0 until arr.length()) {
+                    val it = arr.getJSONObject(i)
+                    val synced = it.optString("syncedLyrics", "")
+                    if (synced.isNotBlank()) return synced
+                    val plain = it.optString("plainLyrics", "")
+                    if (plain.isNotBlank()) return plain
+                }
+                ""
+            } catch (e: Exception) { "" }
+        }
+
+        private fun fetchGecimi(title: String, artist: String): String {
+            return try {
+                val u = StringBuilder("http://gecimi.com/api/lyric/").append(URLEncoder.encode(title, "UTF-8"))
+                if (artist.isNotBlank()) u.append("/").append(URLEncoder.encode(artist, "UTF-8"))
+                val root = httpGetJsonObject(u.toString()) ?: return ""
+                val arr = root.optJSONArray("result") ?: return ""
+                for (i in 0 until arr.length()) {
+                    val it = arr.getJSONObject(i)
+                    val lrcUrl = it.optString("lrc", "")
+                    if (lrcUrl.isNotBlank()) {
+                        val content = httpGetText(lrcUrl)
+                        if (content.isNotBlank()) return content
+                    }
+                }
+                ""
+            } catch (e: Exception) { "" }
+        }
+
+        private fun httpGetText(urlStr: String): String {
+            return try {
+                val conn = URL(urlStr).openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 6000
+                conn.readTimeout = 6000
+                conn.setRequestProperty("User-Agent", "GreenRhino/16")
+                if (conn.responseCode != 200) return ""
+                val bytes = conn.inputStream.readBytes()
+                // 尝试 UTF-8，有乱码 fallback GBK
+                val s = String(bytes, StandardCharsets.UTF_8)
+                if (s.contains('\uFFFD')) {
+                    try { return String(bytes, java.nio.charset.Charset.forName("GBK")) } catch (_: Exception) {}
+                }
+                s
+            } catch (e: Exception) { "" }
+        }
+
+        private fun httpGetJsonArray(urlStr: String): JSONArray? {
+            val txt = httpGetText(urlStr)
+            if (txt.isBlank()) return null
+            return try { JSONArray(txt) } catch (e: Exception) { null }
+        }
+
+        private fun httpGetJsonObject(urlStr: String): JSONObject? {
+            val txt = httpGetText(urlStr)
+            if (txt.isBlank()) return null
+            return try { JSONObject(txt) } catch (e: Exception) { null }
         }
     }
 }
