@@ -109,6 +109,8 @@ class MainActivity : ComponentActivity() {
         container.addView(webView)
         setContentView(container)
 
+        // 🔶 预启动 MediaHttpServer（content:// → HTTP 代理），让 DLNA 电视能拉到局域网流
+        MediaHttpServer.start(this)
         setupWebView()
         // 🔶 WebView 缓存铁律：禁用所有缓存，每次加载都加版本戳强制刷新
         webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
