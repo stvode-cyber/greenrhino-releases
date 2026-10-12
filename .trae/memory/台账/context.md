@@ -1,7 +1,7 @@
 # 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
-> 最后更新：2026-10-12（含 Android 本地歌词代理未完成标注）
+> 最后更新：2026-10-12（DLNA 投屏 content://→HTTP 代理 真机验证通过）
 
 ---
 
@@ -10,26 +10,13 @@
 | 项 | 值 |
 |---|---|
 | 当前版本 | **APP_VERSION = 'v16'**（scripts/build-web.mjs L10） |
-| Git 状态 | ✅ main 分支干净，4 个 commit 已 push 到 origin/main |
+| Git 状态 | ⚠️ main 分支 ahead 1（bb16d41 GitHub 断网未 push，本地安全） |
 | 测试状态 | ✅ 单元 6/6 + E2E 4/4 = 10/10 全绿 |
-| Android 真机 | ✅ moto XT2401_2 (2712x1220)，adb devices 在线，profile 904 |
-| RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / **castScan / castPlay / castStop / castPause**（🆕 DLNA 投屏） |
-| 当前阻塞 | ✅ **ISS-001 RhinoBridge.getLyric 已修复**（commit 674546e，实测 1088 chars LRC 返回） |
-| 已定规则 | ~30 条（见 AGENTS.md 不可变约束 + issues.md 活跃坑） |
-| 云同步后端 | ✅ server/cloud_api.py 跑在 localhost:8787，Windows LocalServer 也内置 |
-| 🆕 DLNA 投屏 | ✅ DlnaCaster.kt（Kotlin 零依赖 SSDP+SOAP）+ Windows DlnaCaster.cs 已有 + 前端 cast.js 已支持双宿主 |
-
-### 🚨 新 AI 接手必须知道的阻塞点（最高优先级）
-
-**Android RhinoBridge.getLyric() 已写代码但前端调不到！**
-
-- 现象：点歌时旧版 `/api/lyric` fetch 报错 `Fetch API cannot load file:///api/lyric`（WebView file:// 不支持相对 fetch）
-- 新版前端代码在 `src/lyricFetch.js` 和 `src/ui/music.js` 都**加了 RhinoBridge 三级优先级**，但**运行时没走到 RhinoBridge**！
-- RhinoBridge 注册日志 ✅ 正常：`RhinoBridge registered OK (music)`
-- 但 `🎤 getLyric(title=xxx)` 日志**从未出现过**
-- evaluateJavascript 调试发现 Android onConsoleMessage 的 priority 计算有 bug（char code 当 Log priority），导致 console.log 调试不可靠
-- APK 解压确认 **classes3.dex 里有 getLyric + fetchLrclib + fetchGecimi + RB1 字符串** → Kotlin 代码编进去了
-- 但前端运行时为什么检测不到 `typeof window.RhinoBridge.getLyric === 'function'`？→ **新 AI 要查的核心问题**
+| Android 真机 | ✅ moto XT2401_2, profile 904 专属（`pm disable-user --user 0/900-903`） |
+| RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / castScan / castPlay / castStop / castPause |
+| 已定规则 | ~32 条（见 AGENTS.md + DEC-20261012-001/002 新增 MediaHttpServer + Debug Receiver） |
+| 云同步后端 | ✅ server/cloud_api.py localhost:8787 |
+| 🆕 DLNA 投屏 | ✅ **全链路真机验证通过**：content:// → MediaHttpServer → HTTP 代理 → curl 200 + Range 206 ✅ |
 
 ### 📱 Android 真机快速验证命令
 
@@ -264,19 +251,19 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-12 深夜 | 📺 **Android DLNA 投屏完整打通**：DlnaCaster.kt（Kotlin 零依赖 SSDP+SOAP AVTransport）；RhinoBridge +4 castScan/castPlay/castStop/castPause；Manifest 补 ACCESS_WIFI_STATE/CHANGE_WIFI_MULTICAST_STATE；前端 cast.js 加 Android 双宿主分支；bottombar.js onCastClick 兼容 Android | ✅ 编译 BUILD SUCCESSFUL，commit 5072aad 已 push |
-| 2026-10-12 深夜 | 🎵 **Android 本地歌词代理**：RhinoBridge.getLyric + fetchLrclib + fetchGecimi；前端三级优先级 | 🚨 代码已写但 ISS-001 前端调不通 |
-| 2026-10-12 深夜 | 🎵 **账号 + 云同步**：cloud_api.py /api/sync + cloud.js syncAll + mineEl 账号 | ✅ 完成，已 push |
-| 2026-10-12 深夜 | 🔧 **.gitignore 完善**：屏蔽 release/pwa-site-*/、clients/*/assets/pwa/、根目录 *.png 截图；git rm --cached 清理 180+ 已提交的构建产物 | ✅ 工作区干净 |
-| 2026-10-12 深夜 | 🔧 **Log.println priority bug 修复**：onConsoleMessage char code 当 Log priority，改用 Log.d/e/w/i | ✅ ISS-003 已修 |
+| 2026-10-12 深夜 | 🎥 **content://→HTTP 代理** 真机验证：MediaHttpServer (ServerSocket 零依赖) 200 OK + Range 206 ✅ | ✅ commit bb16d41 本地待 push（GitHub 断网） |
+| 2026-10-12 深夜 | 🔧 **com.sun.net.httpserver 不可用**：Android 没这个 Java SE API，全重写 ServerSocket 手写 HTTP/1.1 | ✅ 已修（MediaHttpServer.kt 236 行） |
+| 2026-10-12 深夜 | 🛠️ **Debug BroadcastReceiver**：adb shell am broadcast 直接触发 CAST_SCAN/CAST_PLAY，绕过 Moto 量产版 Log 过滤 | ✅ commit bb16d41 |
+| 2026-10-12 深夜 | 🛠️ **Android 13+ receiver 崩溃**：SecurityException 要求 RECEIVER_EXPORTED/NOT_EXPORTED flag | ✅ 已修（Build.VERSION.SDK_INT guard） |
+| 2026-10-12 深夜 | 🛠️ **Moto profile 904 专享**：ResolverActivity 弹窗挡 App → pm disable-user 0/900-903 只留 904 | ✅ 已修 |
 
 ### 🔴 已知 TODO（接手可以接着做）
 
 ```
-# ISS-001: RhinoBridge.getLyric 前端调不通（P0，历史阻塞）
-# Android content:// → HTTP 代理（DLNA 电视需要 http(s):// URL）
-# Android Miracast 整屏镜像 Intent 唤起系统面板
-# Android onPageFinished 里多个 evaluateJavascript 秒退（ISS-004）
+# 等 GitHub 恢复：git push origin main 推 bb16d41
+# SSDP castScan 真机发现 TV（当前在 profile 904 上但没实测到设备）
+# onDestroy 里 MediaHttpServer.stop() 已加；如果觉得预启动太激进可改成 lazy start
+# Windows 端 LocalServer 也能起 HTTP 代理（已有 /api/cast-upload，和 Android 实现不同）
 ```
 
 ---

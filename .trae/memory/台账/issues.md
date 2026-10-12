@@ -7,6 +7,36 @@
 
 ## 🔥 活跃坑
 
+### ISS-20261012-008: com.sun.net.httpserver.HttpServer 在 Android 上不存在 P0 ✅
+- 日期：2026-10-12
+- 归类：`#android-api #api-mismatch`
+- 现象：MediaHttpServer.kt 首次实现用 `HttpServer.create(InetSocketAddress, backlog)` 编译报 `Unresolved reference: sun`
+- 根因：`com.sun.net.httpserver.HttpServer` 是 **Java SE API**（JDK 6+），Android 从未实现这个包。Android 只有 `android.net.Uri`、`java.net.ServerSocket`、`java.net.HttpURLConnection` 等标准库
+- 修复：全重写为纯 `java.net.ServerSocket` + 手写 HTTP/1.1 解析（236 行零依赖）
+- 预防规则：**Android 上凡是 `com.sun.` 开头的 Java SE API 一律不存在！不确定就先查 Android Developers 文档**
+- 关联文件：`clients/android-music/.../MediaHttpServer.kt`
+- 状态：✅ 已修（commit 519a7ee）
+
+### ISS-20261012-009: Android 13+ 动态注册 BroadcastReceiver 崩溃 P1 ✅
+- 日期：2026-10-12
+- 归类：`#android-13 #receiver`
+- 现象：`setupDebugReceiver()` 里 `registerReceiver(receiver, filter)` 直接崩溃 `SecurityException: One of RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED should be specified`
+- 根因：Android 13 (API 33) 起动态注册 receiver 必须显式指定 flag，不指定默认拒绝
+- 修复：`if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(receiver, filter)`
+- 预防规则：**Android 13+ 所有 `registerReceiver()` 必须加版本 guard + flag 参数；Manifest 静态注册不受影响**
+- 关联文件：`clients/android-music/.../MainActivity.kt setupDebugReceiver()`
+- 状态：✅ 已修（commit bb16d41）
+
+### ISS-20261012-010: Moto 量产版 Log.d/Log.i 全被过滤 P2 ✅
+- 日期：2026-10-12
+- 归类：`#android-logcat #moto`
+- 现象：App 内 `Log.d("GreenRhino", "...")` 和 `Log.i(...)` 完全看不到，但 `Log.e(...)` 也偶尔被过滤；只有系统 tag 可见
+- 根因：Moto 量产版（XT2401）加了 App 日志过滤策略，非系统 tag 的 Debug/Info 级日志默认不输出
+- 修复：改用 **BroadcastReceiver 触发 + netstat + curl 网络验证**——绕开日志层，直接验证 ServerSocket 监听和 HTTP 流是否通
+- 预防规则：**Moto 量产版上调试 App，优先用 BroadcastReceiver / ContentObserver / LocalSocket 等绕过 logcat**
+- 关联文件：`clients/android-music/.../MainActivity.kt setupDebugReceiver()`
+- 状态：✅ 已修（commit bb16d41）
+
 ### ISS-20261012-005: Windows git credential 配置混乱导致 push 失败 P1
 - 日期：2026-10-12
 - 归类：`#git-credential #windows`
