@@ -134,16 +134,11 @@ export function initBottomBar(app) {
   function onCastClick() {
     const host = cast.isHost()
     if (!host) { app.toast('投屏需在原生客户端中使用（Windows EXE / Android APP）', 'info'); return }
-    // Android 端：如果是 content:// URI 暂不支持直接投（需要 HTTP 代理）
+    // Android 端：content:// 由 Kotlin MediaHttpServer 自动代理成 http://
     // Windows 端：必须有 blob 才能上传到 LocalServer
     const item = player.current
     if (!item) { app.toast('当前没有可投屏的媒体', 'err'); return }
     if (host === 'windows' && !item.blob) { app.toast('Windows 投屏需要可上传的媒体文件', 'err'); return }
-    if (host === 'android' && item.uri && !item.uri.startsWith('http')) {
-      // content:// 暂不支持直接 DLNA 投，需要 Android 端起 HTTP 代理（TODO）
-      // 但如果是 http:// 或 https:// 就能直接投（比如网络音频源）
-      console.warn('cast: Android content:// 暂不支持直接投，需要 HTTP 代理；当前 uri =', item.uri)
-    }
     castPanel.hidden = !castPanel.hidden
     if (!castPanel.hidden) { renderCastList(); cast.scan() }
   }
