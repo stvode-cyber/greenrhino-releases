@@ -1,8 +1,11 @@
 package com.greenrhino.music
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.annotation.SuppressLint
 import android.Manifest
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -60,6 +63,9 @@ class MainActivity : ComponentActivity() {
     // 🔶 DLNA 投屏：单例 DlnaCaster（SSDP 发现 + SOAP AVTransport 控制）
     private val dlnaCaster = DlnaCaster()
 
+    // 🔶 RhinoBridge 实例（同时用于 WebView 注册 + Debug BroadcastReceiver）
+    private val rhinoBridge = RhinoBridge()
+
     // 🔶 ISS-20261009-018: Music App 也需要 MediaStore.Audio 扫描！
     // 之前只有 Player 版有 MediaStore 扫描逻辑，Music 版完全是空壳 → 自动扫描按钮静默失败
     private val mediaPermissionLauncher = registerForActivityResult(
@@ -111,6 +117,8 @@ class MainActivity : ComponentActivity() {
 
         // 🔶 预启动 MediaHttpServer（content:// → HTTP 代理），让 DLNA 电视能拉到局域网流
         MediaHttpServer.start(this)
+        // 🔶 Debug BroadcastReceiver: adb shell am broadcast -a greenrhino.CAST_SCAN / CAST_PLAY / CAST_STOP
+        setupDebugReceiver()
         setupWebView()
         // 🔶 WebView 缓存铁律：禁用所有缓存，每次加载都加版本戳强制刷新
         webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
@@ -293,7 +301,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // ⚠️ 必须用 inner class！匿名 object 上的 @JavascriptInterface 在 targetSdk 34+ 某些设备不生效
-        webView.addJavascriptInterface(RhinoBridge(), "RhinoBridge")
+        webView.addJavascriptInterface(rhinoBridge, "RhinoBridge")
         Log.d("GreenRhino", "RhinoBridge registered OK (music)")
         // 🔶 DEC-20261009-002: 彻底砍掉自动扫描——用户必须手动点工具栏「📥 自动扫描」或「📁 选择文件」导入
         // 不再有任何 postDelayed / SharedPreferences 标记 / 首次启动自动触发
@@ -334,10 +342,57 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        MediaHttpServer.stop()
+        try { unregisterReceiver(debugReceiver) } catch (_: Exception) {}
         webView.stopLoading()
         webView.removeAllViews()
         webView.destroy()
         super.onDestroy()
+    }
+
+    // 🔶 Debug-only broadcast receiver for testing DLNA via adb shell
+    private var debugReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, intent: Intent) {
+            when (intent.action) {
+                "greenrhino.CAST_SCAN" -> {
+                    Log.d("GreenRhino", "📺 [DEBUG] CAST_SCAN received")
+                    rhinoBridge.castScan()
+                }
+                "greenrhino.CAST_PLAY" -> {
+                    val deviceId = intent.getStringExtra("deviceId") ?: ""
+                    val uri = intent.getStringExtra("uri") ?: ""
+                    Log.d("GreenRhino", "📺 [DEBUG] CAST_PLAY device=$deviceId uri=$uri")
+                    rhinoBridge.castPlay(deviceId, uri)
+                }
+                "greenrhino.CAST_STOP" -> {
+                    val deviceId = intent.getStringExtra("deviceId") ?: ""
+                    Log.d("GreenRhino", "📺 [DEBUG] CAST_STOP device=$deviceId")
+                    rhinoBridge.castStop(deviceId)
+                }
+                "greenrhino.MEDIA_HTTP_TEST" -> {
+                    val uri = intent.getStringExtra("uri") ?: "content://media/external/audio/media/1000028670"
+                    MediaHttpServer.start(ctx)
+                    Log.d("GreenRhino", "📺 [DEBUG] MEDIA_HTTP_TEST url=${MediaHttpServer.publicUrlFor(uri)}")
+                }
+            }
+        }
+    }
+
+    private fun setupDebugReceiver() {
+        val filter = IntentFilter().apply {
+            addAction("greenrhino.CAST_SCAN")
+            addAction("greenrhino.CAST_PLAY")
+            addAction("greenrhino.CAST_STOP")
+            addAction("greenrhino.MEDIA_HTTP_TEST")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(debugReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(debugReceiver, filter)
+        }
+        Log.d("GreenRhino", "📺 [DEBUG] BroadcastReceiver registered. Use:")
+        Log.d("GreenRhino", "  adb shell am broadcast -a greenrhino.CAST_SCAN")
+        Log.d("GreenRhino", "  adb shell am broadcast -a greenrhino.CAST_PLAY --es deviceId xxx --es uri 'content://...'")
     }
 
     // 🔶 ISS-20261009-018: Music App 完整 MediaStore.Audio 扫描（之前缺失）
