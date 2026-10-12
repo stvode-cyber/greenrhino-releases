@@ -611,15 +611,26 @@ class MainActivity : ComponentActivity() {
 
         /** 对指定 DLNA 设备播放媒体。uri 必须是局域网可访问的 http(s):// URL */
         @android.webkit.JavascriptInterface
-        fun castPlay(deviceId: String, httpUri: String) {
-            Log.d("GreenRhino", "📺 castPlay(device=$deviceId, uri=$httpUri)")
-            if (deviceId.isBlank() || httpUri.isBlank()) {
+        fun castPlay(deviceId: String, anyUri: String) {
+            Log.d("GreenRhino", "📺 castPlay(device=$deviceId, uri=$anyUri)")
+            if (deviceId.isBlank() || anyUri.isBlank()) {
                 Log.w("GreenRhino", "castPlay: deviceId or uri blank, abort")
                 return
             }
-            if (!httpUri.startsWith("http://") && !httpUri.startsWith("https://")) {
-                Log.w("GreenRhino", "castPlay: uri must be http(s)://, got: $httpUri")
-                return
+            // 🔶 content:// → HTTP 代理（DLNA 电视需要 http(s)://）
+            val httpUri = when {
+                anyUri.startsWith("http://") || anyUri.startsWith("https://") -> anyUri
+                anyUri.startsWith("content://") -> {
+                    // 起 MediaHttpServer（零依赖 HttpServer，绑定 0.0.0.0）
+                    MediaHttpServer.start(this@MainActivity)
+                    val url = MediaHttpServer.publicUrlFor(anyUri)
+                    Log.d("GreenRhino", "📺 content:// → proxy: $url")
+                    url
+                }
+                else -> {
+                    Log.w("GreenRhino", "castPlay: unsupported uri scheme: $anyUri")
+                    return
+                }
             }
             dlnaCaster.play(deviceId, httpUri)
         }

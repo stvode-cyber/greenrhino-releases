@@ -92,7 +92,7 @@ function scan() {
 
 // 把当前播放的媒体投到指定设备。
 // Windows: Blob → POST LocalServer /api/cast-upload → 返回本机局域网 URL → 投电视
-// Android: 媒体必须已有 http(s):// URL（content:// 和 blob 暂不支持，见 TODO）
+// Android: content:// 由 Kotlin 端 MediaHttpServer 自动代理成 http://（DLNA 电视可访问）
 async function castTo(deviceId) {
   if (!state.host) return
   const item = player.current
@@ -116,13 +116,9 @@ async function castTo(deviceId) {
     if (!data || !data.url) { emit('error', '投屏上传未返回可用地址'); return }
     httpUri = data.url
   } else if (state.host === 'android') {
-    // Android：需要 item.uri 是 http(s)://
-    // TODO: Android 端起 LocalServer 代理 content:// → http:// 流，或把文件拷到 cache 再暴露
+    // Android：直接传 item.uri（content:// 或 http:// 都行，Kotlin 内部 MediaHttpServer 自动转）
     const uri = item.uri || ''
-    if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
-      emit('error', 'Android 投屏暂仅支持 http(s):// URL。content:// 需要代理（TODO）')
-      return
-    }
+    if (!uri) { emit('error', 'Android 媒体无可用 URI'); return }
     httpUri = uri
   }
 
