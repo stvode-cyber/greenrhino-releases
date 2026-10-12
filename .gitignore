@@ -8,12 +8,15 @@ node_modules/
 dist/
 release/windows-music/
 release/windows-player/
+release/pwa-site-music/
+release/pwa-site-player/
 clients/**/publish/
 clients/**/build/
 clients/**/bin/
 clients/**/obj/
 clients/**/wwwroot/
 clients/**/wwwroot.zip
+clients/**/assets/pwa/
 
 # Android Gradle 缓存（每次 build 自动变，严禁入库）
 clients/android-*/.gradle/
@@ -38,6 +41,18 @@ profile.mobileprovision
 .DS_Store
 Thumbs.db
 *.log
+
+# Cloudflare wrangler 缓存（部署 CLI 自动生成）
+.wrangler/
+
+# 根目录工作截图（产品图标在 icons/ 子目录、clients/*/Assets/、clients/assets/ 里，不在根）
+/*.png
+
+# IDE 自动生成
+ui.xml
+
+# TRAE 工具临时输出
+.trae-html-share-packages/
 
 # 测试运行时状态（Playwright/Jest 自动生成，非源码）
 test-results/
