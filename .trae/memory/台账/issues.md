@@ -27,28 +27,27 @@
 - 状态：✅ 已修（commit 5072aad）
 - 相关坑：—
 
-### ISS-20261012-001: Android RhinoBridge.getLyric 前端调不通 🔥🔥🔥 P0
-- 日期：2026-10-12
+### ISS-20261012-001: Android RhinoBridge.getLyric 前端调不通 🔥🔥🔥 P0 → ✅ 已修
+- 日期：2026-10-12 → 2026-10-12 晚修复
 - 归类：`#android-webview #javascriptinterface #lyric-proxy`
 - 关联文件：
-  - `clients/android-music/app/src/main/java/com/greenrhino/music/MainActivity.kt` L476-570
-  - `src/lyricFetch.js` L19-25
+  - `clients/android-music/.../MainActivity.kt` L476-570（RhinoBridge.getLyric + fetchLrclib + fetchGecimi）
+  - `src/lyricFetch.js` L19-25（前端 RhinoBridge 检测）
   - `src/ui/music.js` L181-187
-  - `src/main.js` L741-744
-- 现象：前端代码检测到 `window.RhinoBridge` 存在（requestAutoImport 已在用），但 `typeof RhinoBridge.getLyric !== 'function'`，导致歌词搜索走第二级 `/api/lyric` fetch（在 WebView file:// 下报 404）
-- 已验证：
-  - ✅ Kotlin RhinoBridge.getLyric 有 `@android.webkit.JavascriptInterface` 注解
-  - ✅ addJavascriptInterface(RhinoBridge(), "RhinoBridge") 在 L287
-  - ✅ APK 解压 classes3.dex 里有 `getLyric`, `fetchLrclib`, `fetchGecimi`, `RB1` 字符串
-  - ✅ RhinoBridge 注册日志正常：`RhinoBridge registered OK (music)`
-  - ✅ `fun getLyric` 和 `fun lookupMediaUri` 在同一个 inner class RhinoBridge 里
-  - ❌ evaluateJavascript 同步检测 RhinoBridge 方法列表时崩溃（多次调用导致 app 秒退）
-- 根因猜测（3 种可能）：
-  1. Android WebView `for(var k in bridgeObj)` 只能枚举被 @JavascriptInterface 标注的方法，但 `typeof bridgeObj.getLyric` 应该能检测——除非方法没被正确暴露
-  2. Kotlin 的 CompletableFuture + Thread + 网络请求 在 @JavascriptInterface 方法里可能触发 SecurityException 或 Threading 限制？但 lookupMediaUri 也做 contentResolver 查询（同步），没问题
-  3. 前端检测到 RhinoBridge 但 `typeof RhinoBridge.getLyric` 是 undefined 或 string（WebView 把返回 String 的方法包装成什么了？）
-- 预防规则：**改 Android @JavascriptInterface 方法后，必须在 evaluateJavascript 同步验证 `JSON.stringify({keys:Object.keys(RhinoBridge)})`**
-- 修复方向：新 AI 接手第一件事——在 addJavascriptInterface 之后同步 evaluateJavascript 检测 RhinoBridge 实际暴露的方法列表
+- 现象：前端代码检测到 `window.RhinoBridge` 存在但 `typeof RhinoBridge.getLyric !== 'function'`
+- **真正根因**：之前 AI 测试时 `adb uninstall + install` 清了 IndexedDB → 媒体库空 → 没歌可播 → **根本没触发 fetchOnlineLyric 链路**！不是 Bridge 有问题。**同时 Moto ResolverActivity 弹窗（profile 选择）挡着导致 App 没启动 → onPageFinished 没执行 → 探针没输出**，双重误判
+- **实测验证**（2026-10-12 晚，commit 674546e）：
+  - ✅ RhinoBridge 完整暴露 9 方法：castPause, castPlay, castScan, castStop, getLyric, lookupMediaUri, requestAutoImport, setPlaying, toggleFullscreen
+  - ✅ JS eval `RhinoBridge.getLyric('晴天','周杰伦')` → **1088 chars LRC**（`[00:29.36] 故事的小黃花...`），耗时 1134ms
+  - ✅ LRCLIB 网络请求在 Android WebView @JavascriptInterface 里完全正常（CompletableFuture + 8s 超时够用）
+- 修复动作：保留简化版 onPageFinished 方法列表探针（单次 evaluateJavascript，不触发 ISS-004 秒退），去掉调试用的串行 getLyric 调用
+- commit: 674546e
+- 预防规则：
+  - **Android 端新增 @JavascriptInterface 方法后**：uninstall+install 冷启动 → 看 logcat `🔧 RB PROBE` 确认方法在 rbKeys 里且 typeof=function
+  - **Moto 测试必做**：先 `pm disable-user --user 0/900-903 com.greenrhino.music` 只留 904，避免 ResolverActivity 弹窗挡着
+  - **uninstall 会清 IndexedDB**，重测前别依赖之前的媒体库数据
+- 状态：✅ 已修
+- 相关坑：ISS-20261012-004（evaluateJavascript 秒退）、ISS-20261012-002（file:// fetch 不支持）
 
 ### ISS-20261012-002: gradlew copyPwaAssets UP-TO-DATE 但 assets/pwa 是旧前端 🔥🔥 P0
 - 日期：2026-10-12

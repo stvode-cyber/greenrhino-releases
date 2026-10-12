@@ -14,7 +14,7 @@
 | 测试状态 | ✅ 单元 6/6 + E2E 4/4 = 10/10 全绿 |
 | Android 真机 | ✅ moto XT2401_2 (2712x1220)，adb devices 在线，profile 904 |
 | RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / **castScan / castPlay / castStop / castPause**（🆕 DLNA 投屏） |
-| 当前阻塞 | 🚨 **Android RhinoBridge.getLyric 前端调不通**（ISS-001，历史遗留，新 AI 接手第一件事查） |
+| 当前阻塞 | ✅ **ISS-001 RhinoBridge.getLyric 已修复**（commit 674546e，实测 1088 chars LRC 返回） |
 | 已定规则 | ~30 条（见 AGENTS.md 不可变约束 + issues.md 活跃坑） |
 | 云同步后端 | ✅ server/cloud_api.py 跑在 localhost:8787，Windows LocalServer 也内置 |
 | 🆕 DLNA 投屏 | ✅ DlnaCaster.kt（Kotlin 零依赖 SSDP+SOAP）+ Windows DlnaCaster.cs 已有 + 前端 cast.js 已支持双宿主 |
