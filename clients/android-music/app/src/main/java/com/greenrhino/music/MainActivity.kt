@@ -57,6 +57,9 @@ class MainActivity : ComponentActivity() {
         ).apply { setReferenceCounted(false) }
     }
 
+    // 🔶 DLNA 投屏：单例 DlnaCaster（SSDP 发现 + SOAP AVTransport 控制）
+    private val dlnaCaster = DlnaCaster()
+
     // 🔶 ISS-20261009-018: Music App 也需要 MediaStore.Audio 扫描！
     // 之前只有 Player 版有 MediaStore 扫描逻辑，Music 版完全是空壳 → 自动扫描按钮静默失败
     private val mediaPermissionLauncher = registerForActivityResult(
@@ -568,6 +571,61 @@ class MainActivity : ComponentActivity() {
             val txt = httpGetText(urlStr)
             if (txt.isBlank()) return null
             return try { JSONObject(txt) } catch (e: Exception) { null }
+        }
+
+        // ========== 🆕 DLNA 投屏桥接（前端 cast.js 调用） ==========
+        // 设计：@JavascriptInterface 必须同步返回，扫描是异步的
+        //   → castScan() 立即返回 void，扫描完成后通过 evaluateJavascript
+        //     回调前端 window.__castCb(JSON) 把设备列表推过去
+        //   → castPlay/castStop/castPause 也是 void，立即返回，内部起线程执行 SOAP
+
+        @android.webkit.JavascriptInterface
+        fun castScan() {
+            Log.d("GreenRhino", "📺 castScan() called")
+            dlnaCaster.discover { devices ->
+                val arr = JSONArray()
+                for (d in devices) {
+                    arr.put(JSONObject().apply {
+                        put("id", d.id)
+                        put("name", d.name)
+                        put("controlUrl", d.controlUrl)
+                    })
+                }
+                val json = arr.toString()
+                runOnUiThread {
+                    // ISS-004: 这条是用户触发的，不是 onPageFinished，所以安全
+                    webView.evaluateJavascript(
+                        "if(window.__castCb)window.__castCb({type:'cast:devices',devices:$json})", null
+                    )
+                }
+            }
+        }
+
+        /** 对指定 DLNA 设备播放媒体。uri 必须是局域网可访问的 http(s):// URL */
+        @android.webkit.JavascriptInterface
+        fun castPlay(deviceId: String, httpUri: String) {
+            Log.d("GreenRhino", "📺 castPlay(device=$deviceId, uri=$httpUri)")
+            if (deviceId.isBlank() || httpUri.isBlank()) {
+                Log.w("GreenRhino", "castPlay: deviceId or uri blank, abort")
+                return
+            }
+            if (!httpUri.startsWith("http://") && !httpUri.startsWith("https://")) {
+                Log.w("GreenRhino", "castPlay: uri must be http(s)://, got: $httpUri")
+                return
+            }
+            dlnaCaster.play(deviceId, httpUri)
+        }
+
+        @android.webkit.JavascriptInterface
+        fun castStop(deviceId: String) {
+            Log.d("GreenRhino", "📺 castStop(device=$deviceId)")
+            dlnaCaster.stop(deviceId)
+        }
+
+        @android.webkit.JavascriptInterface
+        fun castPause(deviceId: String) {
+            Log.d("GreenRhino", "📺 castPause(device=$deviceId)")
+            dlnaCaster.pause(deviceId)
         }
     }
 }
