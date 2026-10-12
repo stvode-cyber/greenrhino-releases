@@ -1,128 +1,93 @@
-# 🪤 踩坑台账 issues.md
+# 🐛 踩坑记录（issues.md）
 
-> 记录所有踩过的坑：**问题 / 解决 / 根因 / 预防 / 严重度 / 归类标签 / 关联文件**
-> 编号规则：`ISS-YYYYMMDD-NNN`，每天递增。同一坑解决 ≥3 次 且 已入 Skill → 移「📦 归档区」。
-> **核心预防规则**会自动写成 `// TODO: [坑标签] 预防：xxx` 注释到关联文件里。
->
-> 🆕 **成长型机制**：每条坑带归类标签，同标签 ≥2 条 → 自动归成「🔶 问题群」，≥3 次修复 → 自动升严重度加🔥。
+> 每条坑必须带归类标签（#label），已修的移归档区
+> 最后更新：2026-10-12
 
 ---
 
-## 🔴 活跃坑（按严重度排序）
+## 🔥 活跃坑
 
-### P0 — 影响发布/构建/核心功能
+### ISS-20261012-001: Android RhinoBridge.getLyric 前端调不通 🔥🔥🔥 P0
+- 日期：2026-10-12
+- 归类：`#android-webview #javascriptinterface #lyric-proxy`
+- 关联文件：
+  - `clients/android-music/app/src/main/java/com/greenrhino/music/MainActivity.kt` L476-570
+  - `src/lyricFetch.js` L19-25
+  - `src/ui/music.js` L181-187
+  - `src/main.js` L741-744
+- 现象：前端代码检测到 `window.RhinoBridge` 存在（requestAutoImport 已在用），但 `typeof RhinoBridge.getLyric !== 'function'`，导致歌词搜索走第二级 `/api/lyric` fetch（在 WebView file:// 下报 404）
+- 已验证：
+  - ✅ Kotlin RhinoBridge.getLyric 有 `@android.webkit.JavascriptInterface` 注解
+  - ✅ addJavascriptInterface(RhinoBridge(), "RhinoBridge") 在 L287
+  - ✅ APK 解压 classes3.dex 里有 `getLyric`, `fetchLrclib`, `fetchGecimi`, `RB1` 字符串
+  - ✅ RhinoBridge 注册日志正常：`RhinoBridge registered OK (music)`
+  - ✅ `fun getLyric` 和 `fun lookupMediaUri` 在同一个 inner class RhinoBridge 里
+  - ❌ evaluateJavascript 同步检测 RhinoBridge 方法列表时崩溃（多次调用导致 app 秒退）
+- 根因猜测（3 种可能）：
+  1. Android WebView `for(var k in bridgeObj)` 只能枚举被 @JavascriptInterface 标注的方法，但 `typeof bridgeObj.getLyric` 应该能检测——除非方法没被正确暴露
+  2. Kotlin 的 CompletableFuture + Thread + 网络请求 在 @JavascriptInterface 方法里可能触发 SecurityException 或 Threading 限制？但 lookupMediaUri 也做 contentResolver 查询（同步），没问题
+  3. 前端检测到 RhinoBridge 但 `typeof RhinoBridge.getLyric` 是 undefined 或 string（WebView 把返回 String 的方法包装成什么了？）
+- 预防规则：**改 Android @JavascriptInterface 方法后，必须在 evaluateJavascript 同步验证 `JSON.stringify({keys:Object.keys(RhinoBridge)})`**
+- 修复方向：新 AI 接手第一件事——在 addJavascriptInterface 之后同步 evaluateJavascript 检测 RhinoBridge 实际暴露的方法列表
 
-#### 🔶 问题群 #css-grid-overflow（🔥 已加级 P0，累计修复 3 次）
-> 标签：`#css-grid-overflow #css-layout`
+### ISS-20261012-002: gradlew copyPwaAssets UP-TO-DATE 但 assets/pwa 是旧前端 🔥🔥 P0
+- 日期：2026-10-12
+- 归类：`#gradle-cache #android-assets #build-pipeline`
+- 关联文件：`clients/android-music/app/build.gradle` L53-84
+- 现象：改 src/lyricFetch.js 加 RhinoBridge 三级优先级 → build-web.mjs 生成 release/pwa-site-music → gradlew assembleDebug 显示 `copyPwaAssets UP-TO-DATE` → APK 里 /api/lyric fetch 错误（旧前端）
+- 根因：Gradle copy 任务的 inputs/outputs 缓存机制。copyPwaAssets 配置了 `from("$rootDir/../../release/pwa-site-music")` 但没正确监听 release/ 目录变化，导致即使手动改了 release/ 里的文件，Gradle 也认为"没变化"跳过复制
+- 解法（临时）：**手动 robocopy** — `robocopy release\pwa-site-music clients\android-music\app\src\main\assets\pwa /MIR /NFL /NDL /NJH /NJS /NP`
+- 解法（永久）：改 build.gradle 的 copyPwaAssets 配置，用 `inputs.dir` 明确监听 `release/pwa-site-music/**` 所有文件变化
+- 预防规则：**改前端后 → build-web.mjs → 手动 robocopy → gradlew clean assembleDebug**，三个步骤一个都不能少
 
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
-|---|---|---|---|---|---|---|---|
-| 🔥 ISS-20261008-001 | 2026-10-08 | `#main` 缺 `overflow:hidden` → 子元素（vp-page width:100%）撑到容器 82 万亿像素宽 → 顶栏底栏被挤没 | `#main { overflow: hidden }` | CSS grid 中，子元素 `width:100%` 会基于「grid 列的 min-width:auto」计算，而不是容器实际宽度 | **grid 布局的中间容器必须加 overflow:hidden；不要依赖 grid-auto-flow 的隐式裁剪** | #css-grid-overflow | src/style.css `#main` |
-| 🔥 ISS-20261008-002 | 2026-10-08 | `#app { grid-template-columns: 0 minmax(0, 1fr) }` — 1fr 不带 minmax → 列被内容撑宽 | 所有 1fr 列改写 `minmax(0, 1fr)` | grid 的 1fr 默认 min-width:auto，任何 min-width > 0 的子元素会把列撑到超过可用空间 | **所有 grid-template-columns 里的 1fr 必须写 minmax(0, 1fr)** | #css-grid-overflow | src/style.css `#app` grid |
-| ISS-20261008-005 | 2026-10-08 | 视频 `<video>` 元素 `object-fit:contain`（缺省）→ 竖屏播放时黑边 | 沉浸式视频改用 `cover` | contain 保持比例但留黑边；cover 铺满但裁切边角 | **视频播放器提供切换按钮让用户选 contain（完整）/ cover（铺满）/ fill（拉伸）** | #css-video-fit | src/style.css `.vp-stage video` |
-| ISS-20261009-019 | 2026-10-09 | `onResume` 直接调 `wakeLock.release()` → 若 `onPause` 时 `isPlaying=false` 没持锁 → 抛 "WakeLock under-locked" RuntimeException → App 崩溃（装机后打不开） | 加 `if (wakeLock.isHeld) wakeLock.release()` 守卫 | PowerManager.WakeLock 必须配对 acquire/release；未 acquire 就 release 会抛异常 | **所有 wakeLock.release() 调用前必须先检查 isHeld；setReferenceCounted(false) 防计数错乱** | #android-wakelock #android-webview | clients/android-music/.../MainActivity.kt L305 |
-| ISS-20261009-020 | 2026-10-09 | 自动扫描"砍不干净"——只删了 Kotlin `postDelayed`，JS 层 `library.js` 空库 `setTimeout` 漏删 → 用户反馈仍自动扫 | 双层根因全删：Kotlin postDelayed + JS setTimeout + SharedPreferences first_scan_done 标记 | 自动扫描触发点分散在 Kotlin + JS 两层，单改一层漏改另一层 | **跨语言功能砍除必须 grep 两层调用链：Kotlin (RhinoBridge / postDelayed) + JS (setTimeout / window.__xx) 全删干净** | #auto-scan #cross-layer-cleanup | clients/android-music/.../MainActivity.kt、src/ui/library.js |
+### ISS-20261012-003: WebView onConsoleMessage priority 计算 bug 🔥 P1
+- 日期：2026-10-12
+- 归类：`#android-webview #debug #logcat`
+- 关联文件：`clients/android-music/app/src/main/java/com/greenrhino/music/MainActivity.kt` L191-207
+- 现象：console.log / console.error 的日志在 logcat 里不显示或级别不对
+- 根因：
+  ```kotlin
+  val level = when (consoleMessage.messageLevel()) {
+      ConsoleMessage.MessageLevel.ERROR -> "E"
+      ...
+  }
+  Log.println(level[0].code, "GreenRhino/JS", msg)
+  //              ^^^^^^^^^^^
+  // 'D'.code = 68 ≠ Log.DEBUG = 3！
+  // 'E'.code = 69 ≠ Log.ERROR = 6！
+  ```
+- 解法：用 `Log.d()` / `Log.e()` 直接调用，不要用 `Log.println(charCode)`
+- 预防规则：**Android Log 调试只用 Log.d / Log.e / Log.w / Log.i，不要用 Log.println**
 
-#### 🔶 问题群 #android-webview-cache（累计修复 2 次）
-> 标签：`#android-webview-cache #android-webview`
+### ISS-20261012-004: 多次 evaluateJavascript 调用导致 app 秒退 🔥 P1
+- 日期：2026-10-12
+- 归类：`#android-webview #evaluateJavascript #app-crash`
+- 关联文件：`clients/android-music/app/src/main/java/com/greenrhino/music/MainActivity.kt` onPageFinished
+- 现象：onPageFinished 里连续 3-4 个 evaluateJavascript 调用 → APK 装机后启动秒退，没有任何 crash 日志（Process died）
+- 根因猜测：多次 evaluateJavascript 同时调 → WebView 内部线程竞争 / OOM / evaluateJavascript callback 异常吞掉
+- 解法：**onPageFinished 里最多 1 个 evaluateJavascript，调试代码写 src/ 里的 JS console.error**
+- 预防规则：**WebView onPageFinished 里只写 1 个 evaluateJavascript，调试用前端 JS 的 console.error**
 
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
-|---|---|---|---|---|---|---|---|
-| ISS-20261008-003 | 2026-10-08 | WebView 缓存旧 CSS/JS → APK 改了但设备上渲染不变 | ① `adb shell pm clear <pkg>` 清 app 数据 ② index.html 加 `?v=timestamp` cache-busting query string ③ install 后用户手动重新打开 App | WebView 有 disk cache（HTML + JS + CSS 全缓存），install -r 不覆盖已缓存文件，force-stop 也不清 disk cache | **Android WebView debug 迭代必须 cache-busting + pm clear，不要只 install -r + force-stop** | #android-webview-cache | index.html、MainActivity.kt |
-| ISS-20261008-004 | 2026-10-08 | gradle `copyPwaAssets` 每次从 release/pwa-site-* 拷到 assets/pwa，覆盖之前手改的文件 | 改 assets 里的文件必须在 `gradlew assembleDebug` 之前改 release 目录，或改 gradle 任务顺序 | copyPwaAssets 是 gradle 的 Copy 任务，每次 build 都执行，覆盖 destDir 里的所有文件 | **改 Android assets/pwa 里的文件，优先改 src/ → build-web → 再 assemble，不要直接改 assets 目录** | #gradle-asset-copy | clients/android-player/app/build.gradle copyPwaAssets |
-
-#### 🔶 问题群 #android-webview（🔥 已加级 P0，累计修复 4 次）
-> 标签：`#android-webview #relative-path #feature-detection`
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
-|---|---|---|---|---|---|---|---|
-| 🔥 ISS-20260914-001 | 2026-09-14 | Android WebView 加载 index.html 时 `/src/style.css` 等 404 | 全部改为相对路径 `./src/style.css` | 浏览器 dev server 下绝对路径指向 dev server 根（正确），但 WebView 加载本地 assets 时绝对路径指向设备根（错误） | **所有资源引用用相对路径，绝对路径只在 HTML import 极少数场景用** | #relative-path #android-webview | release/pwa-site-*/index.html |
-| ISS-20260913-001 | 2026-09-13 | SW cache 名硬编码 `greenrhino-v14` + build-web.mjs 隐式正则替换 → 版本号漂移 | sw.js 改为 `'__SW_CACHE__'` 占位符，build-web.mjs 用 `replace(/'__SW_CACHE__'/, cfg.cache)` 精确替换 | 隐式正则 `greenrhino-v\d+` 在版本号格式变化时可能漏掉，且源码里版本号不可见 | **SW cache 必须用显式占位符，禁止硬编码版本号，替换必须用精确正则** | #version-sync #sw-cache | sw.js、scripts/build-web.mjs |
-
-#### 🔶 问题群 #twa-gms（累计修复 2 次）
-> 标签：`#twa-gms #android-dependency`
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
-|---|---|---|---|---|---|---|---|
-| ISS-20260914-002 | 2026-09-14 | Android TWA 用了错误依赖 `androidx.browser.trusted.LauncherActivity` → 崩溃 | 改用 `com.google.androidbrowserhelper.trusted.LauncherActivity`（来自 `android-browser-helper` 库） | AndroidX browser 库不包含 LauncherActivity，它是独立的 android-browser-helper 组件 | **TWA 必须依赖 com.google.androidbrowserhelper:androidbrowserhelper，不要找错包** | #twa-gms #android-dependency | clients/android-music/app/build.gradle |
-| ISS-20260914-003 | 2026-09-14 | TWA 依赖 Google Play Services 和 Chrome → 华为设备（无 GMS）无法全屏，显示浏览器地址栏 | 迁移到 WebView 原生壳 | 华为设备缺 GMS，TWA fallback 到 Custom Tab 会显示浏览器 UI | **TWA 方案必须验证无 GMS 设备的表现，或者直接用 WebView 壳** | #twa-gms #android-dependency | clients/android-music/ |
-| ISS-20260914-004 | 2026-09-14 | assetlinks.json 里用占位符域名 | 改为真实域名 `greenrhino-music.pages.dev` 和 `greenrhino-player.pages.dev` | 复制模板时忘记替换 | **assetlinks.json 的 target 域名必须与 Cloudflare Pages 域名严格匹配** | #assetlinks #android | clients/android-*/app/src/main/assets/assetlinks.json |
-
-### P1 — 影响体验/构建效率
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
-|---|---|---|---|---|---|---|---|
-| ISS-20260914-005 | 2026-09-14 | `copy-web.mjs` 没重跑 → Windows EXE 内嵌资源与线上版本不一致 | 改完 PWA 后必须重跑 `scripts/copy-web.mjs` 再 `dotnet publish` | Windows 壳内嵌 PWA 资源是静态复制的，不是运行时加载 | **改了 PWA 任何文件后，Windows EXE 必须重新跑 copy-web + dotnet publish** | #pwa-rebuild #windows-exe | scripts/copy-web.mjs、clients/windows/ |
-| ISS-20260914-006 | 2026-09-14 | `library.js` 的 `refresh()` 并发调用 → 媒体库重复条目 | 加锁防止并发 refresh | 快速连续刷新时代码没做防抖/去重 | **异步列表刷新必须加锁或防抖，同一时刻只允许一个 refresh 在跑** | #concurrent #library | src/library.js |
-| ISS-20260914-007 | 2026-09-14 | Huawei AppGallery 截图用 390×800 → 比例不达标被拒 | 改用符合 0.75~1.77 比例的截图 | 截图前没查华为商店截图规范 | **每个应用商店的截图规范要先查再出图，不要凭感觉** | #appstore-screenshot | clients/huawei-music/listing/ |
-| ISS-20260914-008 | 2026-09-14 | GitHub Actions 残留废弃 workflow（build-ios.yml）→ 仓库首页显示红叉 | 删除未使用的 workflow | 早期方案废弃了但忘记删 CI | **废弃方案的配套 CI/配置一并删除，别留尾巴** | #ci-cleanup | .github/workflows/ |
-| ISS-20260914-009 | 2026-09-14 | koa-connect wrapper 导致 auth middleware 迁移时 ctx 泄漏 | 放弃 wrapper，原生 Koa 重写 | Express 和 Koa 的 ctx 模型不兼容，wrapper 无法完整桥接 | **跨框架迁移时不要用 wrapper 偷懒，原生重写更可靠** | #frame-dont-use-wrapper | server/auth.js |
-| ISS-20261009-021 | 2026-10-09 | SAF 弹窗混所有文件类型（图片/视频/音频/文档 tab 全出），用户抱怨"导入打开混太多文件" | 绕开 `params.createIntent()`，完全手动构建 `Intent(ACTION_OPEN_DOCUMENT)`：`type="audio/*"`+15 种音频 MIME 白名单（音乐）/ `type="video/*"`+12 种视频 MIME 白名单（播放器），保留 `EXTRA_ALLOW_MULTIPLE`，加 acceptTypes 诊断日志 | WebView `FileChooserParams.createIntent()` 只按 accept 字符串粗略映射 type 且不传 EXTRA_MIME_TYPES，SAF 拿到 `*/*` 就展示全部文档 root | **SAF Intent 必须手动构建：type 锁定大分类 + EXTRA_MIME_TYPES 精确白名单；禁止直接用 params.createIntent() 默认产物。验证方法：开抽屉看分类列表是否只剩目标类型** | #saf-mime-filter #android-webview | clients/android-music/.../MainActivity.kt onShowFileChooser、clients/android-player/.../MainActivity.kt onShowFileChooser |
-| ISS-20261009-022 | 2026-10-09 | 装机后"改动没生效"假象——设备有 5 个应用分身（user 900-904），`pm clear --user 0` 只清机主；用户开的是分身里的 App，分身还带旧数据 → 反复重装用户仍说"没变化" | `adb shell pm list users` 查全部用户 → 逐个 `pm clear --user N com.greenrhino.music`；闭环验证：adb pull base.apk → 改名 .zip → Expand-Archive 解包 → Select-String 验证代码真进包 | 多用户设备上 pm clear/install 只影响指定 user；"没生效"要先分清【代码没进包】vs【进了包但端上旧数据】 | **装机验证前先清所有 user 空间；验证代码生效必须 adb pull 端上 APK 解包比对，不能只看本地产物** | #android-webview #multi-user-verify | 验证流程（adb 命令） |
-
-### P2 — 次要/偶发
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 |
-|---|---|---|---|---|---|---|---|
-| ISS-20260914-010 | 2026-09-14 | WebView 不支持 `webkitdirectory`（文件夹导入） | 在 index.html 中隐藏文件夹导入按钮 | webkitdirectory 是 Chrome/Edge 特性，Android System WebView 可能不完整支持 | **Feature detection 后隐藏不支持的按钮** | #feature-detection #android-webview | src/index.html |
-
----
-
-## 📦 归档区
-
-> 同一坑被引用 ≥3 次 且 预防规则已沉淀进 Skill → 移至此处，附归档原因
-
-### 🔶 问题群 #gradle-directory（累计修复 2 次，待沉淀进 Skill 后全群归档）
-> 标签：`#gradle-directory #path-charset #build-assets`
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 | 归档原因 |
-|---|---|---|---|---|---|---|---|---|
-| ISS-20260914-011 | 2026-09-14 | Gradle build.gradle 含 UTF-8 BOM → `Unexpected character '?' @ line 1` | 用 PowerShell 去掉前 3 字节 BOM | 用 Windows 记事本保存时自动加 BOM，Groovy/Gradle 不识别 | **build.gradle 必须用 UTF-8 无 BOM 编码** | #gradle-directory #path-charset | clients/android-player/app/build.gradle | 单次修复 |
-| ISS-20260916-001 | 2026-09-16 | **build.gradle assets 拷贝到错误目录**导致 APK 丢 src/ | copyPwaAssets destDir 从 `$buildDir/intermediates/merged_assets/...` → `file("$rootDir/app/src/main/assets/pwa")` | Gradle 的 compressDebugAssets 只处理 src/main/assets 里的顶层文件，中间产物目录的文件会被丢 | **copyPwaAssets 必须往 app/src/main/assets/pwa/（Android 标准目录）写，不能往 merged_assets 中间目录追加** | #gradle-directory #build-assets | clients/android-*/app/build.gradle | 单次修复 |
-
-### 🔶 问题群 #relative-path（🔥 同群活跃坑 ISS-20260914-001 已 P0 加级，本群归档条目为补充记录）
-> 标签：`#relative-path #android-webview`
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 | 归档原因 |
-|---|---|---|---|---|---|---|---|---|
-| 🔥 ISS-20260916-003 | 2026-09-16 | **index.html 绝对路径在 Android WebView 上白屏** | index.html 4 处绝对路径 → 相对路径；build-web.mjs L93 regex 同步改 | WebView 加载 file:///android_asset/pwa/index.html 时，绝对路径 /xxx 指向文件系统根目录（不存在）→ JS/CSS 不加载 → 白屏 | **index.html 资源引用必须全部用 ./ 相对路径** | #relative-path #android-webview | index.html、scripts/build-web.mjs L93 | 与 ISS-20260914-001 同群，已沉淀进预防规则，归档 |
-
-### P1 — 影响体验/构建效率（续）
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 | 归档原因 |
-|---|---|---|---|---|---|---|---|---|
-| ISS-20260914-012 | 2026-09-14 | Android themes.xml 缺子主题 Theme.GreenRhino.Launcher → manifest 引用但资源不存在 | 复制 music 的完整 themes.xml（含基础主题 + Launcher 子主题两层） | 复制 music 的 themes.xml 到 player 时只保留了基础主题，忘了 Launcher 子主题 | **复制 Android 资源文件时要完整复制，不要手动裁剪** | #android-themes #resource-copy | clients/android-player/app/src/main/res/values/themes.xml | 单次修复 |
-| ISS-20260914-013 | 2026-09-14 | publish.ps1 里 dotnet publish 指向错误 csproj | 改成各自的 csproj（GreenRhinoMusic.csproj / GreenRhinoPlayer.csproj） | 从 GreenRhino/publish.ps1 复制时忘了改 csproj 文件名 | **复制 publish.ps1 时必须改 csproj 路径** | #publish-script #csproj-path | clients/windows/GreenRhinoMusic/publish.ps1 | 单次修复 |
-| ISS-20260914-014 | 2026-09-14 | dotnet 不在 PATH → PowerShell 直接跑找不到 | publish.ps1 开头加 PATH 兜底：检测 `C:\greenrhino-tools\dotnet\dotnet.exe` 存在时加入 env:Path | dotnet SDK 装在非系统 PATH 的自定义位置 | **工具链在非标准路径时，脚本里加 PATH 兜底** | #dotnet-path #publish-script | clients/windows/GreenRhinoMusic/publish.ps1 | 单次修复 |
-
-### P2 — 次要/偶发（续）
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 | 归档原因 |
-|---|---|---|---|---|---|---|---|---|
-| ISS-20260914-015 | 2026-09-14 | Playwright install chromium 超时无进展 | 设置正确的 PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright | 国内网络直连 playwright 官方 CDN 极慢；只有 cdn.npmmirror.com/binaries/playwright 格式才生效 | **国内跑 Playwright 前设 PLAYWRIGHT_DOWNLOAD_HOST 环境变量** | #playwright-mirror #network-cn | test/smoke-playwright.mjs | 已沉淀进 user shared-issues |
-
-### 其他归档
-
-| 编号 | 日期 | 问题 | 解决方法 | 根因 | 预防规则 | 归类标签 | 关联文件 | 归档原因 |
-|---|---|---|---|---|---|---|---|---|
-| ISS-20260915-001 | 2026-09-15 | player 的 __winRole 内部值是 video 不是 player | 测试脚本期望值改成 video；源码保持不变 | 项目演进中 player 站点的功能从"播放器"变成侧重"视频"，内部 role 代号跟随功能 | **写条件分支时注意：if (winRole === 'video') 对应 🎬 player 站点** | #role-naming #video-vs-player | scripts/build-web.mjs | 单次修复 |
-| ISS-20260915-002 | 2026-09-15 | player APK 首帧白屏（HarmonyOS WebView） | main.js L78-80 video role 也同步设 `data-theme='dark'` | music role 有 2 步（加 class + 同步设主题），video role 只做了第 1 步 | **所有 role 必须同步设 data-theme** | #android-theme #harmonyos-webview | src/main.js | 单次修复 |
-| ISS-20260915-003 | 2026-09-15 | HarmonyOS pm install 卡住无输出 | 让用户手动点屏幕上的安装确认弹窗；或 push 到 /data/local/tmp/ 后用文件管理器装 | HarmonyOS 安全扫描机制；首次安装需要用户侧屏幕确认 | **HarmonyOS pm install 挂起 → push 到 /data/local/tmp/ 后让用户点屏幕弹窗** | #harmonyos-install #adb | 所有 adb install 命令 | 单次修复 |
-| ISS-20260915-004 | 2026-09-15 | Windows 上 USB 已插但 adb devices 空 | `adb kill-server; adb start-server` 重启 daemon 后才认到设备 | ADB daemon 竞态，不重启不认新插的设备 | **USB 插上后 adb devices 空 → 先 kill/start server** | #adb-daemon #windows-usb | 所有 adb 命令 | 单次修复 |
-| ISS-20260916-002 | 2026-09-16 | Motorola launcher 快捷方式残留成山 | install 前先 uninstall 干净；install 后 `pm clear launcher3` 清残留 | Android App Shortcuts 机制，uninstall 也不清理 | **install 前先 uninstall；install 后 pm clear com.motorola.launcher3** | #motorola-launcher #android-install | 所有 Android install 命令 | 单次修复 |
-| ISS-20261010-022 | 2026-10-10 | Gradle copyPwaAssets 增量失效 → assets/pwa/ 是旧版源码 | 手动 `Copy-Item release/* → assets/pwa/* -Recurse -Force -Exclude .well-known` | Gradle Copy task 是增量的，只有源文件 timestamp 比目标新才拷；build-web.mjs 改过但没触发 Gradle 检测 | **改完 src/ 或 build-web.mjs 后，必须手动同步 release → assets，不能依赖 Gradle copyPwaAssets 自动执行** | #gradle-assets-sync #android-build | scripts/build-web.mjs → clients/android-*/app/src/main/assets/pwa/ | 单次修复 |
-| ISS-20261010-023 | 2026-10-10 | ROLE block 先 .remove() topbar/sidebar/bottombar → 后续 initBottomBar/menu-toggle/nav/search/import 6 处 getElementById 返回 null → main.js crash → SW 注册走不到 | 6 处全部加可选链 ?.addEventListener；bottombar.js initBottomBar 加 null check 提前 return | JS 同步执行，ROLE block 在 L87 remove DOM，但后续 L381 initBottomBar、L422 menu-toggle、L634 nav、L656 search、L661-662 import 绑定事件在后面才执行 | **music role 下，所有可能在 topbar/sidebar/bottombar 被 remove 后才执行的 getElementById 必须加可选链 ?.；全局初始化函数（initBottomBar 等）必须加 null check 提前 return** | #null-check #role-dom-removal | src/main.js L87-92, L381, L422, L634, L656, L661-662, src/ui/bottombar.js L13 | 单次修复 |
-| ISS-20261010-024 | 2026-10-10 | python -m http.server 占着 release/* 目录 → build-web.mjs rmSync EPERM 失败 | Get-Process python | Stop-Process -Force; 先杀 python 再跑 build-web | Node rmSync 无法删除被其他进程占用的 Windows 目录 | **跑 build-web.mjs 前必须先杀所有 python 进程（Start-Process 起的 http.server 会锁 release 目录）** | #python-server-lock #windows-perm | scripts/build-web.mjs 开头 | 单次修复 |
+### ISS-20261012-005: Android WebView file:// 下 fetch('/api/lyric') 报 scheme not supported 🔥 P1
+- 日期：2026-10-12（首次在旧版歌词自动搜索时暴露）
+- 归类：`#android-webview #cors #fetch-api #lyric-proxy`
+- 现象：`Fetch API cannot load file:///api/lyric?title=xxx. URL scheme "file" is not supported.`
+- 根因：Android WebView loadUrl("file:///android_asset/index.html") 加载，前端 fetch('/api/lyric') 相对 URL 变成 `file:///api/lyric` → WebView 的 fetch 不支持 file:// scheme
+- 解法：前端第一级检测 `window.RhinoBridge.getLyric` 原生桥（已写 ✅）；兜底直连 `https://lrclib.net/api/search`（跨域友好）
+- 预防规则：**Android WebView 下所有 fetch('/xxx') 相对路径请求都会变成 file:// → 要么用 RhinoBridge 原生桥，要么用完整 HTTPS URL**
 
 ---
 
-### 📈 成长型问题群汇总
+## 📦 归档区（已修）
 
-| 问题群标签 | 活跃坑数 | 归档坑数 | 累计修复次数 | 当前严重度 | 状态 |
-|---|---|---|---|---|---|
-| `#android-webview` | 2 | 2 | 4 | 🔴 P0 🔥加级 | 活跃，待全群归档 |
-| `#relative-path` | 1 | 1 | 3 | 🔴 P0 🔥加级 | 活跃，已沉淀进预防规则 |
-| `#gradle-directory` | 0 | 2 | 2 | 🟠 P1 | 归档，待沉淀 Skill |
-| `#twa-gms` | 2 | 0 | 2 | 🔴 P0 | 活跃 |
-| `#playwright-mirror` | 0 | 1 | 1 | 🟡 P2 | 已提升到 user shared |
-| `#harmonyos-install` | 0 | 1 | 1 | 🟠 P1 | 归档 |
+### ISS-20261009-021: SAF drawer 分类过滤不彻底 ✅ P2 → 📦 归档
+### ISS-20261009-020: addMediaFromAndroid 硬编码 VIDEO_EXT + 500MB ✅ P2 → 📦 归档
+### ISS-20261009-019: buildMusicHome 函数缺失导致 music role init crash ✅ P2 → 📦 归档
+### ISS-20261009-018: Music App MediaStore 扫描完全缺失 ✅ P2 → 📦 归档
+
+---
+
+## 🔶 问题群
+
+### `#android-webview`（4 条活跃 + 1 条归档）🔥🔥🔥 高优先
+ISS-001 / ISS-003 / ISS-004 / ISS-005 都是 Android WebView 相关，值得统一解决后写 Skill

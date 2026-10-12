@@ -96,6 +96,20 @@ export async function openSettings(app, focus = '') {
     row('设为默认播放器', '双击音频/视频直接用本软件打开', h('button', { class: 'opt', onclick: setAsDefaultPlayer }, '设为系统默认')),
     row('交叉淡入', '歌曲间平滑过渡', cf),
     row('均衡器 EQ', '10 段频率调节', eqWrap),
+    // 🔶 个人空间后端：手机填 PC 局域网 IP + 8787 端口
+    (() => {
+      const savedBase = localStorage.getItem('__GR_CLOUD_BASE__')?.trim() || ''
+      const inp = h('input', { class: 'opt', type: 'text', placeholder: 'http://192.168.x.x:8787', value: savedBase,
+        style: { width: '200px', padding: '6px 10px', border: '1px solid #E5E7EB', borderRadius: '8px', background: '#fff' } })
+      const saveBtn = h('button', { class: 'opt', onclick: () => {
+        const v = inp.value.trim().replace(/\/+$/, '')
+        if (!v) { localStorage.removeItem('__GR_CLOUD_BASE__'); toast('已清除，恢复默认 localhost'); return }
+        if (!/^https?:\/\//i.test(v)) { toast('请以 http:// 或 https:// 开头', 'err'); return }
+        localStorage.setItem('__GR_CLOUD_BASE__', v)
+        toast('已保存，重新进入个人空间生效', 'ok')
+      } }, '保存')
+      return row('个人空间后端', '填 PC 局域网 IP:8787，手机上云盘才能连上', h('div', { style: { display: 'flex', gap: '8px' } }, inp, saveBtn))
+    })(),
     row('多端同步', '导出/导入进度·歌单·收藏·偏好（手动同步，不同步媒体文件）', h('div', {}, syncInput, h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, exportBtn, importBtn))),
     row('存储', '媒体占用与清理', h('div', {}, storageInfo, h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px' } }, clearThumbBtn, clearBtn))),
     row('导入记录', '历史导入来源', importBox)

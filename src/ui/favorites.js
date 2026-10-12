@@ -2,13 +2,29 @@
 import { h } from './dom.js'
 import { getFavorites } from '../store.js'
 import { songRow } from './library.js'
+import { player } from '../player.js'
 
 export function buildFavorites(app, only) {
   const el = h('div', { class: 'page' })
+  function scrollToPlaying() {
+    const curId = player.current?.id
+    if (!curId) return
+    const row = el.querySelector(`[data-id="${curId}"]`)
+    if (row) requestAnimationFrame(() => row.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+  }
+  function updatePlayingMark(item) {
+    el.querySelectorAll('.playing').forEach(n => n.classList.remove('playing'))
+    if (item) {
+      const row = el.querySelector(`[data-id="${item.id}"]`)
+      if (row) { row.classList.add('playing'); scrollToPlaying() }
+    }
+  }
   async function refresh() {
     el.innerHTML = ''
     // 弹窗角色（音乐窗）只展示本类型收藏；Hub 展示全部
     const list = (await getFavorites()).filter((m) => !only || m.type === only)
+    // 🔶 队列上下文：收藏页点歌 → 队列就是收藏列表
+    app.activeSource = list
     // 顶部 Tab + 工具条（参考图：单曲 / 歌手 / 专辑 / 视频 + 播放图标 + 总数 + 搜索 + 排序 + 多选）
     const header = h('div', { class: 'sr-page-header' },
       h('div', { class: 'sr-tabs' },
@@ -31,9 +47,12 @@ export function buildFavorites(app, only) {
     const listBox = h('div', { class: 'sr-list' })
     list.forEach((item) => listBox.appendChild(songRow(item, app)))
     el.appendChild(listBox)
+    // 🔶 初始化滚动到正在播放的
+    scrollToPlaying()
   }
-  const off = app.onStore('favorites:changed', refresh)
-  el._cleanup = off
+  const offStore = app.onStore('favorites:changed', refresh)
+  const offTrack = player.on('trackchanged', (item) => updatePlayingMark(item))
+  el._cleanup = () => { offStore(); offTrack() }
   refresh()
-  return { el, refresh }
+  return { el, refresh, cleanup: () => { offStore(); offTrack() } }
 }

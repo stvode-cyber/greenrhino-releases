@@ -6,6 +6,19 @@ import { mediaCard } from './library.js'
 
 export function buildPlaylists(app, only) {
   const el = h('div', { class: 'page' })
+  function scrollToPlaying() {
+    const curId = player.current?.id
+    if (!curId) return
+    const row = el.querySelector(`[data-id="${curId}"]`)
+    if (row) requestAnimationFrame(() => row.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+  }
+  function updatePlayingMark(item) {
+    el.querySelectorAll('.playing').forEach(n => n.classList.remove('playing'))
+    if (item) {
+      const row = el.querySelector(`[data-id="${item.id}"]`)
+      if (row) { row.classList.add('playing'); scrollToPlaying() }
+    }
+  }
   async function refresh() {
     el.innerHTML = ''
     const pls = await getPlaylists()
@@ -16,6 +29,8 @@ export function buildPlaylists(app, only) {
 
     // 智能列表：来自媒体库的动态聚合（弹窗角色按类型过滤）
     const all = (await getAllMedia()).filter((m) => !only || m.type === only)
+    // 🔶 队列上下文：歌单页点歌 → 队列是全部音乐（因为各种智能列表混杂，没有单一上下文）
+    app.activeSource = all
     const recent = [...all].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 12)
     const top = all.filter((m) => (m.playCount || 0) > 0).sort((a, b) => (b.playCount || 0) - (a.playCount || 0)).slice(0, 12)
     const fresh = all.filter((m) => m.lastPlayedAt).sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0)).slice(0, 12)
@@ -40,6 +55,8 @@ export function buildPlaylists(app, only) {
     const grid = h('div', { class: 'grid' })
     pls.forEach((pl) => grid.appendChild(playlistCard(pl, app, only)))
     el.appendChild(grid)
+    // 🔶 初始化滚动到正在播放的
+    scrollToPlaying()
   }
 
   function smartSection(title, items, all, sub) {
@@ -63,10 +80,11 @@ export function buildPlaylists(app, only) {
     await savePlaylist({ id: 'pl-' + Date.now(), name, ids, at: Date.now() })
     toast('歌单已保存'); refresh()
   }
-  const off = app.onStore('playlists:changed', refresh)
-  el._cleanup = off
+  const offStore = app.onStore('playlists:changed', refresh)
+  const offTrack = player.on('trackchanged', (item) => updatePlayingMark(item))
+  el._cleanup = () => { offStore(); offTrack() }
   refresh()
-  return { el, refresh }
+  return { el, refresh, cleanup: () => { offStore(); offTrack() } }
 }
 
 function timeAgo(t) {

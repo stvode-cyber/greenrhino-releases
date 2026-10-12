@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-10-10（周五）
+
+| 时间 | 任务 | 改了哪些文件 | 跑了啥命令 | 备注 |
+|---|---|---|---|---|
+| 晚 | **「我的」页重写微信「我」风格 + 个人空间入口** | src/main.js、src/style.css | build-web.mjs + test:build + gradlew assembleDebug + adb install -r | 顶部头像区（🎵绿方头像+名字+副标题）+ 简洁列表行（图标+文字+数量+›箭头）；7行菜单：☁️个人空间→⭐收藏→📃歌单→🕐最近→🌙主题（点切深浅）→⚙️设置→ℹ️关于；cloud.js 个人空间已接好（注册送5GB+上传+下载，无分享）；音乐 App allowedViews 加 cloud；**保留用户音乐数据装机** |
+| 晚 | **「我的」页：歌单卡片化 + 设定功能区** | src/main.js、src/style.css | build-web.mjs + test:build + gradlew assembleDebug + adb install -r | 歌单从纯文字列表→2列网格卡片（📃图标+名字+歌曲数+▶播放/🗑删除）；收藏也成卡片（点进收藏页）；加⚙️设定区（主题浅/深切换+全部设置→openSettings+关于）；saveSettings + player.emit('theme') 同步 |
+
+| 时间 | 任务 | 改了哪些文件 | 跑了啥命令 | 备注 |
+|---|---|---|---|---|
+| 晚 | **ISS-20261010-026 Android MediaStore 导入补 parseTags** | src/main.js | build-web.mjs + test:build + gradlew assembleDebug + adb install -r | addMediaFromAndroid 只存基础字段缺歌词。__mediaBatch 回调里对 musicAdded 逐首 fetch(content://uri)→blob→parseTags 拿内嵌 USLT 歌词+APIC 封面。Kotlin shouldInterceptRequest 已代理 content:// |
+| 晚 | **ISS-20261010-027 全屏播放页接在线搜歌词** | src/lyricFetch.js（新）+ src/main.js | build-web.mjs + test:build + gradlew assembleDebug + adb install -r | 抽 lyricFetch.js 模块（fetchOnlineLyric + fetchLrclib），LRCLIB 国际歌词库免费无 Key。openMusicFullpage trackchanged 时没内嵌歌词自动 fetch LRCLIB → 搜到渲染 + 写回 IndexedDB 缓存 |
+| 下午 | **ISS-20261010-025 全屏播放页「📋 列表」双重根因修复** | src/style.css、src/main.js | build-web.mjs + test:build + gradlew assembleDebug + adb install -r | ① z-index：drawer 40→210、backdrop 39→209（高于 player-fullpage 200）② body.win-music 下 drawer 显式白背景 ③ openMusicFullpage 进入时 queue 为空自动 getAllMedia 填充队列 |
+| 下午 | **长按批量选择功能落地** | src/ui/library.js | build-web.mjs + test:build + gradlew assembleDebug + adb install -r | songRow + mediaCard 都加 600ms 长按检测 → enterSelectMode() → 多选模式 + 底部批量操作栏（全选/加入歌单/删除/取消）；openAddToPlaylist() 已支持新建歌单和加入旧歌单 |
+
 ## 2026-10-08（周三）
 
 - 视频播放核心功能落地：CSS grid 溢出根因修复（`#main overflow:hidden` + `minmax(0,1fr)`）

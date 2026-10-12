@@ -1,12 +1,27 @@
 // main.js — 应用装配与编排
+window.__grModuleRan = true  // 🔶 终极诊断：如果 module 执行到这里就打标记
+// 🔶 DEBUG: 打印 RhinoBridge 对象到底有哪些方法
+setTimeout(() => {
+  try {
+    const rb = window.RhinoBridge
+    if (rb) {
+      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(rb)).filter(m => m !== 'constructor')
+      console.log('🔧 RhinoBridge methods:', methods)
+      console.log('🔧 RhinoBridge.getLyric exists?', typeof rb.getLyric)
+    } else {
+      console.log('🔧 RhinoBridge NOT FOUND on window!')
+    }
+  } catch (e) { console.log('🔧 RhinoBridge debug error:', e) }
+}, 300)
 import { h, toast, openModal, formatTime } from './ui/dom.js'
 import { player } from './player.js'
 import {
   addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile,
-  getFavorites, getPlaylists, getRecent, toggleFavorite
+  getFavorites, getPlaylists, getRecent, toggleFavorite, deletePlaylist
 } from './store.js'
 import { parseTags, guessFromFilename } from './metadata.js'
 import { parseLRC } from './lrc.js'
+import { fetchOnlineLyric } from './lyricFetch.js'
 import { initBottomBar } from './ui/bottombar.js'
 import { songRow } from './ui/library.js'
 import { buildMusic } from './ui/music.js'
@@ -16,12 +31,21 @@ import { buildPlaylists } from './ui/playlists.js'
 import { buildRecent } from './ui/recent.js'
 import { buildStats } from './ui/stats.js'
 import { openOnlineSearch } from './ui/onlinesearch.js'
-import { buildCloud } from './ui/cloud.js'
+import { buildCloud, syncAll } from './ui/cloud.js'
 import { buildQueue } from './ui/queue.js'
 import { openSettings } from './ui/settings.js'
 import { openHelp } from './help.js'
 import { initGestures } from './ui/gestures.js'
 import { queueVideoThumbs } from './videoThumb.js'
+
+// 字节数友好显示：B/KB/MB/GB
+function fmtQuota(n) {
+  if (n == null || !n) return '0 B'
+  if (n < 1024) return n + ' B'
+  if (n < 1024 ** 2) return (n / 1024).toFixed(1) + ' KB'
+  if (n < 1024 ** 3) return (n / 1024 ** 2).toFixed(1) + ' MB'
+  return (n / 1024 ** 3).toFixed(2) + ' GB'
+}
 
 // store.js 事件总线
 const app = {
@@ -29,6 +53,7 @@ const app = {
   mode: 'music',
   search: '',
   currentList: [],
+  activeSource: [], // 🔶 当前页面对应的播放源（library 全部 / favorites / 歌单），playItem 优先用它构建队列
   onStore,
   toast,
   refreshCurrent() { [music, video, favorites, playlists, recent, stats].forEach((p) => p?.refresh?.()); syncCurrentList() },
@@ -61,16 +86,30 @@ const favorites = isMusic ? buildFavorites(app, 'music') : null
 const playlists = isMusic ? buildPlaylists(app, 'music') : null
 const recent = isHub ? buildRecent(app) : null
 const stats = isHub ? buildStats(app) : null
-const cloud = isHub ? buildCloud(app) : null
-const home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : null)
+const cloud = (isHub || isMusic) ? buildCloud(app) : null
+let home = null
+try {
+  home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : null)
+} catch (e) {
+  console.error('[init] buildHome/buildMusicHome 崩了:', e?.message, e?.stack)
+}
 const pages = {}
 for (const [k, p] of Object.entries({ home, music, video, favorites, playlists, recent, stats, cloud })) {
   if (p) { pages[k] = p; view.appendChild(p.el) }
 }
+// 🔶 ISS-20261010-030: mineEl 必须在 home.el 被 append 后才插进去！
+// buildMusicHome 内部 el.parentElement 为 null → insertBefore 会被跳过
+if (home?.mineEl && home.el?.parentElement) {
+  home.el.parentElement.insertBefore(home.mineEl, home.el.nextSibling)
+  console.error('[mine] ✅ mineEl inserted after home.el, in DOM: ' + !!document.body.contains(home.mineEl))
+} else if (home?.mineEl) {
+  console.error('[mine] ⚠️ home.el.parentElement still null, appending mineEl directly to view')
+  view.appendChild(home.mineEl)
+}
 
 // 按角色精简侧栏：隐藏本窗不需要的导航项
 const allowedViews = isHub ? new Set(['home', 'music', 'video', 'recent', 'stats', 'playlists', 'favorites', 'cloud', 'settings'])
-  : ROLE === 'music' ? new Set(['music', 'playlists', 'favorites'])
+  : ROLE === 'music' ? new Set(['home', 'music', 'playlists', 'favorites', 'cloud'])
   : new Set(['video'])
 document.querySelectorAll('.nav-item').forEach((b) => {
   if (b.dataset.view && !allowedViews.has(b.dataset.view)) b.style.display = 'none'
@@ -196,49 +235,113 @@ function buildMusicHome(app) {
 
   refresh()
 
-  // "我的"页：最近播放 + 歌单 + 收藏列表（底部导航点"我的"触发）
+  // "我的"页 — 微信「我」风格：顶部头像区 + 图标+文字简洁列表行
   const mineEl = h('div', { class: 'mh-mine', hidden: true })
   async function showMine() {
-    mineEl.innerHTML = ''
-    mineEl.hidden = false
-    el.hidden = true
-    const [favs, pls, recent] = await Promise.all([getFavorites(), getPlaylists(), getRecent(30)])
-    const recBox = h('div', { class: 'mh-mine-section' },
-      h('div', { class: 'mh-mine-head' }, '🕐 最近播放', h('span', { class: 'mh-mine-count' }, recent.length + ' 首')),
-      recent.length ? h('div', { class: 'sr-list' },
-        ...recent.map(function(it) {
-          var row = songRow(it, app, { selectable: false })
-          var sub = row.querySelector('.sr-sub')
-          if (sub && it.playCount) sub.textContent = '播放 ' + it.playCount + ' 次'
-          return row
-        }))
-        : h('div', { class: 'empty' }, h('div', {}, '还没有播放记录')))
-    // 收藏区
-    const favBox = h('div', { class: 'mh-mine-section' },
-      h('div', { class: 'mh-mine-head' }, '⭐ 我的收藏', h('span', { class: 'mh-mine-count' }, favs.length + ' 首')),
-      favs.length ? h('div', { class: 'sr-list' },
-        ...favs.map((it) => songRow(it, app, { selectable: false })))
-        : h('div', { class: 'empty' }, h('div', {}, '还没有收藏，去发现页点 ⭐ 吧')))
-    // 歌单区
-    const plBox = h('div', { class: 'mh-mine-section' },
-      h('div', { class: 'mh-mine-head' }, '📃 我的歌单', h('span', { class: 'mh-mine-count' }, pls.length + ' 个')),
-      pls.length ? h('div', { class: 'mh-pl-list' },
-        ...pls.map((pl) => h('div', { class: 'mh-pl-item', onclick: () => {
-          // 点歌单 → 播放该歌单
-          player.setQueue(pl.ids.map((id) => favs.find((f) => f.id === id)).filter(Boolean))
-          showPage('music')
-        } }, pl.name)))
-        : h('div', { class: 'empty' }, h('div', {}, '还没有歌单，播放时点"存为歌单"创建')))
-    mineEl.appendChild(recBox)
-    mineEl.appendChild(favBox)
-    mineEl.appendChild(plBox)
+    try {
+      console.error('[mine] showMine() CALLED! mineEl=' + !!mineEl + ' el.parentElement=' + !!el?.parentElement)
+      mineEl.innerHTML = ''
+      mineEl.hidden = false
+      el.hidden = true
+      console.error('[mine] step1: hide el, show mineEl. mineEl.hidden=' + mineEl.hidden + ' el.hidden=' + el.hidden)
+
+      // ① 顶部：头像 + 账号信息（读 localStorage.gr_cloud_session，未登录引导登录）
+      const cloudSess = (() => { try { return JSON.parse(localStorage.getItem('gr_cloud_session') || 'null') } catch { return null } })()
+      const quotaHint = h('div', { class: 'wm-quota' })
+      const nameEl = h('div', { class: 'wm-name' })
+      const subEl = h('div', { class: 'wm-sub' })
+      if (cloudSess?.token) {
+        nameEl.textContent = '👤 ' + (cloudSess.username || '用户')
+        subEl.textContent = '加载中...'
+        quotaHint.textContent = `配额 ${fmtQuota(cloudSess.used || 0)} / ${fmtQuota(cloudSess.quota || 0)}`
+      } else {
+        nameEl.textContent = '绿角犀用户'
+        subEl.textContent = '登录后可在音乐和视频 App 间同步'
+        quotaHint.textContent = '点击登录 · 注册送 5GB'
+      }
+      const header = h('div', { class: 'wm-header' },
+        h('div', { class: 'wm-avatar' }, cloudSess?.token ? '👤' : '🎵'),
+        h('div', { class: 'wm-user-info' }, nameEl, subEl, quotaHint))
+      if (cloudSess?.token) {
+        header.style.cursor = 'pointer'
+        header.addEventListener('click', () => { hideMine(); showPage('cloud') })
+      } else {
+        header.style.cursor = 'pointer'
+        header.addEventListener('click', () => { hideMine(); showPage('cloud') })
+      }
+
+      mineEl.appendChild(header)
+      console.error('[mine] ✅ header built + appended, mineEl.children=' + mineEl.children.length)
+
+      // ② 微信风格列表行（先同步构好，等数据回来更新 count）
+      function wmRow(icon, label, hint, onClick) {
+        return h('div', { class: 'wm-row', onclick },
+          h('div', { class: 'wm-row-icon' }, icon),
+          h('div', { class: 'wm-row-label' }, label),
+          hint ? h('div', { class: 'wm-row-hint' }, hint) : null,
+          h('div', { class: 'wm-row-arrow' }, '›'))
+      }
+
+      const hintFav = h('span', { class: 'wm-row-hint' }, '...')
+      const hintPls = h('span', { class: 'wm-row-hint' }, '...')
+      const hintRecent = h('span', { class: 'wm-row-hint' }, '...')
+
+      const list = h('div', { class: 'wm-list' },
+        wmRow('☁️', '个人空间', cloudSess?.token ? `${fmtQuota(cloudSess.used||0)} / ${fmtQuota(cloudSess.quota||5*1024**3)}` : '5GB', () => { hideMine(); showPage('cloud') }),
+        // 🔶 云同步按钮：登录后显示「立即同步」，音乐和视频两 App 打通桥梁
+        cloudSess?.token ? wmRow('🔄', '立即同步', '音乐↔视频歌单/收藏', async () => {
+          try { toast('同步中...', 'info'); const r = await syncAll(); toast(`同步完成：更新 ${r.push.ok ? 'OK' : '冲突'}`, 'ok'); showMine() }
+          catch (e) { toast('同步失败：' + e.message, 'err') }
+        }) : null,
+        wmRow('⭐', '我的收藏', hintFav, () => { hideMine(); showPage('favorites') }),
+        wmRow('📃', '我的歌单', hintPls, () => { hideMine(); showPage('playlists') }),
+        wmRow('🕐', '最近播放', hintRecent, () => { toast('最近播放功能开发中…', 'info') }),
+        h('div', { class: 'wm-sep' }),
+        wmRow('🌙', '主题外观', document.documentElement.getAttribute('data-theme') === 'dark' ? '深色' : '浅色', () => {
+          const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+          const next = cur === 'dark' ? 'light' : 'dark'
+          saveSettings({ theme: next })
+          document.documentElement.setAttribute('data-theme', next)
+          player.emit('theme', next)
+          toast('已切换' + (next === 'dark' ? '深色' : '浅色') + '主题', 'ok')
+          showMine()
+        }),
+        wmRow('⚙️', '设置', '', () => openSettings(app)),
+        wmRow('ℹ️', '关于', 'v16', () => toast('绿角犀音乐 v16 · 离线优先播放器', 'ok')))
+
+      mineEl.appendChild(list)
+      console.error('[mine] ✅ list built + appended, mineEl.children=' + mineEl.children.length + ' innerHTML_len=' + mineEl.innerHTML.length)
+
+      // ③ 异步拉数据更新副标题和 count
+      try {
+        console.error('[mine] ⏳ about to await Promise.all for DB reads...')
+        const [favs, pls, recent, all] = await Promise.all([getFavorites(), getPlaylists(), getRecent(30), getAllMedia()])
+        console.error('[mine] ✅ DB resolved: favs=' + favs?.length + ' pls=' + pls?.length + ' recent=' + recent?.length + ' all=' + all?.length)
+        const songs = all.filter((m) => m.type === 'music')
+        header.querySelector('.wm-sub').textContent = `${songs.length} 首本地音乐 · ${favs.length} 收藏 · ${pls.length} 歌单`
+        hintFav.textContent = favs.length + ' 首'
+        hintPls.textContent = pls.length + ' 个'
+        hintRecent.textContent = recent.length + ' 首'
+      } catch (e) {
+        console.error('[mine] 拉数据失败:', e)
+        header.querySelector('.wm-sub').textContent = '加载失败：' + (e?.message || e)
+      }
+    } catch (e) {
+      // 兜底：任何异常都不应该让页面空白
+      console.error('[mine] showMine 崩溃:', e)
+      toast('我的页面加载失败：' + (e?.message || e), 'err')
+      el.hidden = false
+      mineEl.hidden = true
+    }
   }
   function hideMine() { mineEl.hidden = true; el.hidden = false }
 
   // 把 mineEl 加到 view（和 home.el 同级）
-  el.parentElement?.insertBefore(mineEl, el.nextSibling)
+  // ⚠️ ISSUE: 这里 buildMusicHome 还没返回，home.el 也还没被 append 到 view
+  // 所以 el.parentElement 是 null！必须延后到 pages 循环 append 之后！
+  // 现在 buildMusicHome 内部把 mineEl 挂到 home 对象上供外部使用
 
-  return { el, show: refresh, refresh, showMine, hideMine }
+  return { el, show: refresh, refresh, showMine, hideMine, mineEl }
 }
 
 // ---------- 🎵 全屏播放页（大歌词居中 + 进度条 + 控制按钮） ----------
@@ -249,6 +352,20 @@ function modeIcon(m) {
 function openMusicFullpage() {
   if (document.getElementById('music-fullpage')) return
   let item = player.current
+
+  // 🔶 ISS-20261010-025: 进入全屏播放页时自动填充队列（如果还空着）
+  // 用户可能没先点歌就进了全屏 → queue=0 → 点列表抽屉也是空的
+  if (!player.queue.length) {
+    getAllMedia().then((all) => {
+      const songs = all.filter((m) => m.type === 'music')
+      if (songs.length) {
+        player.setQueue(songs, item?.id || songs[0].id)
+        // 如果还没在播放，预载第一首（不自动响）
+        // trackchanged 事件会自动更新 titleEl/artistEl/歌词等（见下方 offTrack）
+        if (!item) player.playItem(songs[0], { autoplay: false })
+      }
+    })
+  }
 
   const titleEl = h('div', { class: 'pfp-title' }, item?.title || item?.name || '未在播放')
   const artistEl = h('div', { class: 'pfp-artist' }, item?.artist || item?.album || '')
@@ -329,7 +446,7 @@ function openMusicFullpage() {
     lines.forEach((l, i) => l.classList.toggle('active', i === idx))
     lines[idx]?.scrollIntoView({ block: 'center' })
   })
-  const offTrack = player.on('trackchanged', (it) => {
+  const offTrack = player.on('trackchanged', async (it) => {
     item = it
     lastIdx = -2
     titleEl.textContent = it.title || it.name || '未在播放'
@@ -338,7 +455,21 @@ function openMusicFullpage() {
     lyrics = it.lyric ? parseLRC(it.lyric) : []
     lyricsEl.innerHTML = ''
     if (lyrics.length) { lyricsEl.appendChild(linesWrap); renderLines() }
-    else lyricsEl.appendChild(h('div', { class: 'pfp-empty' }, '暂无歌词 · 可在音乐页点「搜歌词」在线匹配'))
+    else {
+      // 🔶 ISS-20261010-027: 没内嵌歌词 → 自动在线搜 LRCLIB
+      const emptyBox = h('div', { class: 'pfp-empty' }, '🔍 正在联网匹配歌词...')
+      lyricsEl.appendChild(emptyBox)
+      const online = await fetchOnlineLyric(it)
+      if (online && online.length) {
+        lyrics = online
+        lyricsEl.innerHTML = ''
+        lyricsEl.appendChild(linesWrap)
+        renderLines()
+        toast('已匹配在线歌词', 'ok')
+      } else {
+        emptyBox.textContent = navigator.onLine ? '😅 未匹配到歌词' : '📡 离线状态无法联网匹配'
+      }
+    }
     durT.textContent = formatTime(player.getDuration() || 0)
   })
   const offPlay = player.on('play', () => { playBtn.textContent = '⏸' })
@@ -399,6 +530,32 @@ window.__mediaBatch = async (items, status) => {
     const added = await addMediaFromAndroid(all)
     console.error('[gr] addMediaFromAndroid added.length=' + added.length)
     toast(`导入完成：新增 ${added.length} 个`, 'ok')
+    // 🔶 ISS-20261010-026: Android MediaStore 导入后补解析内嵌 ID3 标签
+    // addMediaFromAndroid 只存基础字段，跳过了 parseTags；
+    // 但 JS fetch(content://uri) 已由 Kotlin shouldInterceptRequest 代理 → 可 fetch 文件读内嵌 USLT 歌词 + 封面
+    const musicAdded = added.filter(i => i.type === 'music')
+    if (musicAdded.length) {
+      toast(`正在解析 ${musicAdded.length} 个音频的内嵌歌词...`, 'info')
+      let lyricCount = 0, coverCount = 0
+      for (const it of musicAdded) {
+        try {
+          const res = await fetch(it.uri)
+          if (!res.ok) continue
+          const blob = await res.blob()
+          const tags = await parseTags(blob)
+          const patch = {}
+          if (tags.lyrics) { patch.lyric = tags.lyrics; lyricCount++ }
+          if (tags.cover) { patch.cover = tags.cover; coverCount++ }
+          // title/artist/album 如果 MediaStore 给的和文件名猜的一样（MediaStore 可能没带），用 ID3 真正的
+          if (tags.title && tags.title !== it.name.replace(/\.[^.]+$/, '')) patch.title = tags.title
+          if (tags.artist && !it.artist) patch.artist = tags.artist
+          if (tags.album && !it.album) patch.album = tags.album
+          if (Object.keys(patch).length) await updateMedia(it.id, patch)
+        } catch (e) { console.error('[gr] parseTags FAIL for ' + it.name + ': ' + e.message) }
+      }
+      if (lyricCount) toast(`解析到 ${lyricCount} 首内嵌歌词，${coverCount} 张封面`, 'ok')
+      else toast('部分音频无内嵌歌词，可点「搜歌词」在线匹配', 'info')
+    }
     // 🔶 ISS-20261008-006：给新导入的视频排队抽帧生成封面
     const newVideos = added.filter(i => i.type === 'video')
     if (newVideos.length) queueVideoThumbs(newVideos)
@@ -585,11 +742,19 @@ function relocateMedia(id) {
 // ---------- 播放 ----------
 function playItem(item) {
   app.mode = item.type
-  showPage(item.type)
-  const ctx = (app.currentList || []).filter((i) => i.type === item.type)
+  // 🔶 队列上下文：activeSource（当前页面过滤后的列表）优先，其次 currentList
+  // 这样在收藏页点歌 → 队列是收藏列表；在音乐库点歌 → 队列是全部音乐
+  const source = app.activeSource?.length ? app.activeSource : (app.currentList || [])
+  const ctx = source.filter((i) => i.type === item.type)
   const queueList = ctx.length ? ctx : [item]
+  // 🔶 保持用户当前页面：如果已在收藏/歌单等分类页就不跳走；只有在首页才跳到对应类型页
+  if (!['favorites', 'playlists', 'recent', 'cloud'].includes(app.page)) showPage(item.type)
   player.setQueue(queueList, item.id)
   player.playItem(item, { crossfade: player.isPlaying() })
+  // 🔶 ISS-20261010-027: 播放时就后台搜歌词（不用等进全屏）
+  if (!item.lyric && item.type !== 'video') {
+    fetchOnlineLyric(item).catch(() => {})
+  }
 }
 function playList(items, first) {
   app.mode = first.type

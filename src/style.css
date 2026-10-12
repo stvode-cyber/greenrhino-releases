@@ -274,13 +274,13 @@ body.win-music .app-version { color: var(--kg); border-color: var(--kg-soft); ba
 .drawer {
   position: fixed; right: 0; top: 0; bottom: 0; width: 340px; max-width: 86vw;
   background: var(--card); border-left: 1px solid var(--line); box-shadow: var(--shadow);
-  transform: translateX(100%); transition: transform .25s; z-index: 40; display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform .25s; z-index: 210; display: flex; flex-direction: column;
 }
 .drawer.open { transform: translateX(0); }
 /* 🔶 播放队列抽屉的背景遮罩（点空白处关闭 + ESC 关闭）*/
 .drawer-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);
-  opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 39;
+  opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 209;
 }
 .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
 .drawer .dh { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--line); }
@@ -1012,6 +1012,8 @@ body.win-music #sidebar .brand-logo {
 .sr-row:hover { background: rgba(0,0,0,.03); }
 .sr-row:active { background: rgba(0,0,0,.06); }
 .sr-row.sel { background: rgba(0,216,166,.08); }
+.sr-row.playing { background: rgba(0,216,166,.12); border-left: 3px solid var(--kg, #00D8A6); }
+.card.playing { box-shadow: 0 0 0 2px var(--kg, #00D8A6) inset; border-radius: 8px; }
 .sr-row.selectable { cursor: default; }
 .sr-row.selectable .sr-play { opacity: .5; pointer-events: auto; }
 /* 🔶 用户要求：列表行加深区别，在 #EAECEF 灰底上能一眼看清每行边界 */
@@ -1263,6 +1265,12 @@ body.win-music .sr-list,
 body.win-music .music-page {
   background: #EAECEF !important;
 }
+/* 🔶 ISS-20261010-025: queue drawer 在 music role 全屏播放页上也能看见 —— 明确背景 + 强化边框区分 */
+body.win-music .drawer {
+  background: #FFFFFF !important;
+  border-left: 1px solid #DCE3EC !important;
+  box-shadow: -8px 0 24px rgba(0,0,0,.08) !important;
+}
 /* 去掉所有 linear-gradient / radial-gradient 背景 */
 body.win-music * {
   background-image: none !important;
@@ -1303,14 +1311,44 @@ body.win-music .sidebar-foot { display: none !important; }
 body.win-music aside { display: none !important; }
 body.win-music #app { grid-template-columns: 1fr !important; }
 
-/* 🎵 "我的"页（底部导航点"我的"显示） */
-.mh-mine { padding: 12px 16px; }
-.mh-mine-section { margin-bottom: 18px; background: #fff; border-radius: 14px; padding: 14px; border: 1px solid #E5E7EB; }
-.mh-mine-head { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #1f2937; }
-.mh-mine-count { font-size: 12px; color: #9AA4B2; font-weight: 400; }
-.mh-pl-list { display: flex; flex-direction: column; gap: 6px; }
-.mh-pl-item { padding: 10px 12px; background: #F9FAFB; border-radius: 10px; font-size: 14px; cursor: pointer; border: 1px solid #F3F4F6; }
-.mh-pl-item:active { background: #EEF2FF; }
+/* 🎵 "我的"页 — 微信「我」风格 */
+.mh-mine { padding: 0; min-height: 100%; background: #EAECEF !important; }
+
+/* 顶部头像区 */
+.wm-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 28px 18px 22px; background: #fff; margin: 0; border-bottom: 1px solid #E5E7EB;
+}
+.wm-avatar {
+  width: 58px; height: 58px; border-radius: 14px; background: #00D8A6;
+  display: flex; align-items: center; justify-content: center; font-size: 28px;
+  flex-shrink: 0;
+}
+.wm-user-info { flex: 1; min-width: 0; }
+.wm-name { font-size: 17px; font-weight: 600; color: #1f2937; }
+.wm-sub { font-size: 12px; color: #9AA4B2; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wm-quota { font-size: 11px; color: var(--kg, #00D8A6); margin-top: 4px; }
+
+/* 微信风格列表容器 */
+.wm-list { margin-top: 10px; }
+.wm-sep { height: 10px; background: transparent; }
+.wm-sep + .wm-row:first-child { margin-top: 10px; border-top: 1px solid #E5E7EB; }
+
+/* 列表行：图标 + 文字 + 提示 + 箭头 */
+.wm-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; background: #fff; cursor: pointer;
+  border-bottom: 1px solid #F3F4F6;
+}
+.wm-row:active { background: #F3F4F6; }
+.wm-row-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+  flex-shrink: 0; background: #F3F4F6;
+}
+.wm-row-label { flex: 1; font-size: 15px; color: #1f2937; }
+.wm-row-hint { font-size: 13px; color: #9AA4B2; flex-shrink: 0; }
+.wm-row-arrow { font-size: 22px; color: #C7CCD1; flex-shrink: 0; line-height: 1; }
 
 
 .imp-page { position: fixed; inset: 0; z-index: 90; background: #EAECEF !important; display: flex; flex-direction: column; animation: impIn .18s ease; }

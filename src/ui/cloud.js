@@ -3,9 +3,19 @@
 // 部署：本机运行 `python server/cloud_api.py` 即可；生产可设 OSS 环境变量走阿里云。
 import { h, toast } from './dom.js'
 
-// 后端基址：优先 url ?cloud=，其次 window.GR_CLOUD_BASE（原生壳注入的内嵌服务端口），默认本机 8787
-const CLOUD_BASE = (new URLSearchParams(location.search).get('cloud')
-  || window.GR_CLOUD_BASE || 'http://localhost:8787').replace(/\/+$/, '')
+// 后端基址：优先级
+//   1) localStorage.__GR_CLOUD_BASE__  — 用户在设置里填的（手机局域网用）
+//   2) URL ?cloud=                     — URL 参数
+//   3) window.GR_CLOUD_BASE            — 原生壳注入（Windows 内嵌服务）
+//   4) 默认 http://localhost:8787
+const CLOUD_BASE = ((() => {
+  const saved = localStorage.getItem('__GR_CLOUD_BASE__')?.trim()
+  if (saved) return saved
+  const urlParam = new URLSearchParams(location.search).get('cloud')
+  if (urlParam) return urlParam
+  if (window.GR_CLOUD_BASE) return window.GR_CLOUD_BASE
+  return 'http://localhost:8787'
+})()).replace(/\/+$/, '')
 // 是否运行在原生壳（WebView2）：内嵌云盘同源可用，纯网页需另起 Python 后端
 const IS_HOST = !!window.GR_HOST
 
@@ -232,5 +242,78 @@ export function buildCloud(app) {
     hide() {},
     refresh() { if (loadSession()) reload() }
   }
+}
+
+// ================================================================
+// 🔶 云同步工具（独立函数，其他模块可直接 import 调用）
+// 用途：音乐/视频两 App 打通桥梁——登录同一账号即可共享歌单/收藏/续播进度
+// ================================================================
+import { dbGetAll, dbGet, dbPut, dbClear } from '../store.js'
+
+// 要同步的 IndexedDB 表（媒体文件本身 blob 不同步！不同 App 扫的 MediaStore 不一样）
+const SYNC_TABLES = ['favorites', 'playlists', 'progress', 'settings', 'queue']
+
+/** 把本地 IndexedDB 导出成可上传的 JSON */
+export async function syncExport() {
+  const data = {}
+  for (const t of SYNC_TABLES) {
+    if (t === 'settings') {
+      const v = await dbGet('settings', 'main')
+      if (v) data[t] = { main: v }
+    } else {
+      data[t] = await dbGetAll(t)
+    }
+  }
+  return { data, client_ts: Date.now() }
+}
+
+/** 合并服务器数据到本地 IndexedDB（last-writer-wins 逐条） */
+export async function syncImport(data) {
+  const report = { updated: 0, inserted: 0, skipped: 0, tables: {} }
+  for (const table of SYNC_TABLES) {
+    const remoteItems = data[table]
+    if (!remoteItems) continue
+    report.tables[table] = 0
+    if (table === 'settings') {
+      const remote = remoteItems.main
+      if (remote) { await dbPut('settings', remote, 'main'); report.tables[table]++ }
+      continue
+    }
+    for (const item of remoteItems) {
+      try {
+        const key = item.id
+        if (!key) { report.skipped++; continue }
+        const local = await dbGet(table, key)
+        if (!local) {
+          await dbPut(table, item, key); report.inserted++; report.tables[table]++
+        } else {
+          // 比较时间戳（优先 updatedAt，其次 lastPlayedAt，其次 playCount 改动）
+          const rTs = item.updatedAt || item.lastPlayedAt || item.addedAt || 0
+          const lTs = local.updatedAt || local.lastPlayedAt || local.addedAt || 0
+          if (rTs >= lTs) {
+            await dbPut(table, item, key); report.updated++; report.tables[table]++
+          }
+        }
+      } catch (e) { console.error('[cloud] syncImport error:', table, e) }
+    }
+  }
+  return report
+}
+
+/** 完整同步流程：服务器数据 → merge → 本地 → 本地最新 → push 回服务器 */
+export async function syncAll() {
+  const s = loadSession()
+  if (!s || !s.token) throw new Error('未登录')
+  // 1) pull
+  const pull = await api('/api/sync')
+  // 2) merge（服务器有数据才合并，空则跳过）
+  if (pull.data && Object.keys(pull.data).length) {
+    await syncImport(pull.data)
+  }
+  // 3) export + push
+  const payload = await syncExport()
+  payload.data_ts = pull.server_ts || 0
+  const r = await api('/api/sync', { method: 'POST', body: payload })
+  return { pull, push: r }
 }
 

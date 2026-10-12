@@ -12,6 +12,7 @@
 | 问题群标签 | 活跃坑 | 归档坑 | 严重度 | 详见 issues.md 第几段 |
 |---|---|---|---|---|
 | `#css-grid-overflow` 🔥 | 2 | 0 | 🔴 P0 | **P0 活跃坑第一段（最新！）** |
+| `#css-z-index` | 1 | 0 | 🟠 P1 | P1 活跃坑最新条（ISS-20261010-025） |
 | `#android-webview` 🔥 | 2 | 2 | 🔴 P0 | P0 活跃坑第三段 |
 | `#android-webview-cache` | 2 | 0 | 🔴 P0 | P0 活跃坑第二段 |
 | `#relative-path` 🔥 | 1 | 1 | 🔴 P0 | P0 活跃坑第三段 + 归档区 |
@@ -26,7 +27,7 @@
 | 模块 | 关键决策 | 踩过的坑 |
 |---|---|---|
 | 整体架构 | DEC-20260909-002（原生 ES Module 零构建） | ISS-20260914-001（资源路径相对路径）、ISS-20260914-010（webkitdirectory feature detection）、🔥ISS-20260916-003（WebView 绝对路径白屏） |
-| style.css（全局） | DEC-20261008-001（object-fit contain/cover 策略） | 🔥ISS-20261008-001（#main 缺 overflow:hidden）、🔥ISS-20261008-002（grid 1fr 缺 minmax）、ISS-20261008-005（video object-fit 默认黑边） |
+| style.css（全局） | DEC-20261008-001（object-fit contain/cover 策略） | 🔥ISS-20261008-001（#main 缺 overflow:hidden）、🔥ISS-20261008-002（grid 1fr 缺 minmax）、ISS-20261008-005（video object-fit 默认黑边）、ISS-20261010-025（drawer z-index 被 fullpage 盖住） |
 | ui/videoPlayer.js | DEC-20261008-002（控制条 auto-hide 策略） | ISS-20261008-003（WebView 缓存旧 JS） |
 | ui/bottombar.js | — | — |
 | library.js | — | ISS-20260914-006（refresh 并发去重）、ISS-20261009-020（空库 setTimeout 自动扫描漏删） |

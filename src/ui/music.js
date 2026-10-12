@@ -166,9 +166,10 @@ export function buildMusic(app) {
       ensureCover(item).then((url) => { if (url) setCover(item) })
     }
   })
-  // ② 在线自动歌词：优先走原生壳本地代理 /api/lyric（多源聚合 LRCLIB+歌词迷，且绕开浏览器跨域），
-  //    纯 PWA 模式（无本地服务）再兜底直连 LRCLIB。命中后渲染并缓存回 IndexedDB（下次离线也有）。
-  //    query 可指定自定义歌名/歌手（手动搜歌词时用）。
+  // ② 在线手动搜歌词：三级优先级（和 src/lyricFetch.js 完全一致）
+  //    1. RhinoBridge.getLyric()  — Android 原生桥
+  //    2. /api/lyric              — Windows LocalServer
+  //    3. 直连 LRCLIB             — 纯 PWA 兜底
   async function fetchOnlineLyric(item, query) {
     if (!item || item.type === 'video') return
     const title = (query?.title ?? item.title ?? item.name ?? '').trim()
@@ -176,19 +177,32 @@ export function buildMusic(app) {
     const album = (query?.album ?? item.album ?? '').trim()
     if (!title || !navigator.onLine) return
     let lrc = ''
-    // ① 原生壳本地代理（exe 专属）：同源请求，无跨域问题
+
+    // ① Android 原生桥（RhinoBridge）— 最快
     try {
-      const u = new URLSearchParams({ title, artist })
-      const res = await fetch(`/api/lyric?${u.toString()}`)
-      if (res.ok) {
-        const j = await res.json().catch(() => null)
-        if (j && j.lyric && j.lyric.trim()) lrc = j.lyric.trim()
+      if (window.RhinoBridge && typeof window.RhinoBridge.getLyric === 'function') {
+        lrc = window.RhinoBridge.getLyric(title, artist) || ''
+        if (lrc) console.log('[music.js] ✅ RhinoBridge hit:', title)
       }
-    } catch (e) { /* 本地服务不存在（纯 PWA）或非 200：走兜底 */ }
-    // ② 直连 LRCLIB 兜底（仅当代理未命中）
+    } catch (e) {}
+
+    // ② Windows /api/lyric 同源代理
+    if (!lrc) {
+      try {
+        const u = new URLSearchParams({ title, artist })
+        const res = await fetch(`/api/lyric?${u.toString()}`)
+        if (res.ok) {
+          const j = await res.json().catch(() => null)
+          if (j && j.lyric && j.lyric.trim()) lrc = j.lyric.trim()
+        }
+      } catch (e) {}
+    }
+
+    // ③ 直连 LRCLIB 兜底
     if (!lrc) {
       try { lrc = await fetchLrclib(title, artist, album) } catch (e) {}
     }
+
     if (!lrc) { toast('未找到匹配歌词'); return }
     const parsed = parseLRC(lrc)
     if (!parsed.length) { toast('歌词格式无法解析'); return }

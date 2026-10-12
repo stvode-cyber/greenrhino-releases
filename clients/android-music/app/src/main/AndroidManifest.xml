@@ -35,6 +35,8 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:launchMode="singleTask"
+            android:resizeableActivity="false"
+            android:supportsPictureInPicture="false"
             android:theme="@style/Theme.GreenRhino.Launcher">
 
             <!-- 桌面启动入口 -->

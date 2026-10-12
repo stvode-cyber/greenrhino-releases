@@ -112,7 +112,9 @@ export function mediaLibrary(app, type) {
             else { selected.add(it.id); node.classList.add('sel') }
             updateSelBar()
           }
-        } : {}))
+        } : {
+          onLongPress: (it) => { enterSelectMode(it) }
+        }))
       }
       el.appendChild(listBox)
     } else {
@@ -126,12 +128,34 @@ export function mediaLibrary(app, type) {
             else { selected.add(it.id); node.classList.add('sel') }
             updateSelBar()
           }
-        } : {}))
+        } : {
+          onLongPress: (it) => { enterSelectMode(it) }
+        }))
       }
       el.appendChild(grid)
     }
     el.appendChild(selbar)
     updateSelBar()
+    // 🔶 队列上下文：记录本次渲染的列表为播放源，供 playItem 构建正确队列
+    app.activeSource = list
+    // 🔶 滚动到正在播放的曲目
+    const curId = player.current?.id
+    if (curId) {
+      const row = el.querySelector(`[data-id="${curId}"]`)
+      if (row) requestAnimationFrame(() => row.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+    }
+  }
+
+  // 🔶 更新 playing 标记（轻量，不重建）+ 自动滚动
+  function updatePlayingMark(item) {
+    el.querySelectorAll('.playing').forEach(n => n.classList.remove('playing'))
+    if (item) {
+      const row = el.querySelector(`[data-id="${item.id}"]`)
+      if (row) {
+        row.classList.add('playing')
+        requestAnimationFrame(() => row.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+      }
+    }
   }
 
   // ---------- 多选 / 批量操作 ----------
@@ -142,6 +166,15 @@ export function mediaLibrary(app, type) {
     h('button', { class: 'ghost-btn danger', onclick: () => batchDelete() }, '🗑 删除'),
     h('button', { class: 'ghost-btn', onclick: () => exitSelect() }, '取消')
   )
+
+  // 🔶 长按进入多选（选长按那行）
+  function enterSelectMode(firstItem) {
+    selMode = true
+    selected.clear()
+    if (firstItem) selected.add(firstItem.id)
+    el.classList.add('selecting')
+    refresh()
+  }
 
   function updateSelBar() {
     const n = selected.size
@@ -263,12 +296,14 @@ export function mediaLibrary(app, type) {
     app.onStore('library:changed', refresh),
     app.onStore('media:updated', refresh),
     app.onStore('favorites:changed', refresh),
-    app.onStore('thumb:updated', refresh)
+    app.onStore('thumb:updated', refresh),
+    // 🔶 切歌时轻量更新 playing 标记 + 自动滚动（不重建列表，性能好）
+    player.on('trackchanged', (item) => updatePlayingMark(item))
   )
   const cleanup = () => unsub.forEach((u) => u())
 
   refresh()
-  return { el, refresh, cleanup }
+  return { el, refresh, cleanup, enterSelectMode }
 }
 
 export function mediaCard(item, app, opts = {}) {
@@ -299,9 +334,31 @@ export function mediaCard(item, app, opts = {}) {
   if (dur != null) { const m = Math.floor(dur / 60), s = Math.floor(dur % 60); badges.appendChild(h('span', { class: 'bdg' }, `${m}:${String(s).padStart(2, '0')}`)) }
   if (item.size) badges.appendChild(h('span', { class: 'bdg' }, item.size > 1048576 ? (item.size / 1048576).toFixed(1) + 'MB' : (item.size / 1024).toFixed(0) + 'KB'))
 
+  // 🔶 长按手势辅助（和 songRow 同样模式）
+  function bindLongPress(node) {
+    if (opts.selectable || !opts.onLongPress) return
+    let holdTimer = null, sx = 0, sy = 0, triggered = false
+    node.addEventListener('touchstart', (e) => {
+      const t = e.touches[0]
+      sx = t.clientX; sy = t.clientY; triggered = false
+      holdTimer = setTimeout(() => { triggered = true; opts.onLongPress(item, node) }, 600)
+    }, { passive: true })
+    const cancelHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null } }
+    node.addEventListener('touchmove', (e) => {
+      if (!holdTimer) return
+      const t = e.touches[0]
+      if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) cancelHold()
+    }, { passive: true })
+    node.addEventListener('touchend', () => cancelHold(), { passive: true })
+    node.addEventListener('touchcancel', () => cancelHold(), { passive: true })
+    // click 时如果长按触发过就跳过
+    const origClick = node.onclick
+    node.addEventListener('click', (e) => { if (triggered) { triggered = false; e.stopPropagation(); return } })
+  }
+
   if (opts.selectable) {
     const chk = h('div', { class: 'chk', title: '选择' }, '✓')
-    const node = h('div', { class: 'card' + (isLost ? ' lost' : '') + (opts.selected ? ' sel' : ''), 'data-id': item.id },
+    const node = h('div', { class: 'card' + (isLost ? ' lost' : '') + (opts.selected ? ' sel' : '') + (player.current?.id === item.id ? ' playing' : ''), 'data-id': item.id },
       chk, thumb, fav,
       h('div', { class: 'meta' },
         h('div', { class: 'name' }, item.title || item.name),
@@ -313,7 +370,7 @@ export function mediaCard(item, app, opts = {}) {
     return node
   }
 
-  const node = h('div', { class: 'card' + (isLost ? ' lost' : '') },
+  const node = h('div', { class: 'card' + (isLost ? ' lost' : '') + (player.current?.id === item.id ? ' playing' : ''), 'data-id': item.id },
     thumb, fav,
     h('div', { class: 'meta' },
       h('div', { class: 'name' }, item.title || item.name),
@@ -321,6 +378,7 @@ export function mediaCard(item, app, opts = {}) {
       badges
     )
   )
+  bindLongPress(node)
   if (isLost) {
     // §12 文件已丢失：标灰 + 提示 + 重新定位 / 移除
     const badge = h('div', { class: 'lost-badge' }, '⚠ 文件已丢失')
@@ -413,8 +471,31 @@ export function songRow(item, app, opts) {
   const classes = ['sr-row']
   if (selMode) classes.push('selectable')
   if (opts.selected) classes.push('sel')
+  if (player.current?.id === item.id) classes.push('playing') // 🔶 正在播放高亮
   const row = h('div', { class: classes.join(' '), 'data-id': item.id }, coverBox, info, playBtn, moreBtn)
+
+  // 🔶 长按手势：600ms 不移动 → 触发 onLongPress（用于批量选择入口）
+  let holdTimer = null, sx = 0, sy = 0, triggered = false
+  row.addEventListener('touchstart', (e) => {
+    if (selMode) return // 已在多选模式就不触发
+    const t = e.touches[0]
+    sx = t.clientX; sy = t.clientY; triggered = false
+    holdTimer = setTimeout(() => {
+      triggered = true
+      opts.onLongPress?.(item, row)
+    }, 600)
+  }, { passive: true })
+  const cancelHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null } }
+  row.addEventListener('touchmove', (e) => {
+    if (!holdTimer) return
+    const t = e.touches[0]
+    if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) cancelHold()
+  }, { passive: true })
+  row.addEventListener('touchend', () => cancelHold(), { passive: true })
+  row.addEventListener('touchcancel', () => cancelHold(), { passive: true })
+
   row.addEventListener('click', () => {
+    if (triggered) { triggered = false; return } // 长按触发过就不跑 click
     if (selMode && opts.onToggle) { opts.onToggle(item, row); return }
     app.playItem ? app.playItem(item) : (player.current = item, player.play())
   })

@@ -89,6 +89,8 @@ def register(username, password):
         "token": new_token(),
         "quota": QUOTA_BYTES,
         "used": 0,
+        "data": {},          # 🔶 云同步数据槽：favorites/playlists/progress/settings 等 JSON
+        "data_ts": 0,        # 🔶 服务器最后一次收到 sync_push 的时间戳（ms）
     }
     save_users()
     return users[username]["token"], None
@@ -100,6 +102,24 @@ def login(username, password):
     rec["token"] = new_token()  # 登录即轮换 token
     save_users()
     return rec["token"], None
+
+# ---------------- 云同步（音乐/视频两 App 打通桥梁） ----------------
+# 每个用户独立的 data JSON 槽，存 favorites / playlists / progress / settings 等。
+# 客户端传 client_ts → 服务器只在 client_ts >= data_ts 时覆盖（避免旧数据回滚）。
+def sync_pull(username):
+    rec = users[username]
+    return {"data": rec.get("data", {}), "server_ts": rec.get("data_ts", 0)}
+
+def sync_push(username, payload):
+    rec = users[username]
+    client_ts = int(payload.get("client_ts", 0))
+    # 首次推送（服务器没数据）直接保存
+    if not rec.get("data_ts") or client_ts >= rec.get("data_ts", 0):
+        rec["data"] = payload.get("data", {})
+        rec["data_ts"] = max(client_ts, int(time.time() * 1000))
+        save_users()
+        return True, rec.get("data_ts", 0), None
+    return False, rec.get("data_ts", 0), "服务器数据较新，请先 pull 再 push"
 
 def upload_file(username, name, data: bytes):
     rec = users[username]
@@ -219,6 +239,13 @@ class H(BaseHTTPRequestHandler):
                 if fid:
                     return self._send(200, {"id": fid, "name": name, "size": len(data)})
                 return self._send(400, {"error": err})
+            if p == "/api/sync":
+                uname = auth_user(self._token())
+                if not uname: return self._send(401, {"error": "未登录"})
+                payload = json.loads(body or b"{}")
+                ok, server_ts, err = sync_push(uname, payload)
+                if err: return self._send(409, {"error": err, "server_ts": server_ts})
+                return self._send(200, {"ok": ok, "server_ts": server_ts})
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(500, {"error": str(e)})
@@ -246,6 +273,10 @@ class H(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(data)
                 return
+            if u.path == "/api/sync":
+                uname = auth_user(self._token())
+                if not uname: return self._send(401, {"error": "未登录"})
+                return self._send(200, sync_pull(uname))
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(500, {"error": str(e)})

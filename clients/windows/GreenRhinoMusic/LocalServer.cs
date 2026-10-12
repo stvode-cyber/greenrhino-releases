@@ -9,6 +9,7 @@ using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
@@ -563,6 +564,37 @@ namespace GreenRhino
         {
             try { Directory.CreateDirectory(CloudDir()); File.WriteAllText(UsersFile(), JsonSerializer.Serialize(u, new JsonSerializerOptions { WriteIndented = true })); } catch { }
         }
+        // 🔶 云同步数据存取（独立 JSON，与文件上传数据分离）
+        private static string SyncFile(string uid) => Path.Combine(CloudDir(), $"sync-{uid}.json");
+        private static (JsonElement data, long ts) LoadSyncData(string uid)
+        {
+            try
+            {
+                var t = File.ReadAllText(SyncFile(uid));
+                if (string.IsNullOrEmpty(t)) return (JsonDocument.Parse("{}").RootElement, 0);
+                var doc = JsonDocument.Parse(t);
+                var empty = JsonDocument.Parse("{}").RootElement;
+                return (doc.RootElement.TryGetProperty("data", out var d) ? d : empty,
+                        doc.RootElement.TryGetProperty("server_ts", out var tsEl) ? tsEl.GetInt64() : 0);
+            } catch { return (JsonDocument.Parse("{}").RootElement, 0); }
+        }
+        private static void SaveSyncData(string uid, JsonElement? data, long serverTs)
+        {
+            try
+            {
+                Directory.CreateDirectory(CloudDir());
+                using var ms = new MemoryStream();
+                using (var w = new Utf8JsonWriter(ms))
+                {
+                    w.WriteStartObject();
+                    w.WritePropertyName("data");
+                    if (data.HasValue) data.Value.WriteTo(w); else w.WriteStartObject(); w.WriteEndObject();
+                    w.WriteNumber("server_ts", serverTs);
+                    w.WriteEndObject();
+                }
+                File.WriteAllBytes(SyncFile(uid), ms.ToArray());
+            } catch { }
+        }
         private static string UserFilesDir(string uid) { var d = Path.Combine(CloudDir(), "files", uid); Directory.CreateDirectory(d); return d; }
         private static string MetaFile(string uid) => Path.Combine(UserFilesDir(uid), ".index.json");
         private static List<CloudFileMeta> LoadMeta(string uid)
@@ -682,6 +714,38 @@ namespace GreenRhino
                     return;
                 }
                 if (!VerifyToken(tok, out var uid)) { await SendJson(ns, 401, new { error = "未登录或登录已过期" }); return; }
+
+                // 🔶 云同步：favorites/playlists/progress/settings/queue 五张表
+                // 存储：%APPDATA%\GreenRhinoMusic\cloud-<uid>.json
+                if (urlPath == "/api/sync" && method == "GET")
+                {
+                    var (syncData, ts) = LoadSyncData(uid);
+                    await SendJson(ns, 200, new { data = syncData, server_ts = ts });
+                    return;
+                }
+                if (urlPath == "/api/sync" && method == "POST")
+                {
+                    try
+                    {
+                        long clientTs = 0;
+                        JsonElement? data = null;
+                        var doc = JsonDocument.Parse(body);
+                        var r = doc.RootElement;
+                        if (r.TryGetProperty("client_ts", out var tsEl)) clientTs = tsEl.GetInt64();
+                        if (r.TryGetProperty("data", out var dataEl)) data = dataEl;
+                        var (_, serverTs) = LoadSyncData(uid);
+                        if (clientTs > 0 && serverTs > 0 && clientTs < serverTs)
+                        {
+                            await SendJson(ns, 409, new { error = "服务器数据较新，请先 pull 再 push", server_ts = serverTs });
+                            return;
+                        }
+                        long newTs = clientTs > 0 ? clientTs : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        SaveSyncData(uid, data, newTs);
+                        await SendJson(ns, 200, new { ok = true, server_ts = newTs });
+                    }
+                    catch (Exception ex) { await SendJson(ns, 500, new { error = ex.Message }); }
+                    return;
+                }
 
                 if (urlPath.StartsWith("/api/quota", StringComparison.OrdinalIgnoreCase))
                 {
