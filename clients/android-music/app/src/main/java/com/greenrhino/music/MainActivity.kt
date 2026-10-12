@@ -164,15 +164,23 @@ class MainActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                // 🔶 ISS-001 已修复：RhinoBridge.getLyric 暴露正常，返回 1088 chars LRC（周杰伦-晴天）
+                // 保留这条方法列表探针（单次 evaluateJavascript，不触发秒退），方便后续新增 @JavascriptInterface 方法时验证
                 view?.evaluateJavascript(
-                    "JSON.stringify({" +
-                    "role: window.__winRole," +
-                    "appVersion: window.__appVersion," +
-                    "grModuleRan: window.__grModuleRan," +
-                    "viewChildCount: document.getElementById('view')?.children?.length" +
-                    "})"
+                    "(function(){" +
+                    "var r=window.RhinoBridge;" +
+                    "var keys=[];if(r){for(var m in r){keys.push(m);}}" +
+                    "var out={" +
+                    "role:window.__winRole," +
+                    "rbExists:!!r," +
+                    "rbKeys:keys," +
+                    "getLyricType:typeof(r&&r.getLyric)," +
+                    "castScanType:typeof(r&&r.castScan)" +
+                    "};" +
+                    "return JSON.stringify(out);" +
+                    "})()"
                 ) { result ->
-                    Log.d("GreenRhino", "onPageFinished: $result")
+                    Log.d("GreenRhino", "🔧 RB PROBE: $result")
                 }
             }
         }
