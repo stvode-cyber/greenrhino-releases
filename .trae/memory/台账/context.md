@@ -10,13 +10,14 @@
 | 项 | 值 |
 |---|---|
 | 当前版本 | **APP_VERSION = 'v16'**（scripts/build-web.mjs L10） |
-| Git 状态 | main 分支有未 commit 改动（账号/云同步 + 歌词代理） |
+| Git 状态 | ✅ main 分支干净，4 个 commit 已 push 到 origin/main |
 | 测试状态 | ✅ 单元 6/6 + E2E 4/4 = 10/10 全绿 |
 | Android 真机 | ✅ moto XT2401_2 (2712x1220)，adb devices 在线，profile 904 |
-| RhinoBridge | ✅ **5 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / **getLyric**（🆕 歌词代理） |
-| 当前阻塞 | 🚨 **Android RhinoBridge.getLyric 调不通！** 前端代码检测到 RhinoBridge 存在但 getLyric 没被调用（根因待查） |
-| 已定规则 | ~28 条（见 AGENTS.md 不可变约束 + issues.md 活跃坑） |
+| RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / **castScan / castPlay / castStop / castPause**（🆕 DLNA 投屏） |
+| 当前阻塞 | 🚨 **Android RhinoBridge.getLyric 前端调不通**（ISS-001，历史遗留，新 AI 接手第一件事查） |
+| 已定规则 | ~30 条（见 AGENTS.md 不可变约束 + issues.md 活跃坑） |
 | 云同步后端 | ✅ server/cloud_api.py 跑在 localhost:8787，Windows LocalServer 也内置 |
+| 🆕 DLNA 投屏 | ✅ DlnaCaster.kt（Kotlin 零依赖 SSDP+SOAP）+ Windows DlnaCaster.cs 已有 + 前端 cast.js 已支持双宿主 |
 
 ### 🚨 新 AI 接手必须知道的阻塞点（最高优先级）
 
@@ -263,25 +264,19 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-12 深夜 | 🎵 **Android 本地歌词代理**：Kotlin RhinoBridge.getLyric + fetchLrclib + fetchGecimi 双源聚合；前端 lyricFetch.js + ui/music.js 加 RhinoBridge 三级优先级；main.js playItem 后台搜歌词 | ✅ 代码写完，🚨 **RhinoBridge.getLyric 前端调不通**（ISS-001） |
-| 2026-10-12 傍晚 | 🎵 **账号 + 云同步**：后端 cloud_api.py 加 /api/sync GET/POST + sync_pull/sync_push last-writer-wins；前端 cloud.js syncAll/syncExport/syncImport 五表同步；mineEl 显示真实用户名/配额/🔄 同步按钮；后端 8787 端口已验证打通 | ✅ 完成（未 commit） |
-| 2026-10-12 下午 | 🎵 **播放列表联动**：app.activeSource + playItem 重写 + trackchanged 监听；列表滚动定位 + playing 高亮；歌词偏移校准 | ✅ 完成 |
-| 2026-10-11 深夜 | 🎵 **Windows 绿角犀音乐发布**：build publish 单文件 exe 163.6 MB；桌面快捷方式；内嵌 LocalServer localhost:8800 | ✅ 完成 |
-| 2026-10-11 晚 | 🎵 **Android 真机部署**：moto XT2401_2 连上；APK 装机成功；禁用 profile 900/901/902/903/0 只留 904；633 首歌扫出 | ✅ 真机在线 |
+| 2026-10-12 深夜 | 📺 **Android DLNA 投屏完整打通**：DlnaCaster.kt（Kotlin 零依赖 SSDP+SOAP AVTransport）；RhinoBridge +4 castScan/castPlay/castStop/castPause；Manifest 补 ACCESS_WIFI_STATE/CHANGE_WIFI_MULTICAST_STATE；前端 cast.js 加 Android 双宿主分支；bottombar.js onCastClick 兼容 Android | ✅ 编译 BUILD SUCCESSFUL，commit 5072aad 已 push |
+| 2026-10-12 深夜 | 🎵 **Android 本地歌词代理**：RhinoBridge.getLyric + fetchLrclib + fetchGecimi；前端三级优先级 | 🚨 代码已写但 ISS-001 前端调不通 |
+| 2026-10-12 深夜 | 🎵 **账号 + 云同步**：cloud_api.py /api/sync + cloud.js syncAll + mineEl 账号 | ✅ 完成，已 push |
+| 2026-10-12 深夜 | 🔧 **.gitignore 完善**：屏蔽 release/pwa-site-*/、clients/*/assets/pwa/、根目录 *.png 截图；git rm --cached 清理 180+ 已提交的构建产物 | ✅ 工作区干净 |
+| 2026-10-12 深夜 | 🔧 **Log.println priority bug 修复**：onConsoleMessage char code 当 Log priority，改用 Log.d/e/w/i | ✅ ISS-003 已修 |
 
-### 🔴 未 commit 改动清单（接手要知道）
+### 🔴 已知 TODO（接手可以接着做）
 
 ```
-server/cloud_api.py                    ← /api/sync GET/POST（云同步）
-src/main.js                            ← activeSource + playItem 重写 + mineEl 账号 + 歌词后台搜
-src/ui/library.js                      ← playing 高亮 + trackchanged
-src/ui/favorites.js                    ← 完全重写（playing 高亮 + trackchanged）
-src/ui/playlists.js                    ← playing 高亮 + trackchanged
-src/ui/cloud.js                        ← syncExport/syncImport/syncAll
-src/lyricFetch.js                      ← RhinoBridge 三级优先级（未生效！）
-src/ui/music.js                        ← RhinoBridge 三级优先级（未生效！）
-src/style.css                          ← .playing + .wm-quota
-clients/android-music/.../MainActivity.kt ← RhinoBridge.getLyric（Kotlin 写完但前端调不通）
+# ISS-001: RhinoBridge.getLyric 前端调不通（P0，历史阻塞）
+# Android content:// → HTTP 代理（DLNA 电视需要 http(s):// URL）
+# Android Miracast 整屏镜像 Intent 唤起系统面板
+# Android onPageFinished 里多个 evaluateJavascript 秒退（ISS-004）
 ```
 
 ---

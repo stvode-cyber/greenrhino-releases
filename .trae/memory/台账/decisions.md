@@ -24,6 +24,7 @@
 | DEC-20261009-002 | 2026-10-09 | 自动扫描策略 | **彻底砍掉自动扫描**——用户必须手动点工具栏「📥 自动扫描」或「📁 选择文件」 | 之前方案 1（只首次启动扫）→ 用户反馈仍自动扫（JS 层 setTimeout 漏删根因），干脆全砍；用户要"完全完掉" | ① 只首次启动扫（已被否决）② 间隔触发 24h ③ 增量扫描 | clients/android-music/.../MainActivity.kt、src/ui/library.js | → ISS-20261009-020 | 删 Kotlin postDelayed + JS setTimeout 双层根因 |
 | DEC-20261009-003 | 2026-10-09 | 音乐 App 底部 UI | **保留 #music-nav（三栏导航：发现/正在播放/我的），隐藏 #bottombar（全局播放控制条含进度条）** | 用户要"进度条消失"但"保留 3 大选项"——#bottombar 含进度条必须藏，#music-nav 是三栏导航必须留 | 全部藏（错，丢了三栏导航） | src/style.css L1290-1294 | — | `body.win-music #bottombar { display:none }` 一条规则 |
 | DEC-20261009-005 | 2026-10-09 | 导入交互形态 | **点「导入音乐」进整页导入页（.imp-page 覆盖层，非弹窗）：两个大选项「📥 扫描音乐」「📁 手动打开手机文件」** | 用户连续否决两版：统一弹窗（丑+没有"进入"感）、单动作直触（缺两个选项）——"进入分两个选项"= 先进页面再选 | ① 统一弹窗（否决）② 直接触发（否决） | src/main.js L121-154、src/style.css（.imp-page 块）、src/ui/library.js importBar | → ISS-20261009-022 | 工具栏保留「📥 扫描音乐」「📁 手动打开」两直触按钮（一键到位）；sw.js 静态资源网络优先 → 线上部署同 cache 名即生效，v16 不 bump |
+| DEC-20261012-001 | 2026-10-12 | Android DLNA 投屏方案 | **Kotlin 手写 SSDP+SOAP 零依赖实现（照抄 Windows DlnaCaster.cs），通过 RhinoBridge 暴露 castScan/castPlay/castStop/castPause** | 项目风格是零依赖，引入 Cling2 等第三方库（~2MB UPnP 全套）太重；手写 SSDP UDP + SOAP HTTP 只需 ~200 行，完全可控，和 Windows 侧对称 | ① Cling2 等第三方库（重，引入依赖）② Chromecast SDK（依赖 GMS，项目已放弃 GMS）③ Miracast 整屏镜像兜底（但无法精确控制播放/暂停/进度） | clients/android-music/.../DlnaCaster.kt、clients/android-music/.../MainActivity.kt、src/cast.js | → ISS-20261012-004（编译坑已修） | 双宿主：Windows chrome.webview 消息 + Android RhinoBridge evaluateJavascript 回调 |
 
 ---
 

@@ -6,6 +6,17 @@
 
 ---
 
+## 2026-10-12（周六）
+
+| 时间 | 任务 | 改了哪些文件 | 跑了啥命令 | 备注 |
+|---|---|---|---|---|
+| 深夜 | 📺 **Android DLNA 投屏完整打通** | 🆕 clients/android-music/.../DlnaCaster.kt + MainActivity.kt + AndroidManifest.xml + src/cast.js + src/ui/bottombar.js | gradlew assembleDebug ✅ BUILD SUCCESSFUL + npm run test:all 10/10 ✅ | Kotlin 手写 SSDP+SOAP AVTransport 零依赖；RhinoBridge +4 cast 方法；Manifest +2 条局域网权限；前端 cast.js 加 Android 双宿主分支 |
+| 深夜 | 🔧 **Log.println priority bug 修复** | MainActivity.kt L190-203 | gradlew assembleDebug | char code 当 Log priority（'D'.code=68≠Log.DEBUG=3），改用 Log.d/e/w/i |
+| 深夜 | 🎵 **账号云同步 + 播放队列联动 + 歌词代理** | src/main.js + src/lyricFetch.js + src/ui/{cloud,music,library,favorites,playlists,settings}.js + server/cloud_api.py + MainActivity.kt | build-web.mjs + test:all | ⚠️ RhinoBridge.getLyric 前端调不通（ISS-001 历史遗留） |
+| 深夜 | 🔧 **.gitignore 完善** | .gitignore + git rm --cached 清理 180+ 构建产物 | git rm -r --cached + git commit | 屏蔽 release/pwa-site-*/、clients/*/assets/pwa/、根目录 *.png、.wrangler/、ui.xml |
+| 深夜 | 🔧 **Windows git credential 配置修复** | ~/.gitconfig | git config --global --unset + git config --global credential.helper manager | gh.exe 没登录导致 credential.https://github.com.helper 指向死路，删掉后 git-credential-manager 接管，push 成功 |
+| 深夜 | 🔍 **代码审计** | — | — | 审了 26 个 JS + Kotlin + Python 文件，发现 3P0 + 7P1 + 5P2；最紧：RhinoBridge.getLyric 为什么前端调不到 + Log.println bug |
+
 ## 2026-10-10（周五）
 
 | 时间 | 任务 | 改了哪些文件 | 跑了啥命令 | 备注 |

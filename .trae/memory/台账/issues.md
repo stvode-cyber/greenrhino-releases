@@ -7,6 +7,26 @@
 
 ## 🔥 活跃坑
 
+### ISS-20261012-005: Windows git credential 配置混乱导致 push 失败 P1
+- 日期：2026-10-12
+- 归类：`#git-credential #windows`
+- 现象：`git push origin main` 报 `Authentication failed`，但 Windows 凭据管理器里有 `stvode-cyber` 条目
+- 根因：git config 里同时配了两条冲突的 credential helper——一条指向 `gh.exe auth git-credential`（gh 没登录等于死路），一条指向 `git-credential-manager.exe`（正确）
+- 修复：`git config --global --unset credential.https://github.com.helper` 删掉死路那条，`git config --global credential.helper manager` 保留 git-credential-manager
+- 预防规则：**换新机器 / 装新工具后，跑 `git config --list --show-origin | Select-String credential` 检查有没有冲突条目**
+- 状态：✅ 已修
+- 相关坑：—
+
+### ISS-20261012-004: Kotlin DatagramSocket.soReuseAddress 属性名错误 P2
+- 日期：2026-10-12
+- 归类：`#kotlin #android-compile`
+- 现象：`gradlew assembleDebug` 报 `Unresolved reference: soReuseAddress`
+- 根因：Java 的 `socket.setReuseAddress(true)` 在 Kotlin 里对应属性是 `socket.reuseAddress = true`，不是 `socket.soReuseAddress`
+- 修复：`udp.soReuseAddress = true` → `udp.reuseAddress = true`
+- 预防规则：**Kotlin 调 Java socket 属性时先在 Android Studio 里看一下自动补全的名字**
+- 状态：✅ 已修（commit 5072aad）
+- 相关坑：—
+
 ### ISS-20261012-001: Android RhinoBridge.getLyric 前端调不通 🔥🔥🔥 P0
 - 日期：2026-10-12
 - 归类：`#android-webview #javascriptinterface #lyric-proxy`
