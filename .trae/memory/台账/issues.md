@@ -37,6 +37,16 @@
 - 关联文件：`clients/android-music/.../MainActivity.kt setupDebugReceiver()`
 - 状态：✅ 已修（commit bb16d41）
 
+### ISS-20261012-011: Android SSDP 多播必须持 WifiManager.MulticastLock P1 ✅
+- 日期：2026-10-12
+- 归类：`#android-multicast #ssdp`
+- 现象：DlnaCaster.discover() 发了 SSDP M-SEARCH 但永远收到 0 台设备
+- 根因：Android 默认省电策略**丢弃所有 WiFi 多播包**，除非持 MulticastLock。M-SEARCH 发得出去（UDP send 不需要锁），但电视回复的 UDP 包被系统静默丢弃
+- 修复：`wifi.createMulticastLock("GreenRhino-DLNA").apply { setReferenceCounted(false); acquire() }` 在 SSDP 扫描前获取，try/finally 释放。**Manifest 必须有 CHANGE_WIFI_MULTICAST_STATE 权限**
+- 预防规则：**Android 上任何 UDP 多播（SSDP/mDNS/Chromecast discovery）必须先拿 MulticastLock，否则发了等于白发**
+- 关联文件：`clients/android-music/.../DlnaCaster.kt discover()`
+- 状态：✅ 已修（commit 6c01ff9，本地待 push）
+
 ### ISS-20261012-005: Windows git credential 配置混乱导致 push 失败 P1
 - 日期：2026-10-12
 - 归类：`#git-credential #windows`
