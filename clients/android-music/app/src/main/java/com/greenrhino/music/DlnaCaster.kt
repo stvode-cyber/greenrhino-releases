@@ -1,6 +1,8 @@
 package com.greenrhino.music
 
 import android.util.Log
+import android.content.Context
+import android.net.wifi.WifiManager
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.net.DatagramPacket
@@ -39,59 +41,71 @@ class DlnaCaster {
 
     /**
      * SSDP 发现局域网内 DLNA MediaRenderer 设备。
-     * 回调在主线程触发（runOnUiThread），便于调用方直接更新 UI。
+     * ⚠️ 必须持 WifiManager.MulticastLock 否则 Android 丢多播包！
      */
-    fun discover(timeoutMs: Int = 4000, onResult: (List<DlnaDevice>) -> Unit) {
+    fun discover(context: Context, timeoutMs: Int = 4000, onResult: (List<DlnaDevice>) -> Unit) {
         Thread {
             val found = HashMap<String, DlnaDevice>()
             val deadline = System.currentTimeMillis() + maxOf(timeoutMs.toLong(), 3500L)
 
-            // SSDP M-SEARCH 多播
-            val msearch =
-                "M-SEARCH * HTTP/1.1\r\n" +
-                "HOST: 239.255.255.250:1900\r\n" +
-                "MAN: \"ssdp:discover\"\r\n" +
-                "MX: 3\r\n" +
-                "ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n"
+            // 🔶 MulticastLock：Android 默认丢多播包省电，SSDP 必须拿这个锁
+            val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            val multicastLock = wifi?.createMulticastLock("GreenRhino-DLNA")?.apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+            Log.d("GreenRhino", "DLNA MulticastLock acquired: ${multicastLock?.isHeld}")
 
-            DatagramSocket().use { udp ->
-                try { udp.reuseAddress = true } catch (_: Exception) {}
-                try { udp.soTimeout = 1200 } catch (_: Exception) {}
-                val sendData = msearch.toByteArray(StandardCharsets.US_ASCII)
-                try {
-                    udp.send(
-                        DatagramPacket(sendData, sendData.size,
-                            InetAddress.getByName("239.255.255.250"), 1900)
-                    )
-                } catch (e: Exception) {
-                    Log.w("GreenRhino", "DLNA SSDP send failed: ${e.message}")
-                    return@Thread
-                }
+            try {
+                // SSDP M-SEARCH 多播
+                val msearch =
+                    "M-SEARCH * HTTP/1.1\r\n" +
+                    "HOST: 239.255.255.250:1900\r\n" +
+                    "MAN: \"ssdp:discover\"\r\n" +
+                    "MX: 3\r\n" +
+                    "ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n"
 
-                while (System.currentTimeMillis() < deadline) {
-                    val buf = ByteArray(8192)
-                    val pkt = DatagramPacket(buf, buf.size)
+                DatagramSocket().use { udp ->
+                    try { udp.reuseAddress = true } catch (_: Exception) {}
+                    try { udp.soTimeout = 1200 } catch (_: Exception) {}
+                    val sendData = msearch.toByteArray(StandardCharsets.US_ASCII)
                     try {
-                        udp.receive(pkt)
-                        val text = String(pkt.data, 0, pkt.length, StandardCharsets.US_ASCII)
-                        val location = parseHeader(text, "LOCATION")
-                        if (location != null && !found.containsKey(location)) {
-                            parseDevice(location)?.let { found[it.id] = it }
-                        }
-                    } catch (e: java.net.SocketTimeoutException) {
-                        // 预期行为：SSDP MX=3，设备在 3s 内陆续响应
+                        udp.send(
+                            DatagramPacket(sendData, sendData.size,
+                                InetAddress.getByName("239.255.255.250"), 1900)
+                        )
                     } catch (e: Exception) {
-                        Log.w("GreenRhino", "DLNA SSDP recv: ${e.message}")
+                        Log.w("GreenRhino", "DLNA SSDP send failed: ${e.message}")
+                        return@Thread
+                    }
+
+                    while (System.currentTimeMillis() < deadline) {
+                        val buf = ByteArray(8192)
+                        val pkt = DatagramPacket(buf, buf.size)
+                        try {
+                            udp.receive(pkt)
+                            val text = String(pkt.data, 0, pkt.length, StandardCharsets.US_ASCII)
+                            val location = parseHeader(text, "LOCATION")
+                            if (location != null && !found.containsKey(location)) {
+                                parseDevice(location)?.let { found[it.id] = it }
+                            }
+                        } catch (e: java.net.SocketTimeoutException) {
+                            // 预期行为：SSDP MX=3，设备在 3s 内陆续响应
+                        } catch (e: Exception) {
+                            Log.w("GreenRhino", "DLNA SSDP recv: ${e.message}")
+                        }
                     }
                 }
+            } finally {
+                multicastLock?.release()
+                Log.d("GreenRhino", "DLNA MulticastLock released")
             }
 
             _devices.clear()
             _devices.putAll(found)
             Log.d("GreenRhino", "DLNA discover done: ${found.size} devices")
 
-            // 回调到主线程——在 Activity 里用 this@MainActivity.runOnUiThread 调用
-            // 但本类不知道 Activity，所以直接 post 到主线程 Handler
+            // 回调到主线程
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 onResult(found.values.toList())
             }

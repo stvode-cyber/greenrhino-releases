@@ -647,7 +647,7 @@ class MainActivity : ComponentActivity() {
         @android.webkit.JavascriptInterface
         fun castScan() {
             Log.d("GreenRhino", "📺 castScan() called")
-            dlnaCaster.discover { devices ->
+            dlnaCaster.discover(this@MainActivity) { devices ->
                 val arr = JSONArray()
                 for (d in devices) {
                     arr.put(JSONObject().apply {
