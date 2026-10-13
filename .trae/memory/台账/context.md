@@ -251,19 +251,19 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-12 深夜 | 🎥 **content://→HTTP 代理** 真机验证：MediaHttpServer (ServerSocket 零依赖) 200 OK + Range 206 ✅ | ✅ commit bb16d41 本地待 push（GitHub 断网） |
-| 2026-10-12 深夜 | 🔧 **com.sun.net.httpserver 不可用**：Android 没这个 Java SE API，全重写 ServerSocket 手写 HTTP/1.1 | ✅ 已修（MediaHttpServer.kt 236 行） |
-| 2026-10-12 深夜 | 🛠️ **Debug BroadcastReceiver**：adb shell am broadcast 直接触发 CAST_SCAN/CAST_PLAY，绕过 Moto 量产版 Log 过滤 | ✅ commit bb16d41 |
-| 2026-10-12 深夜 | 🛠️ **Android 13+ receiver 崩溃**：SecurityException 要求 RECEIVER_EXPORTED/NOT_EXPORTED flag | ✅ 已修（Build.VERSION.SDK_INT guard） |
-| 2026-10-12 深夜 | 🛠️ **Moto profile 904 专享**：ResolverActivity 弹窗挡 App → pm disable-user 0/900-903 只留 904 | ✅ 已修 |
+| 2026-10-13 下午 | 🧹 **失效文件清理**：删除 15 GB WebView2 污染 + .NET obj/bin，回收 16.4 GB | ✅ 项目从 17.5 GB → 1.3 GB |
+| 2026-10-13 下午 | 📥 **Android 播放器安装**：android-player assembleDebug + adb install，两个 App 都在 Moto 上 | ✅ 前台跑着 |
+| 2026-10-13 下午 | 📄 **DLNA 测试报告** 生成（release/DLNA投屏测试报告_20261013.md，17.9 KB） | ✅ |
+| 2026-10-13 凌晨 | 🎥 **content://→HTTP 代理全链路真机验证**：MediaHttpServer 200 OK + Range 206 + MulticastLock 修复 | ✅ commit 83e5651 push 完成 |
+| 2026-10-12 深夜 | 🛠️ **Debug BroadcastReceiver + profile 904 + ISS-008/009/010** | ✅ commit bb16d41 |
 
 ### 🔴 已知 TODO（接手可以接着做）
 
 ```
-# 等 GitHub 恢复：git push origin main 推 bb16d41
-# SSDP castScan 真机发现 TV（当前在 profile 904 上但没实测到设备）
-# onDestroy 里 MediaHttpServer.stop() 已加；如果觉得预启动太激进可改成 lazy start
-# Windows 端 LocalServer 也能起 HTTP 代理（已有 /api/cast-upload，和 Android 实现不同）
+# SSDP castScan 真机发现 TV（MulticastLock 已加，但需要真实 DLNA 电视在同一局域网）
+# 前端投屏按钮 UI（cast.js 已支持但播放器界面没加投屏入口）
+# Windows 端 DLNA 代理（.NET WebView2 + LocalServer，还没做）
+# onDestroy MediaHttpServer.stop() 已加
 ```
 
 ---
