@@ -45,7 +45,17 @@
 - 修复：`wifi.createMulticastLock("GreenRhino-DLNA").apply { setReferenceCounted(false); acquire() }` 在 SSDP 扫描前获取，try/finally 释放。**Manifest 必须有 CHANGE_WIFI_MULTICAST_STATE 权限**
 - 预防规则：**Android 上任何 UDP 多播（SSDP/mDNS/Chromecast discovery）必须先拿 MulticastLock，否则发了等于白发**
 - 关联文件：`clients/android-music/.../DlnaCaster.kt discover()`
-- 状态：✅ 已修（commit 6c01ff9，本地待 push）
+- 状态：✅ 已修（commit 6c01ff9）
+
+### ISS-20261013-012: WebView2 运行时数据污染 .NET publish 输出目录 🔥 P0 ✅
+- 日期：2026-10-13
+- 归类：`#windows-webview2 #dotnet #publish`
+- 现象：`clients/windows/` 三个项目的 `bin/Release/` 目录残留 **15 GB** 垃圾（GreenRhino/bin 独占 14.1 GB）
+- 根因：旧版本 WindowHost.cs 未显式配置 `UserDataFolder`，WebView2 默认把 IndexedDB / Service Worker cache / LocalStorage / HTTP cache 写进了 publish 输出目录（`exe.exe.WebView2/EBWebView/Default/`）。每次 `dotnet publish` 后跑 exe 验证，都会让 publish 目录膨胀一个数量级
+- 修复：三个项目的 `WindowHost.cs` L68-69 都已正确配置：`var userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GreenRhino*/wv2data")` → WebView2 数据写到 `%LocalAppData%/`，不再污染 publish 输出。**旧污染是历史版本残留，手动 `Remove-Item bin/, obj/` 即可清掉**
+- 预防规则：**任何用 WebView2/WPF 开发的 .NET 桌面 App，必须在 `CoreWebView2Environment.CreateAsync(rt, userData, opts)` 显式指定 `UserDataFolder` 到 AppData/独立目录，绝不能让它默认写到 exe 同级**。.gitignore 屏蔽 `clients/**/bin/` 和 `clients/**/obj/`，但运行时 WebView2 仍会绕过 git 污染磁盘
+- 关联文件：`clients/windows/*/WindowHost.cs BuildEnvAsync()`
+- 状态：✅ 代码正确，历史污染已清理（释放 16.39 GB）
 
 ### ISS-20261012-005: Windows git credential 配置混乱导致 push 失败 P1
 - 日期：2026-10-12
