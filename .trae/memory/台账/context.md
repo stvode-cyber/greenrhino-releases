@@ -265,8 +265,8 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-14 下午 | 🔧 **ISS-002 + ISS-003 修复**：(1) ISS-002 build.gradle 加 `outputs.upToDateWhen { false }` + 删重复 copyPwaAssetsRelease，两个 App 都改了； (2) ISS-003 确认已修（onConsoleMessage 已用 when/Log.e 正确写法，context.md 记录的是旧版 bug） | ✅ copyPwaAssets 不再 UP-TO-DATE |
-| 2026-10-14 下午 | 🔍 **ISS-001 确认已修复 + 台账过期复盘** | ✅ 台账更新 |
+| 2026-10-14 下午 | 📺 **前端投屏按钮 UI 落地**：videoPlayer.js 控制条加「📺 投屏」按钮，cast.js 扫描设备→列表选择→castTo→投屏 Banner（暂停/停止）。CSS 样式完整（面板、设备卡片、投屏中脉冲动画、琥珀 Banner）。build-web + 6/6 测试全绿 | ✅ 纯前端，不需要真机 |
+| 2026-10-14 下午 | 🔧 **ISS-002 + ISS-003 修复** | ✅ |
 | 2026-10-13 下午 | 🧹 **失效文件清理**：删除 15 GB WebView2 污染 + .NET obj/bin，回收 16.4 GB | ✅ 项目从 17.5 GB → 1.3 GB |
 | 2026-10-13 下午 | 📥 **Android 播放器安装**：android-player assembleDebug + adb install，两个 App 都在 Moto 上 | ✅ 前台跑着 |
 | 2026-10-13 下午 | 📄 **DLNA 测试报告** 生成（release/DLNA投屏测试报告_20261013.md，17.9 KB） | ✅ |
@@ -276,7 +276,6 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 ```
 # SSDP castScan 真机发现 TV（MulticastLock 已加，但需要真实 DLNA 电视在同一局域网）
-# 前端投屏按钮 UI（cast.js 已支持但播放器界面没加投屏入口）
 # Windows 端 DLNA 代理（.NET WebView2 + LocalServer，还没做）
 # onDestroy MediaHttpServer.stop() 已加
 # Moto 手机彻底屏蔽我们 App 的 logcat（Log.d/Log.e 全被杀）→ 调试只能靠 BroadcastReceiver + 文件写入 + run-as

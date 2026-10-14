@@ -1,4 +1,4 @@
-﻿// videoPlayer.js — 影像（视频）窗口的播放器。
+// videoPlayer.js — 影像（视频）窗口的播放器。
 // 空态：用视频内容网格填满整个主区域（不再是一块留白黑屏）。
 // 播放态：画面铺满整屏（object-fit:cover，不留黑边），画面下方是增强控制条：
 //   倍速 / 音轨 / 字幕轨 / 载入字幕 / 章节 / 画中画 / 旋转 / 比例 / 截图 / AB 循环 / 生成片段。
@@ -6,6 +6,7 @@ import { h, toast } from './dom.js'
 import { player } from '../player.js'
 import { getSettings, saveTrackPref, deleteMedia } from '../store.js'
 import { mediaLibrary } from './library.js'
+import { cast } from '../cast.js'
 
 export function buildVideoPlayer(app) {
   const lib = mediaLibrary(app, 'video')   // 空态内容：视频库网格，铺满
@@ -197,6 +198,91 @@ export function buildVideoPlayer(app) {
     h('span', { class: 'opt opt-ab ab-label', id: 'abA' }, 'A:--'),
     h('span', { class: 'opt opt-ab ab-label', id: 'abB' }, 'B:--')
   )
+  // ---------- 📺 投屏按钮 + 设备面板 ----------
+  const castBtn = h('button', { class: 'opt vp-cast', title: '投屏到电视', onclick: toggleCastPanel }, '📺 投屏')
+  const castPanel = h('div', { class: 'vp-cast-panel', hidden: true },
+    h('div', { class: 'vp-cast-head' }, '投屏到电视',
+      h('button', { class: 'vp-cast-close', title: '关闭', onclick: () => castPanel.hidden = true }, '✕')),
+    h('div', { class: 'vp-cast-body' }, '点击扫描附近设备…'),
+    h('button', { class: 'opt vp-cast-scan', onclick: startCastScan }, '🔍 扫描设备')
+  )
+  stage.appendChild(castPanel)
+  opts.insertBefore(castBtn, opts.querySelector('.vp-fs'))  // 投屏放在全屏之前
+
+  // 投屏中状态条（显示"正在投送 → XX 电视" + 停止/暂停按钮）
+  const castBanner = h('div', { class: 'vp-cast-banner', hidden: true },
+    h('span', { class: 'vp-cast-ico' }, '📺'),
+    h('span', { class: 'vp-cast-text' }, '正在投送到电视…'),
+    h('button', { class: 'opt', title: '暂停', onclick: () => cast.pause() }, '⏸'),
+    h('button', { class: 'opt', title: '停止投屏', onclick: () => { cast.stop(); toast('已停止投屏') } }, '■ 停止')
+  )
+  stage.appendChild(castBanner)
+
+  function toggleCastPanel() {
+    if (!cast.isHost()) { toast('当前环境不支持投屏', 'warn'); return }
+    if (cast.state.casting) {
+      // 投屏中 → 打开停止/暂停面板
+      castBanner.hidden = !castBanner.hidden
+      return
+    }
+    castPanel.hidden = !castPanel.hidden
+    if (!castPanel.hidden) startCastScan()
+  }
+
+  async function startCastScan() {
+    const body = castPanel.querySelector('.vp-cast-body')
+    const scanBtn = castPanel.querySelector('.vp-cast-scan')
+    scanBtn.disabled = true
+    body.textContent = '正在扫描附近设备…'
+    cast.scan()
+    // 3 秒超时兜底
+    setTimeout(() => {
+      if (castPanel.hidden) return
+      renderDevices()
+    }, 3000)
+  }
+
+  function renderDevices() {
+    const body = castPanel.querySelector('.vp-cast-body')
+    const scanBtn = castPanel.querySelector('.vp-cast-scan')
+    scanBtn.disabled = false
+    const devs = cast.state.devices
+    if (!devs || devs.length === 0) {
+      body.innerHTML = '<div class="vp-cast-empty">没找到设备<br>请确保电视和手机/电脑在同一局域网</div>'
+      return
+    }
+    body.innerHTML = ''
+    devs.forEach((d) => {
+      const btn = h('button', { class: 'vp-cast-dev', onclick: () => selectDevice(d) },
+        h('span', { class: 'vp-cast-dev-name' }, d.name || '未知设备'),
+        h('span', { class: 'vp-cast-dev-sub' }, d.uri || d.host || '')
+      )
+      body.appendChild(btn)
+    })
+  }
+
+  async function selectDevice(d) {
+    castPanel.hidden = true
+    toast('正在投送到「' + (d.name || '电视') + '」…')
+    await cast.castTo(d.id)
+  }
+
+  // 监听投屏状态变化
+  cast.on('devices', renderDevices)
+  cast.on('status', (s) => {
+    if (s.state === 'stopped' || s.state === '') {
+      castBanner.hidden = true
+      castBtn.classList.remove('casting')
+    } else if (s.state === 'playing' || s.state === 'paused') {
+      castBanner.hidden = false
+      castBtn.classList.add('casting')
+      const tvName = cast.state.deviceName || '电视'
+      castBanner.querySelector('.vp-cast-text').textContent =
+        s.state === 'paused' ? `已暂停 → ${tvName}` : `正在投送到 → ${tvName}`
+    }
+  })
+  cast.on('error', (msg) => { toast(msg, 'err') })
+
   stage.appendChild(opts)
 
   function refreshTrackSelects() {
