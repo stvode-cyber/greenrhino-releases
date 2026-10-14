@@ -1,7 +1,7 @@
 # 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
-> 最后更新：2026-10-14（ISS-001 已确认修复 + 台账过期复盘）
+> 最后更新：2026-10-14（全量刷新活跃坑 + 存活状态确认 + 台账过期铁律第 3 次命中）
 
 ---
 
@@ -221,43 +221,66 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 ---
 
-## 🚨 活跃坑（接手必读）
+## ✅ 活跃坑：**全清**！（2026-10-14 全量刷新确认）
 
-### ISS-20261012-001: Android RhinoBridge.getLyric 前端调不通 ✅ 已修复（2026-10-14 确认）
-- ~~根因：未知~~ → **已修复！第一次启动 App 时 onPageFinished 里的 RB PROBE 探针已暴露所有方法**
-- **铁证**：`🔧 RB PROBE: {"role":"music","rbExists":true,"rbKeys":["castPause","castPlay","castScan","castStop","getLyric","lookupMediaUri","requestAutoImport","setPlaying","toggleFullscreen"],"getLyricType":"function"}`
-- **复盘**：context.md 把已修复的坑列为 P0 活跃 → 浪费了本轮大量调试时间在一个已修复的问题上。**台账过期 = AI 瞎跑**
-- 端到端验证：Moto 手机屏蔽所有 Log.d/Log.e 日志，无法通过传统 logcat 验证点歌时歌词链路。代码层面完整（Kotlin getLyric + 前端 fetchOnlineLyric 三级优先级）
-- **预防铁律**：新 AI 接手时，先用 5 分钟启动 App 跑一次，验证 context.md 里的活跃坑是否真的还存在。不要直接按台账清单干活
+### 📊 存活状态确认表（所有坑 = 已修复）
 
-### ISS-20261012-002: gradlew copyPwaAssets UP-TO-DATE ✅ 已修复（2026-10-14）
-- ~~根因：Gradle 缓存机制，没检测到 src/ 目录改动~~ → **已修复！两个 build.gradle 都加了 `outputs.upToDateWhen { false }`**
-- ~~现象：前端改了 RhinoBridge 三级优先级，APK 里还是旧代码~~
-- 修复位置：`clients/android-music/app/build.gradle` + `clients/android-player/app/build.gradle`
-  - `copyPwaAssets` task 开头加 `outputs.upToDateWhen { false }`
-  - 删除重复的 `copyPwaAssetsRelease` task（和 copyPwaAssets 源/目标完全一样）
-  - 删除 `preBuild.dependsOn copyPwaAssetsRelease`
-- 验证：第二次 assembleDebug 显示 `Task ':app:copyPwaAssets' is not up-to-date because:` + `Caching disabled` ✅
-- **注意**：Gradle Copy task 的 from 指向 `release/pwa-site-*`，这个目录里的文件时间戳是 build-web.mjs 生成时的时间。如果改了 src/ 前端忘了先跑 `node scripts/build-web.mjs`，那 release 里的文件还是旧的——**build.gradle 里的 fix 只保证 Gradle 会复制，但复制什么取决于 release 目录里有什么**。建议改前端后先跑 build-web.mjs，或者改前端后手动 touch release 目录
+| 编号 | 问题 | 状态 | 验证方式 |
+|---|---|---|---|
+| ISS-001 | RhinoBridge.getLyric 前端调不通 | ✅ 已修 | RB PROBE 9 方法全 function（含 getLyric） |
+| ISS-002 | Gradle copyPwaAssets UP-TO-DATE | ✅ 已修 | `outputs.upToDateWhen { false }` + 删重复 task，两 App 都改了 |
+| ISS-003 | onConsoleMessage Log.println priority bug | ✅ 已修 | 当前代码 `when(messageLevel())` + Log.e/d 正确写法 |
+| ISS-20261009-019 | buildMusicHome 函数缺失 | ✅ 已修 | music.js 内 |
+| ISS-20261009-020 | addMediaFromAndroid 硬编码 VIDEO_EXT | ✅ 已修 | store.js 已通配 |
+| ISS-20261009-021 | SAF 抽屉分类过滤 | ✅ 已修 | MainActivity EXTRA_MIME_TYPES 严格限制 |
 
-### ISS-20261012-003: WebView onConsoleMessage + evaluateJavascript priority bug ✅ 已修复（2026-10-14 确认）
-- ~~根因：`Log.println(level[0].code, tag, msg)` — `'D'.code = 68` ≠ `Log.DEBUG = 3`~~ → **已修复！当前代码用 `when(consoleMessage.messageLevel())` + 直接调 `Log.e/Log.w/Log.d/Log.i`**
-- context.md 描述的是旧版代码，现在已经是正确写法
-- 当前 MainActivity.kt L211-224：
-  ```kotlin
-  when (consoleMessage.messageLevel()) {
-      ERROR -> Log.e(tag, msg)
-      WARNING -> Log.w(tag, msg)
-      DEBUG -> Log.d(tag, msg)
-      LOG -> Log.i(tag, msg)
-      else -> Log.d(tag, msg)
-  }
-  ```
+### 🪦 台账过期铁律 3 次命中记录
 
-### ISS-20261009-021: SAF 抽屉分类过滤 ✅ 已修
-### ISS-20261009-020: addMediaFromAndroid 硬编码 VIDEO_EXT ✅ 已修
-### ISS-20261009-019: buildMusicHome 函数缺失 ✅ 已修
-### ISS-20261009-018: Music App MediaStore 扫描缺失 ✅ 已修
+| 轮次 | 我以为的 | 实际 | 浪费 |
+|---|---|---|---|
+| 第一轮 | ISS-001 活跃坑 | 已修（RB PROBE 已暴露） | 大量时间跟 Moto logcat 死磕 |
+| 第二轮 | ISS-003 活跃坑 | 已修（when/Log.e 正确写法） | 差点去改正确代码 |
+| 第三轮 | Windows DLNA 代理 "还没做" | **100% 完成**（DlnaCaster.cs 三端全齐） | 选了个不需要动手的任务 |
+
+**🔑 铁律原文**：新 AI 接手 → 先用 5 分钟扫一遍核心源码（MainActivity.kt + build.gradle + DlnaCaster），不要直接按台账清单干活。台账可能比代码老，代码可能比台账新。
+
+---
+
+## 🧩 功能完成度盘点（2026-10-14 全量扫描）
+
+### Android 端
+
+| 模块 | 文件 | 状态 |
+|---|---|---|
+| RhinoBridge 9 方法 | MainActivity.kt L481-706 | ✅ toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / castScan / castPlay / castStop / castPause |
+| SSDP DLNA 发现 | DlnaCaster.kt 独立文件 | ✅ M-SEARCH + MulticastLock + XML 解析 AVTransport |
+| SOAP AVTransport | DlnaCaster.kt + MainActivity 桥接 | ✅ Play/Pause/Stop/Seek |
+| content://→HTTP 代理 | MediaHttpServer.kt | ✅ 原生 ServerSocket + Range + 0.0.0.0 绑定 |
+| onDestroy 清理 | MainActivity.kt L345 | ✅ MediaHttpServer.stop() |
+| Debug BroadcastReceiver | MainActivity.kt L357-385 | ✅ CAST_SCAN/PLAY/STOP/MEDIA_HTTP_TEST + Debug Cast 探针 |
+| Gradle copyPwaAssets | build.gradle | ✅ upToDateWhen=false，不再跳过 |
+
+### Windows 端（三端完全相同）
+
+| 模块 | 文件 | 状态 |
+|---|---|---|
+| SSDP DLNA 发现 | DlnaCaster.cs | ✅ 原生 UdpClient M-SEARCH |
+| SOAP AVTransport | DlnaCaster.cs | ✅ Play/Pause/Stop/Seek |
+| HTTP 代理（cast-upload + external Range） | LocalServer.cs | ✅ POST /api/cast-upload + GET /api/external?t= |
+| WebView2 消息桥 | MainWindow.xaml.cs OnWebMessage | ✅ cast:scan/play/stop/pause/seek/mirror + PostCast 推回前端 |
+| WPF 宿主 | MainWindow.xaml.cs + WindowHost | ✅ SingleInstance + Port 8900（GreenRhinoPlayer） |
+
+### 前端（纯原生 ES Module）
+
+| 模块 | 文件 | 状态 |
+|---|---|---|
+| 播放引擎 | player.js | ✅ 音频双引擎 Crossfade + 视频黑屏看门狗 + HEVC 自动转码 |
+| DLNA 投屏 | cast.js | ✅ isHost/windows/android 双宿主 + scan/castTo/stop/pause/mirror |
+| 投屏 UI | videoPlayer.js | ✅ 📺 投屏按钮 + 设备面板 + 投屏 Banner（脉冲动画） |
+| 三级歌词 | lyricFetch.js | ✅ RhinoBridge → /api/lyric → LRCLIB |
+| 内嵌 HTTP 服务 | server/cloud_api.py | ✅ Node LocalServer |
+| PWA Service Worker | sw.js | ✅ '__SW_CACHE__' 占位符（禁止硬编码版本号） |
+| 云同步 | src/ui/cloud.js + LocalServer | ✅ /api/sync GET/POST last-writer-wins |
 
 ---
 
@@ -265,23 +288,27 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-14 下午 | 🪟 **Windows DLNA 代理台账核实**：选了"Windows DLNA 代理"TODO，结果发现**已经 100% 完成**！DlnaCaster.cs（SSDP+SOAP AVTransport）+ LocalServer.cs（cast-upload+external Range 拉流）+ MainWindow.xaml.cs 消息桥（cast:scan/play/stop/pause/seek/mirror）全齐。3 个 Windows 项目的 DlnaCaster.cs 哈希完全相同。context.md 过期又一次命中 | ✅ 台账更新 |
-| 2026-10-14 下午 | 📺 **前端投屏按钮 UI 落地** | ✅ |
-| 2026-10-13 下午 | 🧹 **失效文件清理**：删除 15 GB WebView2 污染 + .NET obj/bin，回收 16.4 GB | ✅ 项目从 17.5 GB → 1.3 GB |
-| 2026-10-13 下午 | 📥 **Android 播放器安装**：android-player assembleDebug + adb install，两个 App 都在 Moto 上 | ✅ 前台跑着 |
-| 2026-10-13 下午 | 📄 **DLNA 测试报告** 生成（release/DLNA投屏测试报告_20261013.md，17.9 KB） | ✅ |
-| 2026-10-13 凌晨 | 🎥 **content://→HTTP 代理全链路真机验证**：MediaHttpServer 200 OK + Range 206 + MulticastLock 修复 | ✅ commit 83e5651 push 完成 |
+| 2026-10-14 下午 | 🔍 **全量刷新 context.md**：活跃坑全清 + 存活状态表 + 台账过期铁律 3 次命中记录 + Android/Windows/前端完成度盘点 | ✅ |
+| 2026-10-14 下午 | 🪟 **Windows DLNA 代理台账核实**：发现已 100% 完成，3 个项目 DlnaCaster.cs 哈希完全相同 | ✅ 台账更新 |
+| 2026-10-14 下午 | 📺 **前端投屏按钮 UI 落地**：videoPlayer.js + cast.js + style.css | ✅ build-web + 6/6 测试 |
+| 2026-10-14 下午 | 🔧 **ISS-002 + ISS-003 修复** + ISS-001 确认已修 | ✅ |
+| 2026-10-13 下午 | 🧹 **失效文件清理**：回收 16.4 GB | ✅ |
 
-### 🔴 已知 TODO（接手可以接着做）
+### 📌 待做清单（**只有 2 个**）
 
 ```
-# SSDP castScan 真机发现 TV（MulticastLock 已加，但需要真实 DLNA 电视在同一局域网）
-# Windows 端 DLNA 代理 ✅ 已完成！DlnaCaster.cs + LocalServer.cs + MainWindow.xaml.cs 消息桥 全齐，3 个 Windows 项目完全相同。需要 Windows 电脑 + 同一局域网 DLNA 电视真机验证
-# onDestroy MediaHttpServer.stop() 已加
-# Moto 手机彻底屏蔽我们 App 的 logcat（Log.d/Log.e 全被杀）→ 调试只能靠 BroadcastReceiver + 文件写入 + run-as
-# 云同步后端 + Android 歌词代理 还没一起打通测
+1. SSDP castScan 真机发现 TV（MulticastLock 已加，代码已齐）
+   → 需要：Android + 同一局域网 DLNA 电视
+
+2. 云同步后端 + Android 歌词代理 打通测
+   → 需要：同时起 Node server + Android App
 ```
 
----
+### 🛑 硬件限制（**无法纯代码验证**）
 
-**好的，这个 context.md 就是项目驾驶舱。新 AI 读 TL;DR + ISS-001 问题描述 → 立刻知道要干嘛。**
+```
+- Moto 手机彻底屏蔽我们 App 的 logcat → 调试只能靠 BroadcastReceiver + 文件写入 + run-as
+- DLNA 投屏需要真实电视在同一局域网
+- Windows 投屏需要 Windows 电脑 + 真实电视
+- Android App 需要手动点桌面图标启动（adb start 被 ResolverActivity 拦截）
+```
