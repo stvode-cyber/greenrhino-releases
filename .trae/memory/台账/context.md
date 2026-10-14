@@ -1,7 +1,7 @@
 # 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
-> 最后更新：2026-10-12（DLNA 投屏 content://→HTTP 代理 真机验证通过）
+> 最后更新：2026-10-14（ISS-001 已确认修复 + 台账过期复盘）
 
 ---
 
@@ -223,12 +223,12 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 ## 🚨 活跃坑（接手必读）
 
-### ISS-20261012-001: Android RhinoBridge.getLyric 前端调不通 🔥🔥🔥 P0
-- 根因：**未知**（Kotlin 代码编进去了，RhinoBridge 注册了，但前端检测不到 getLyric）
-- 现象：`/api/lyric` fetch 报 `file://` 错误（应该被 RhinoBridge 检测跳过）
-- 验证：APK 解压 classes3.dex 有 `getLyric \| fetchLrclib \| fetchGecimi \| RB1` 字符串 → Kotlin 代码在
-- 预防：每次改 Android Kotlin 后 → clean → assembleDebug → uninstall → install（不要 -r 覆盖）
-- **新 AI 第一件事：加 `Log.e("GreenRhino", "🔧 RB1: $result")` 同步检测，确认 window.RhinoBridge.getLyric 到底有没有**
+### ISS-20261012-001: Android RhinoBridge.getLyric 前端调不通 ✅ 已修复（2026-10-14 确认）
+- ~~根因：未知~~ → **已修复！第一次启动 App 时 onPageFinished 里的 RB PROBE 探针已暴露所有方法**
+- **铁证**：`🔧 RB PROBE: {"role":"music","rbExists":true,"rbKeys":["castPause","castPlay","castScan","castStop","getLyric","lookupMediaUri","requestAutoImport","setPlaying","toggleFullscreen"],"getLyricType":"function"}`
+- **复盘**：context.md 把已修复的坑列为 P0 活跃 → 浪费了本轮大量调试时间在一个已修复的问题上。**台账过期 = AI 瞎跑**
+- 端到端验证：Moto 手机屏蔽所有 Log.d/Log.e 日志，无法通过传统 logcat 验证点歌时歌词链路。代码层面完整（Kotlin getLyric + 前端 fetchOnlineLyric 三级优先级）
+- **预防铁律**：新 AI 接手时，先用 5 分钟启动 App 跑一次，验证 context.md 里的活跃坑是否真的还存在。不要直接按台账清单干活
 
 ### ISS-20261012-002: gradlew copyPwaAssets UP-TO-DATE 但 assets/pwa 是旧前端 🔥🔥 P0
 - 根因：Gradle 缓存机制，没检测到 src/ 目录改动
@@ -251,11 +251,11 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
+| 2026-10-14 下午 | 🔍 **ISS-001 确认已修复 + 台账过期复盘**：启动 App → RB PROBE 暴露 9 方法全 function → 清理调试代码（TEST_LYRIC BroadcastReceiver / console.error） → 恢复干净状态 | ✅ 台账更新 |
 | 2026-10-13 下午 | 🧹 **失效文件清理**：删除 15 GB WebView2 污染 + .NET obj/bin，回收 16.4 GB | ✅ 项目从 17.5 GB → 1.3 GB |
 | 2026-10-13 下午 | 📥 **Android 播放器安装**：android-player assembleDebug + adb install，两个 App 都在 Moto 上 | ✅ 前台跑着 |
 | 2026-10-13 下午 | 📄 **DLNA 测试报告** 生成（release/DLNA投屏测试报告_20261013.md，17.9 KB） | ✅ |
 | 2026-10-13 凌晨 | 🎥 **content://→HTTP 代理全链路真机验证**：MediaHttpServer 200 OK + Range 206 + MulticastLock 修复 | ✅ commit 83e5651 push 完成 |
-| 2026-10-12 深夜 | 🛠️ **Debug BroadcastReceiver + profile 904 + ISS-008/009/010** | ✅ commit bb16d41 |
 
 ### 🔴 已知 TODO（接手可以接着做）
 
@@ -264,6 +264,8 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 # 前端投屏按钮 UI（cast.js 已支持但播放器界面没加投屏入口）
 # Windows 端 DLNA 代理（.NET WebView2 + LocalServer，还没做）
 # onDestroy MediaHttpServer.stop() 已加
+# Moto 手机彻底屏蔽我们 App 的 logcat（Log.d/Log.e 全被杀）→ 调试只能靠 BroadcastReceiver + 文件写入 + run-as
+# 云同步后端 + Android 歌词代理 还没一起打通测
 ```
 
 ---
