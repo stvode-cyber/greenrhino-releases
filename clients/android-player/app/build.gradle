@@ -49,14 +49,16 @@ android {
     }
 }
 
-// === 关键：把 PWA 打进 APK assets ===
-// 从项目根目录的 release/pwa-site-player/ 复制到 app/src/main/assets/pwa/
-// 如果 release/ 还没 build，自动跑 build-web.mjs
+// === ISS-002 修复：禁用 Gradle copy UP-TO-DATE 检测 ===
+// Gradle 默认比较 inputs/outputs 文件时间戳 → 改了 src/ 后忘了先跑 build-web.mjs 时，
+// release/pwa-site-player/ 时间戳没变 → UP-TO-DATE → APK 里前端是旧代码
+// 解法：outputs.upToDateWhen { false } 强制每次 preBuild 都执行复制
 task copyPwaAssets(type: Copy) {
+    outputs.upToDateWhen { false }
     def pwaDir = rootProject.file('../../release/pwa-site-player')
     def destDir = file("$rootDir/app/src/main/assets/pwa")
 
-    // 如果 release 目录不存在，先 build
+    // 如果 release 目录不存在，自动 build
     if (!pwaDir.exists()) {
         doLast {
             exec {
@@ -64,25 +66,14 @@ task copyPwaAssets(type: Copy) {
                 commandLine 'node', 'scripts/build-web.mjs'
             }
         }
-        pwaDir = rootProject.file('../../release/pwa-site-player')
     }
 
-    from pwaDir
-    into destDir
-    exclude '.well-known/**'   // assetlinks.json 不需要打进 APK（是给云端的）
-}
-
-// release 构建也拷一份
-task copyPwaAssetsRelease(type: Copy) {
-    def pwaDir = rootProject.file('../../release/pwa-site-player')
-    def destDir = file("$rootDir/app/src/main/assets/pwa")
-    from pwaDir
+    from pwaDir.exists() ? pwaDir : rootProject.file('../../release/pwa-site-player')
     into destDir
     exclude '.well-known/**'
 }
 
 preBuild.dependsOn copyPwaAssets
-preBuild.dependsOn copyPwaAssetsRelease
 
 dependencies {
     // Kotlin

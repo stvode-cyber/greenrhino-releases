@@ -230,15 +230,29 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 - 端到端验证：Moto 手机屏蔽所有 Log.d/Log.e 日志，无法通过传统 logcat 验证点歌时歌词链路。代码层面完整（Kotlin getLyric + 前端 fetchOnlineLyric 三级优先级）
 - **预防铁律**：新 AI 接手时，先用 5 分钟启动 App 跑一次，验证 context.md 里的活跃坑是否真的还存在。不要直接按台账清单干活
 
-### ISS-20261012-002: gradlew copyPwaAssets UP-TO-DATE 但 assets/pwa 是旧前端 🔥🔥 P0
-- 根因：Gradle 缓存机制，没检测到 src/ 目录改动
-- 现象：前端改了 RhinoBridge 三级优先级，APK 里还是旧代码
-- 预防：**改前端后必须手动 robocopy release\pwa-site-music → clients\android-music\app\src\main\assets\pwa /MIR**，不要等 gradlew copyPwaAssets
+### ISS-20261012-002: gradlew copyPwaAssets UP-TO-DATE ✅ 已修复（2026-10-14）
+- ~~根因：Gradle 缓存机制，没检测到 src/ 目录改动~~ → **已修复！两个 build.gradle 都加了 `outputs.upToDateWhen { false }`**
+- ~~现象：前端改了 RhinoBridge 三级优先级，APK 里还是旧代码~~
+- 修复位置：`clients/android-music/app/build.gradle` + `clients/android-player/app/build.gradle`
+  - `copyPwaAssets` task 开头加 `outputs.upToDateWhen { false }`
+  - 删除重复的 `copyPwaAssetsRelease` task（和 copyPwaAssets 源/目标完全一样）
+  - 删除 `preBuild.dependsOn copyPwaAssetsRelease`
+- 验证：第二次 assembleDebug 显示 `Task ':app:copyPwaAssets' is not up-to-date because:` + `Caching disabled` ✅
+- **注意**：Gradle Copy task 的 from 指向 `release/pwa-site-*`，这个目录里的文件时间戳是 build-web.mjs 生成时的时间。如果改了 src/ 前端忘了先跑 `node scripts/build-web.mjs`，那 release 里的文件还是旧的——**build.gradle 里的 fix 只保证 Gradle 会复制，但复制什么取决于 release 目录里有什么**。建议改前端后先跑 build-web.mjs，或者改前端后手动 touch release 目录
 
-### ISS-20261012-003: WebView onConsoleMessage + evaluateJavascript priority bug 🔥 P1
-- 根因：`Log.println(level[0].code, tag, msg)` — `'D'.code = 68` ≠ `Log.DEBUG = 3`
-- 现象：console.log 调试日志不显示或显示在错误级别
-- 预防：调试时用 `console.error`（Fatal = Error level），或直接 Kotlin Log.d/Log.e
+### ISS-20261012-003: WebView onConsoleMessage + evaluateJavascript priority bug ✅ 已修复（2026-10-14 确认）
+- ~~根因：`Log.println(level[0].code, tag, msg)` — `'D'.code = 68` ≠ `Log.DEBUG = 3`~~ → **已修复！当前代码用 `when(consoleMessage.messageLevel())` + 直接调 `Log.e/Log.w/Log.d/Log.i`**
+- context.md 描述的是旧版代码，现在已经是正确写法
+- 当前 MainActivity.kt L211-224：
+  ```kotlin
+  when (consoleMessage.messageLevel()) {
+      ERROR -> Log.e(tag, msg)
+      WARNING -> Log.w(tag, msg)
+      DEBUG -> Log.d(tag, msg)
+      LOG -> Log.i(tag, msg)
+      else -> Log.d(tag, msg)
+  }
+  ```
 
 ### ISS-20261009-021: SAF 抽屉分类过滤 ✅ 已修
 ### ISS-20261009-020: addMediaFromAndroid 硬编码 VIDEO_EXT ✅ 已修
@@ -251,7 +265,8 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-14 下午 | 🔍 **ISS-001 确认已修复 + 台账过期复盘**：启动 App → RB PROBE 暴露 9 方法全 function → 清理调试代码（TEST_LYRIC BroadcastReceiver / console.error） → 恢复干净状态 | ✅ 台账更新 |
+| 2026-10-14 下午 | 🔧 **ISS-002 + ISS-003 修复**：(1) ISS-002 build.gradle 加 `outputs.upToDateWhen { false }` + 删重复 copyPwaAssetsRelease，两个 App 都改了； (2) ISS-003 确认已修（onConsoleMessage 已用 when/Log.e 正确写法，context.md 记录的是旧版 bug） | ✅ copyPwaAssets 不再 UP-TO-DATE |
+| 2026-10-14 下午 | 🔍 **ISS-001 确认已修复 + 台账过期复盘** | ✅ 台账更新 |
 | 2026-10-13 下午 | 🧹 **失效文件清理**：删除 15 GB WebView2 污染 + .NET obj/bin，回收 16.4 GB | ✅ 项目从 17.5 GB → 1.3 GB |
 | 2026-10-13 下午 | 📥 **Android 播放器安装**：android-player assembleDebug + adb install，两个 App 都在 Moto 上 | ✅ 前台跑着 |
 | 2026-10-13 下午 | 📄 **DLNA 测试报告** 生成（release/DLNA投屏测试报告_20261013.md，17.9 KB） | ✅ |
