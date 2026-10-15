@@ -4,7 +4,8 @@
 绿角犀 · 账号云盘 MVP 后端（零依赖，stdlib 实现）
 =================================================
 运行：python server/cloud_api.py  （默认 8787 端口，Mock 模式）
-功能：注册 / 登录(JWT 风格 token) / 配额(5GB) / 上传(直传，配额预检) / 列举 / 下载 / 删除。
+功能：注册 / 登录(JWT 风格 token) / 配额(5GB) / 上传 / 列举 / 下载 / 删除 /
+      云同步（/api/sync GET/POST last-writer-wins）/ 歌词代理（/api/lyric LRCLIB 兜底）。
 
 存储模式：
 - MOCK（默认）：文件存本地 server/data/files/<user_id>/，元数据 server/data/files.json
@@ -174,6 +175,46 @@ def get_file(username, fid):
     with open(v["path"], "rb") as f:
         return f.read(), v["name"], None
 
+# ---------------- 歌词代理（LRCLIB 公共库兜底） ----------------
+# 前端三级优先级第 ② 级：/api/lyric?title=xxx&artist=xxx
+# LRCLIB 接口：先 search → 取第一个结果的 lrclib_id → GET /api/get/<id> 拿 LRC 文本
+def fetch_lrclib(title, artist=""):
+    """调 LRCLIB 公共 API 拿 LRC 歌词。返回 LRC 纯文本或空字符串。"""
+    import urllib.request, urllib.error
+    try:
+        q = urllib.parse.urlencode({"track_name": title, "artist_name": artist or ""})
+        search_url = f"https://lrclib.net/api/search?{q}"
+        req = urllib.request.Request(search_url, headers={"User-Agent": "GreenRhino/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            results = json.loads(r.read().decode("utf-8"))
+        if not results:
+            return ""
+        # 优先找精确匹配
+        best = None
+        for res in results:
+            if res.get("track_name", "").strip().lower() == title.strip().lower():
+                best = res
+                break
+        if not best:
+            best = results[0]
+        lid = best.get("lrclib_id")
+        if not lid:
+            return ""
+        get_url = f"https://lrclib.net/api/get/{lid}"
+        req2 = urllib.request.Request(get_url, headers={"User-Agent": "GreenRhino/1.0"})
+        with urllib.request.urlopen(req2, timeout=5) as r2:
+            data = json.loads(r2.read().decode("utf-8"))
+        return data.get("syncedLyric") or data.get("plainLyric") or ""
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            print(f"[LYRIC] LRCLIB 限流 429，稍后重试...")
+        else:
+            print(f"[LYRIC] LRCLIB HTTP {e.code}: {e.reason}")
+        return ""
+    except Exception as e:
+        print(f"[LYRIC] LRCLIB 失败：{e}")
+        return ""
+
 # ---------------- HTTP ----------------
 class H(BaseHTTPRequestHandler):
     def _send(self, code, obj=None, headers=None):
@@ -277,6 +318,15 @@ class H(BaseHTTPRequestHandler):
                 uname = auth_user(self._token())
                 if not uname: return self._send(401, {"error": "未登录"})
                 return self._send(200, sync_pull(uname))
+            if u.path == "/api/lyric":
+                # 歌词代理：GET /api/lyric?title=晴天&artist=周杰伦
+                q = parse_qs(u.query)
+                title = (q.get("title") or [""])[0].strip()
+                artist = (q.get("artist") or [""])[0].strip()
+                if not title:
+                    return self._send(400, {"error": "title 参数必填"})
+                lrc = fetch_lrclib(title, artist)
+                return self._send(200, {"lyric": lrc})
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(500, {"error": str(e)})
