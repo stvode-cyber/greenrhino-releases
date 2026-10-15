@@ -1,7 +1,7 @@
-# 🛩️ 绿角犀项目驾驶舱（context.md）
+﻿# 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
-> 最后更新：2026-10-14（全量刷新活跃坑 + 存活状态确认 + 台账过期铁律第 3 次命中）
+> 最后更新：2026-10-15（Python server 稳定 + /api/lyric 60s 缓存 + context.md 三处过期尾巴清扫）
 
 ---
 
@@ -90,7 +90,7 @@ adb devices -l
 ### 技术栈
 
 - **前端**: 原生 ES Module（零构建，无 framework），`src/` 直接浏览器加载
-- **后端**: Node.js LocalServer（server/）— 含 `/api/sync` GET/POST + `/api/lyric` 代理
+- **后端**: Python cloud_api.py（零依赖 stdlib，8787 端口）— 含 register/login/sync + /api/lyric LRCLIB 代理（60s 内存缓存防 429 限流）
 - **构建**: 仅 `scripts/build-web.mjs` + `scripts/build-assets.mjs`（自定义 Node 脚本）
 - **PWA**: 手写 `sw.js`，Manifest v3
 - **Android**: WebView 原生壳（Kotlin MainActivity.kt），两个独立 AndroidManifest
@@ -114,7 +114,7 @@ adb devices -l
 
 ---
 
-## 🎤 Android 本地歌词代理（已写代码但未验证成功）
+## 🎤 Android 本地歌词代理（代码完整 + RB PROBE 已暴露方法）
 
 ### 架构
 
@@ -181,7 +181,7 @@ Log.e("GreenRhino", "🔧 RB check: $result")
 ### 同步链路
 
 ```
-server/cloud_api.py（Node.js，跑 8787）
+server/cloud_api.py（Python 零依赖 stdlib，跑 8787）
   POST /api/register  → {username, password} → users.json[username] = {salt, hash, token, quota, used, data:{}, data_ts:0}
   POST /api/login     → 返回 token + quota + used
   GET  /api/sync      → {data: {...}, server_ts: 1728500000000}

@@ -175,9 +175,12 @@ def get_file(username, fid):
     with open(v["path"], "rb") as f:
         return f.read(), v["name"], None
 
-# ---------------- 歌词代理（LRCLIB 公共库兜底） ----------------
+# ---------------- 歌词代理（LRCLIB 公共库兜底 + 60s 内存缓存） ----------------
 # 前端三级优先级第 ② 级：/api/lyric?title=xxx&artist=xxx
 # LRCLIB 接口：先 search → 取第一个结果的 lrclib_id → GET /api/get/<id> 拿 LRC 文本
+_lyric_cache = {}   # (title, artist_lower) → (timestamp_ms, lrc_text)
+LYRIC_CACHE_TTL_MS = 60 * 1000   # 60 秒缓存，防止 LRCLIB 429 限流
+
 def fetch_lrclib(title, artist=""):
     """调 LRCLIB 公共 API 拿 LRC 歌词。返回 LRC 纯文本或空字符串。"""
     import urllib.request, urllib.error
@@ -325,7 +328,15 @@ class H(BaseHTTPRequestHandler):
                 artist = (q.get("artist") or [""])[0].strip()
                 if not title:
                     return self._send(400, {"error": "title 参数必填"})
+                # 60s 内存缓存：同一 title+artist 不重复打 LRCLIB（防 429 限流）
+                cache_key = (title.lower(), (artist or "").lower())
+                now = int(time.time() * 1000)
+                cached = _lyric_cache.get(cache_key)
+                if cached and now - cached[0] < LYRIC_CACHE_TTL_MS:
+                    print(f"[LYRIC] cache hit: {title} ({now - cached[0]}ms 内)")
+                    return self._send(200, {"lyric": cached[1], "cached": True})
                 lrc = fetch_lrclib(title, artist)
+                _lyric_cache[cache_key] = (now, lrc)
                 return self._send(200, {"lyric": lrc})
             return self._send(404, {"error": "not found"})
         except Exception as e:
