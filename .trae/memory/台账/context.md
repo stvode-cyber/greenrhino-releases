@@ -15,7 +15,7 @@
 | Android 真机 | ✅ moto XT2401_2, profile 904 专属（`pm disable-user --user 0/900-903`） |
 | RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / castScan / castPlay / castStop / castPause |
 | 已定规则 | ~32 条（见 AGENTS.md + DEC-20261012-001/002 新增 MediaHttpServer + Debug Receiver） |
-| 云同步后端 | ✅ server/cloud_api.py localhost:8787 |
+| 云同步后端 | ✅ **Python** server/cloud_api.py（零依赖 stdlib，8787 端口），含 /api/register + /api/login + /api/sync GET/POST + **/api/lyric** LRCLIB 代理 |
 | 🆕 DLNA 投屏 | ✅ **全链路真机验证通过**：content:// → MediaHttpServer → HTTP 代理 → curl 200 + Range 206 ✅ |
 
 ### 📱 Android 真机快速验证命令
@@ -278,7 +278,7 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 | DLNA 投屏 | cast.js | ✅ isHost/windows/android 双宿主 + scan/castTo/stop/pause/mirror |
 | 投屏 UI | videoPlayer.js | ✅ 📺 投屏按钮 + 设备面板 + 投屏 Banner（脉冲动画） |
 | 三级歌词 | lyricFetch.js | ✅ RhinoBridge → /api/lyric → LRCLIB |
-| 内嵌 HTTP 服务 | server/cloud_api.py | ✅ Node LocalServer |
+| 内嵌 HTTP 服务 | server/cloud_api.py（Python 零依赖，8787） | ✅ register/login/sync + /api/lyric LRCLIB 代理 |
 | PWA Service Worker | sw.js | ✅ '__SW_CACHE__' 占位符（禁止硬编码版本号） |
 | 云同步 | src/ui/cloud.js + LocalServer | ✅ /api/sync GET/POST last-writer-wins |
 
@@ -294,14 +294,22 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 | 2026-10-14 下午 | 🔧 **ISS-002 + ISS-003 修复** + ISS-001 确认已修 | ✅ |
 | 2026-10-13 下午 | 🧹 **失效文件清理**：回收 16.4 GB | ✅ |
 
-### 📌 待做清单（**只有 2 个**）
+### 📌 待做清单（**只剩 1 个**）
 
 ```
 1. SSDP castScan 真机发现 TV（MulticastLock 已加，代码已齐）
    → 需要：Android + 同一局域网 DLNA 电视
+```
 
-2. 云同步后端 + Android 歌词代理 打通测
-   → 需要：同时起 Node server + Android App
+### ✅ 2026-10-15 本轮完成
+```
+2. ~~云同步后端 + 歌词代理 打通测~~ ✅ 已完成！
+   → Python cloud_api.py 起在 8787 端口
+   → /api/register ✅ /api/login ✅ /api/sync GET(pull) ✅ /api/sync POST(push) ✅
+   → last-writer-wins 正确拒绝旧数据（409 Conflict）
+   → 新增 /api/lyric LRCLIB 代理（search → lrclib_id → get LRC）
+   → LRCLIB 限流 429 → server 正确返回空字符串 → 前端走第三级兜底
+   → context.md 之前把 Python 后端写成 Node → 已修正
 ```
 
 ### 🛑 硬件限制（**无法纯代码验证**）
