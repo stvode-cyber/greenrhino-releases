@@ -10,7 +10,7 @@
 | 项 | 值 |
 |---|---|
 | 当前版本 | **APP_VERSION = 'v16'**（scripts/build-web.mjs L10） |
-| Git 状态 | ⚠️ main 分支 ahead 1（bb16d41 GitHub 断网未 push，本地安全） |
+| Git 状态 | ⚠️ main 分支 ahead 9（GitHub 断网未 push，本地安全） |
 | 测试状态 | ✅ 单元 6/6 + E2E 4/4 = 10/10 全绿 |
 | Android 真机 | ✅ moto XT2401_2, profile 904 专属（`pm disable-user --user 0/900-903`） |
 | RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / castScan / castPlay / castStop / castPause |
