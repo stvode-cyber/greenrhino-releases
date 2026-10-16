@@ -1,4 +1,4 @@
-﻿// cloud.js — 账号云盘客户端（注册送 5GB / 上传 / 列举 / 下载 / 删除）
+// cloud.js — 账号云盘客户端（注册送 5GB / 上传 / 列举 / 下载 / 删除）
 // 后端：server/cloud_api.py（零依赖 Python stdlib HTTP 服务，默认 8787 端口，CORS 已开放）
 // 部署：本机运行 `python server/cloud_api.py` 即可；生产可设 OSS 环境变量走阿里云。
 import { h, toast } from './dom.js'
@@ -18,6 +18,11 @@ const CLOUD_BASE = ((() => {
 })()).replace(/\/+$/, '')
 // 是否运行在原生壳（WebView2）：内嵌云盘同源可用，纯网页需另起 Python 后端
 const IS_HOST = !!window.GR_HOST
+
+// Android 壳里 Moto 屏蔽 Debug/Info 级别，Error 级别能漏出来 → 用 console.error 当唯一调试通道
+// 纯网页（Chrome DevTools 正常）不需要这些日志
+const _IS_ANDROID_SHELL = /android/i.test(navigator.userAgent || '')
+const _log = (...args) => { if (_IS_ANDROID_SHELL) console.error('[cloud]', ...args) }
 
 const SKEY = 'gr_cloud_session'
 
@@ -41,6 +46,7 @@ function fmtBytes(n) {
 async function api(path, { method = 'GET', body = null, auth = true, isForm = false } = {}) {
   const headers = {}
   const s = loadSession()
+  _log('api', method, path, 's.token=', (s?.token || '').slice(0, 20))
   if (auth && s && s.token) headers['Authorization'] = 'Bearer ' + s.token
   const opt = { method, headers }
   if (body) {
@@ -303,7 +309,11 @@ export async function syncImport(data) {
 /** 完整同步流程：服务器数据 → merge → 本地 → 本地最新 → push 回服务器 */
 export async function syncAll() {
   const s = loadSession()
-  if (!s || !s.token) throw new Error('未登录')
+  _log('syncAll: loadSession()=', !!s, 's.token=', (s?.token || '').slice(0, 20))
+  if (!s || !s.token) {
+    _log('syncAll FAIL: 未登录')
+    throw new Error('未登录')
+  }
   // 1) pull
   const pull = await api('/api/sync')
   // 2) merge（服务器有数据才合并，空则跳过）
@@ -316,4 +326,9 @@ export async function syncAll() {
   const r = await api('/api/sync', { method: 'POST', body: payload })
   return { pull, push: r }
 }
+
+// 🧪 DEBUG: 暴露到 window 供 Android Debug BroadcastReceiver 触发
+// 纯网页端不会暴露（非 Android 壳 _IS_ANDROID_SHELL = false 但仍暴露 — 无伤大雅，仅 Android 壳 BroadcastReceiver 用）
+_log('CLOUD_BASE:', CLOUD_BASE, 'IS_HOST:', IS_HOST)
+window.__GR_SYNC = { syncAll, syncExport, syncImport, api, loadSession, CLOUD_BASE }
 

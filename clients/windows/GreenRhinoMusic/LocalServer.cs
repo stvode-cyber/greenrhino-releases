@@ -470,6 +470,10 @@ namespace GreenRhino
         private async Task<string> FetchLyricAggregate(string title, string artist)
         {
             if (string.IsNullOrWhiteSpace(title)) return "";
+            // 🔶 ISS-20261016-010: 清洗 MediaStore 占位符 <unknown>
+            // 前端 item.artist 可能带 MediaStore ROM 级字面量，导致 LRCLIB/gecimi 搜索 100% miss
+            if (artist != null && (artist.Equals("<unknown>", StringComparison.OrdinalIgnoreCase) || artist.Equals("Unknown Artist", StringComparison.OrdinalIgnoreCase)))
+                artist = "";
             // ① LRCLIB
             try
             {

@@ -176,11 +176,15 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描', pr
     existingKeys.add(dupKey)
     const id = hashId('android:' + j.id + ':' + j.uri)
     scannedIds.add(id)
+    // 🔶 ISS-20261016-010: 前端兜底清洗 MediaStore ROM 占位符
+    // 即使 Kotlin/Windows 三端已清洗，这里加双保险避免跨平台遗漏
+    const _cleanArtist = (v) => { const s = (v || '').trim(); return ['<unknown>', 'unknown artist'].includes(s.toLowerCase()) ? '' : s }
+    const _cleanAlbum = (v) => { const s = (v || '').trim(); return ['<unknown>', 'unknown album'].includes(s.toLowerCase()) ? '' : s }
     // 🔶 ISS-20261009-018: 按 role 设 type / mime / artist / album
     const item = role === 'music' ? {
       id, name: j.name, type: 'music', mime: 'audio/mpeg',
       size: j.size || 0, addedAt: Date.now(), folder,
-      artist: j.artist || '', album: j.album || '',
+      artist: _cleanArtist(j.artist), album: _cleanAlbum(j.album),
       title: j.name.replace(/\.[^.]+$/, ''), duration: j.duration || 0,
       uri: j.uri, favorite: false, playCount: 0, lastPlayedAt: 0,
       source: 'android_mediastore'

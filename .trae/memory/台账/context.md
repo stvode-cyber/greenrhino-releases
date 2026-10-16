@@ -1,7 +1,7 @@
-﻿# 🛩️ 绿角犀项目驾驶舱（context.md）
+# 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
-> 最后更新：2026-10-15（Python server 稳定 + /api/lyric 60s 缓存 + context.md 三处过期尾巴清扫）
+> 最后更新：2026-10-16（云同步 Android 端全链路打通 + Advisor 审查清理 + /api/logout 安全端点；活跃坑 ISS-013~016 入库；cloud.js _log() 守卫）
 
 ---
 
@@ -15,7 +15,8 @@
 | Android 真机 | ✅ moto XT2401_2, profile 904 专属（`pm disable-user --user 0/900-903`） |
 | RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / castScan / castPlay / castStop / castPause |
 | 已定规则 | ~32 条（见 AGENTS.md + DEC-20261012-001/002 新增 MediaHttpServer + Debug Receiver） |
-| 云同步后端 | ✅ **Python** server/cloud_api.py（零依赖 stdlib，8787 端口），含 /api/register + /api/login + /api/sync GET/POST + **/api/lyric** LRCLIB 代理 |
+| 云同步后端 | ✅ **Python** server/cloud_api.py（零依赖 stdlib，8787 端口），含 /api/register + /api/login + /api/sync GET/POST + **/api/lyric** LRCLIB 代理。**已修复**：login() 不再轮换 token（多端共用账号不会互踢） |
+| 🆕 云同步 Android 端 | ✅ **2026-10-16 真机打通**：MainActivity.kt cloudBase=`http://192.168.1.132:8787` → URL ?cloud= 参数注入 → register + login + quota 5GB + syncAll pull+push+last-writer-wins 全绿 ✅ |
 | 🆕 DLNA 投屏 | ✅ **全链路真机验证通过**：content:// → MediaHttpServer → HTTP 代理 → curl 200 + Range 206 ✅ |
 
 ### 📱 Android 真机快速验证命令
@@ -29,6 +30,12 @@ adb logcat -d -s GreenRhino:D GreenRhino:E 2>&1 | Select-String "getLyric|🎤|R
 
 # 看是否还有 /api/lyric fetch 报错（应该没有！）
 adb logcat -d -s GreenRhino/JS:F 2>&1 | Select-String "/api/lyric"
+
+# 🆕 云同步：Debug BroadcastReceiver（Android 13+ 必须 RECEIVER_EXPORTED）
+adb shell am broadcast -a greenrhino.CLOUD_SYNC
+adb shell am broadcast -a greenrhino.CAST_SCAN
+# 看 CLOUD_BASE + session token 是否正确
+adb logcat -d -s GreenRhino/JS:F 2>&1 | Select-String "\[cloud\]"
 ```
 
 ### 构建链路（改前端后 Android APK 不会自动更新 assets！）
@@ -46,13 +53,26 @@ robocopy release\pwa-site-music clients\android-music\app\src\main\assets\pwa /M
 cd clients\android-music
 .\gradlew.bat clean assembleDebug
 
-# 5. 卸载重装（覆盖旧 dex 缓存）
-adb uninstall com.greenrhino.music
-adb install app\build\outputs\apk\debug\app-debug.apk
+# 5. ⚠️ 装机：绝对不要 adb uninstall（会清 IndexedDB → 633 首歌全没 → 空库死锁！）
+#    覆盖安装 + 保留旧数据：adb install -r
+adb install -r "app\build\outputs\apk\debug\app-debug.apk"
 
-# 6. 启动
-adb logcat -c
+# 6. Moto XT2401 必须 grant 4 权限（否则 requestAutoImport 卡权限等待）
+adb shell pm grant com.greenrhino.music android.permission.READ_MEDIA_AUDIO
+adb shell pm grant com.greenrhino.music android.permission.READ_MEDIA_IMAGES
+adb shell pm grant com.greenrhino.music android.permission.READ_MEDIA_VIDEO
+adb shell pm grant com.greenrhino.music android.permission.READ_EXTERNAL_STORAGE
+
+# 7. 启动（注意：不要先 logcat -c！Moto 清 buffer 后完全屏蔽 App 日志）
 adb shell am start -n com.greenrhino.music/.MainActivity
+# 可能弹 ResolverActivity（多 user profile 拦截）→ tap 610,2251 绕过去
+adb shell uiautomator dump /sdcard/ui_r.xml
+if ((adb shell cat /sdcard/ui_r.xml) -match "选择要使用的应用程序") { adb shell input tap 610 2251 }
+
+# 8. 等 App 加载完 → 直接 --pid 抓日志（不 -c！）
+Start-Sleep -Seconds 15
+$pid = (adb shell pidof com.greenrhino.music).Trim()
+adb logcat -d --pid=$pid 2>&1 | Select-String "GreenRhino|🎤|getLyric"
 ```
 
 ### ⚠️ 新 AI 必做 Checklist（3 分钟版）
@@ -90,8 +110,39 @@ adb devices -l
 ### 技术栈
 
 - **前端**: 原生 ES Module（零构建，无 framework），`src/` 直接浏览器加载
-- **后端**: Python cloud_api.py（零依赖 stdlib，8787 端口）— 含 register/login/sync + /api/lyric LRCLIB 代理（60s 内存缓存防 429 限流）
+- **后端**: 三端分立（按宿主平台自动选择，不是同一个！）
+  - 🐍 **Python** `server/cloud_api.py`（8787 端口）— 云同步 `/api/sync` + LRCLIB `/api/lyric` 代理（60s 内存缓存防 429 限流）
+  - 🟣 **.NET** 内嵌 LocalServer（8800 端口）— Windows WebView2 侧媒体流式 + `/api/lyric` 同源代理
+  - 🔧 **Kotlin** MediaHttpServer（40363 端口动态）— Android `content://→HTTP Range` 代理（DLNA 投屏用）
 - **构建**: 仅 `scripts/build-web.mjs` + `scripts/build-assets.mjs`（自定义 Node 脚本）
+
+### 🏗️ 后端架构图（三端，各司其职）
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  前端 PWA（同一套 src/，运行时按 winRole 裁剪）                      │
+│  fetchOnlineLyric() / fetch('/api/lyric') / syncAll()               │
+└────────────┬──────────────────┬──────────────────┬────────────────┘
+             │                  │                  │
+             ▼                  ▼                  ▼
+┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
+│ 🟣 Windows 侧        │ │ 🔧 Android 侧        │ │ 🐍 云端/局域网侧     │
+│ .NET LocalServer    │ │ Kotlin MediaHttp   │ │ Python cloud_api    │
+│ 8800 端口固定       │ │ Server 动态端口     │ │ 8787 端口固定       │
+│                     │ │                    │ │                     │
+│ ✅ /api/external    │ │ ✅ 原生 ServerSocket│ │ ✅ /api/register   │
+│   Range 媒体流      │ │   0.0.0.0 绑定      │ │ ✅ /api/login      │
+│ ✅ /api/cast-upload │ │ ✅ content://→HTTP │ │ ✅ /api/sync GET   │
+│   投屏上传          │ │   代理（DLNA用）    │ │ ✅ /api/sync POST  │
+│ ✅ /api/lyric       │ │                    │ │   last-writer-wins │
+│   同源歌词代理       │ │ 歌词不走此端口      │ │ ✅ /api/lyric      │
+│                     │ │                    │ │   LRCLIB 代理       │
+│ 歌词实际走:          │ │ 歌词实际走:          │ │                    │
+│ fetch('/api/lyric') │ │ RhinoBridge         │ │ 歌词实际走:         │
+│ → LocalServer       │ │ .getLyric() Kotlin  │ │ fetch('http://IP')  │
+│   fetchLrclib()     │ │   fetchLrclib()     │ │ → cloud_api        │
+└────────────────────┘ └────────────────────┘ └────────────────────┘
+```
 - **PWA**: 手写 `sw.js`，Manifest v3
 - **Android**: WebView 原生壳（Kotlin MainActivity.kt），两个独立 AndroidManifest
 - **Windows**: .NET 8 WebView2 `clients/windows/GreenRhino{Music,Player}`（已 build publish）
@@ -114,15 +165,15 @@ adb devices -l
 
 ---
 
-## 🎤 Android 本地歌词代理（代码完整 + RB PROBE 已暴露方法）
+## 🎤 Android 本地歌词代理 ✅ 已验证全链路通
 
 ### 架构
 
 ```
 前端 fetchOnlineLyric(item)
   → 三级优先级：
-    ① window.RhinoBridge.getLyric(title, artist)   ← Android 原生桥（🆕 刚加的）
-    ② fetch('/api/lyric?title=...')                 ← Windows LocalServer 同源代理
+    ① window.RhinoBridge.getLyric(title, artist)   ← Android 原生桥（第一级，已验证）
+    ② fetch('/api/lyric?title=...')                 ← Windows .NET LocalServer 8800 同源代理
     ③ fetch('https://lrclib.net/api/search?...')    ← 纯 PWA 兜底（跨域友好）
   → 命中后 parseLRC() + updateMedia(id, {lyric: lrc}) → IndexedDB 缓存
 
@@ -133,46 +184,42 @@ Kotlin RhinoBridge.getLyric(title, artist): String
   → 返回 LRC 纯文本
 ```
 
+### ✅ 真机验证时间线（2026-10-16 Moto XT2401）
+
+| 时间 | 事件 | 日志证据 |
+|---|---|---|
+| 10:24 | RB PROBE | ✅ 9/9 方法全 function（含 getLyric） |
+| 10:24 | 点歌触发 getLyric | `getLyric(title=周杰伦串烧, artist=<unknown>)` → miss |
+| 10:36 | 发现 artist 全 `<unknown>` | **ISS-010 根因确认**：MediaStore 对无 TAG 文件返回字面量 `<unknown>` |
+| 11:04 | 三层修复后 getLyric | **🎉 `getLyric(title=Acoustic Installation, artist=TK from 凛として时雨)` → artist 不再是 `<unknown>`！** |
+| 11:10 | npm test:all | ✅ 单元 6/6 + E2E 4/4 全绿 |
+
 ### 改动文件（已完成）
 
 | 文件 | 改动 |
 |---|---|
-| `clients/android-music/.../MainActivity.kt` | RhinoBridge 加 `getLyric(title, artist)` + `fetchLrclib()` + `fetchGecimi()` + `httpGetText()` + `httpGetJsonArray()` + `httpGetJsonObject()` |
+| `clients/android-music/.../MainActivity.kt` | RhinoBridge 加 `getLyric(title, artist)` + `fetchLrclib()` + `fetchGecimi()`；scanMediaStore() 加 `<unknown>` / `Unknown Artist` 清洗 |
+| `clients/windows/GreenRhinoMusic/LocalServer.cs` | FetchLyricAggregate() 同步加 `<unknown>` 清洗 |
+| `src/store.js` | addMediaFromAndroid() 加 `_cleanArtist()` 前端兜底 |
 | `src/lyricFetch.js` | fetchOnlineLyric 加 RhinoBridge 三级优先级（第一级） |
 | `src/ui/music.js` | fetchOnlineLyric（手动搜歌词版）同样加 RhinoBridge 三级优先级 |
 | `src/main.js` | playItem() 里后台调用 fetchOnlineLyric(item)（不等进全屏） |
 
-### 已踩的坑
+### 🛡️ MediaStore `<unknown>` 清洗（ISS-010 根因沉淀）
 
-| # | 坑 | 根因 | 解法 |
-|---|---|---|---|
-| 1 | /api/lyric fetch 在 WebView 里报错 `file://` | Android WebView loadUrl("file:///android_asset/index.html")，相对 URL `/api/lyric` 变成 `file:///api/lyric`，WebView 不支持 | ✅ 前端第一级检测 RhinoBridge，有就跳过 fetch |
-| 2 | gradlew assembleDebug 说 copyPwaAssets UP-TO-DATE 但 assets 里是旧代码 | Gradle 缓存机制——没检测到 src/ 改动（src 不在 Gradle 监听范围内！） | ✅ **手动 robocopy** release/pwa-site-music → assets/pwa；改前端后必须手动复制 |
-| 3 | evaluateJavascript 回调里 Log.println 崩溃 | Log.println(priority, ...) 的 priority 是 char，不是 int！`'D'.code = 68`，但 Android Log 常量是 `Log.DEBUG = 3` → int 值错 | ✅ 用 `Log.d()` / `Log.e()` 直接调用 |
-| 4 | onConsoleMessage 调试不可靠 | 同样 priority 计算 bug：`when (messageLevel) { DEBUG -> "D" }` 然后 `level[0].code` → 68，不是 3 | ✅ console.log 调试时要用 `console.error`（Fatal 级别）或直接用 Kotlin Log.e |
-| 5 | RhinoBridge inner class 必须用 inner class | 匿名 object 的 @JavascriptInterface 在 targetSdk 34+ 某些设备不生效 | ✅ 代码已是 inner class |
+**Android MediaStore.Images/Video/Audio 返回字段的危险陷阱：**
+- 有内嵌 TAG → 返回真实值（如 `TK from 凛として时雨`）
+- **无内嵌 TAG → 返回字面量 `<unknown>`（不是 null！不是空串！）**
+- Kotlin `cur.getString(ARTIST_IDX) ?: ""` 对字面量无效，`?: ""` 只对 null 生效
 
-### 🚨 待解问题
+**MediaStore 实际分布**（adb 实测 642 首）：artist=`<unknown>` 321 (50%)，artist 有值 321 (50%)
 
-**为什么 RhinoBridge.getLyric 没被前端调用到？**
+**三层清洗策略**（必须全做，不能只信一层）：
+1. Kotlin `if (artist.equals("<unknown>", ignoreCase=true) \|\| artist.equals("Unknown Artist", ignoreCase=true)) artist = ""`
+2. .NET LocalServer 同步加
+3. store.js 前端兜底 `_cleanArtist()`
 
-可能原因：
-1. Android WebView 里 `for(var k in window.RhinoBridge)` 不能枚举 Java 桥对象的方法（只暴露 prototype 上的，不暴露 own properties）→ 但 `typeof RhinoBridge.getLyric` 应该能检测
-2. WebView 版本太旧不支持 ES2020 可选链 `?.`（但 fetchOnlineLyric 里没用可选链，music.js 里也没用）
-3. 前端检测时机不对——RhinoBridge 在 addJavascriptInterface 时还没创建好？
-4. APK 里其实还是旧前端（robocopy 漏了或 Gradle 又覆盖回去）
-
-**新 AI 要做的验证：**
-```kotlin
-// 在 addJavascriptInterface 之后立刻调用：
-webView.evaluateJavascript(
-    "(function(){console.error('🔧 RB exists:', !!window.RhinoBridge, 'getLyric:', typeof window.RhinoBridge?.getLyric);})()",
-    null
-)
-// 或者直接同步检测：
-val result = webView.evaluateJavascriptSync("JSON.stringify({exists:!!window.RhinoBridge, type:typeof window.RhinoBridge?.getLyric})")
-Log.e("GreenRhino", "🔧 RB check: $result")
-```
+**好消息**：LRCLIB 对空 artist 自动走 track-only 搜索（`q.append(URLEncoder.encode(title)); if (artist.isNotBlank()) q.append("&artist_name=").append(...)`），所以 artist 为空不影响搜索。
 
 ---
 
@@ -181,7 +228,7 @@ Log.e("GreenRhino", "🔧 RB check: $result")
 ### 同步链路
 
 ```
-server/cloud_api.py（Python 零依赖 stdlib，跑 8787）
+server/cloud_api.py（🐍 Python，跑 8787 端口）
   POST /api/register  → {username, password} → users.json[username] = {salt, hash, token, quota, used, data:{}, data_ts:0}
   POST /api/login     → 返回 token + quota + used
   GET  /api/sync      → {data: {...}, server_ts: 1728500000000}
@@ -221,28 +268,31 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 ---
 
-## ✅ 活跃坑：**全清**！（2026-10-14 全量刷新确认）
+## 🏷️ 活跃坑状态（2026-10-16 更新）
 
-### 📊 存活状态确认表（所有坑 = 已修复）
+### 📊 2026-10-16 新坑（3 条，均已解决）
+
+| 编号 | 问题 | 状态 | 验证方式 |
+|---|---|---|---|
+| **ISS-20261016-010** 🔥 | MediaStore 导入歌曲 artist 全是字面量 `<unknown>` | ✅ **已修（真机验证）** | `getLyric(title=Acoustic Installation, artist=TK from 凛として时雨)` — artist 不再是 `<unknown>`；三层清洗（Kotlin + .NET + store.js） |
+| **ISS-20261016-011** | Moto logcat 屏蔽调试日志 | ✅ **沉淀成稳定套路** | 冷启动后不 `logcat -c`，直接 `adb logcat -d --pid=<PID>` 抓 buffer 残留；触发新代码用 Debug BroadcastReceiver |
+| **ISS-20261016-012** | Moto ResolverActivity 4 分身拦截 adb start | ✅ **沉淀成稳定套路** | `adb shell input tap 610 2251`（第一项 center） |
+
+### 📊 历史坑（已全部修复）
 
 | 编号 | 问题 | 状态 | 验证方式 |
 |---|---|---|---|
 | ISS-001 | RhinoBridge.getLyric 前端调不通 | ✅ 已修 | RB PROBE 9 方法全 function（含 getLyric） |
-| ISS-002 | Gradle copyPwaAssets UP-TO-DATE | ✅ 已修 | `outputs.upToDateWhen { false }` + 删重复 task，两 App 都改了 |
-| ISS-003 | onConsoleMessage Log.println priority bug | ✅ 已修 | 当前代码 `when(messageLevel())` + Log.e/d 正确写法 |
+| ISS-002 | Gradle copyPwaAssets UP-TO-DATE | ✅ 已修 | `outputs.upToDateWhen { false }` + 手动 robocopy |
+| ISS-003 | onConsoleMessage Log.println priority bug | ✅ 已修 | 用 `Log.d/e/w/i` 直接调用 |
 | ISS-20261009-019 | buildMusicHome 函数缺失 | ✅ 已修 | music.js 内 |
 | ISS-20261009-020 | addMediaFromAndroid 硬编码 VIDEO_EXT | ✅ 已修 | store.js 已通配 |
 | ISS-20261009-021 | SAF 抽屉分类过滤 | ✅ 已修 | MainActivity EXTRA_MIME_TYPES 严格限制 |
 
-### 🪦 台账过期铁律 3 次命中记录
-
-| 轮次 | 我以为的 | 实际 | 浪费 |
-|---|---|---|---|
-| 第一轮 | ISS-001 活跃坑 | 已修（RB PROBE 已暴露） | 大量时间跟 Moto logcat 死磕 |
-| 第二轮 | ISS-003 活跃坑 | 已修（when/Log.e 正确写法） | 差点去改正确代码 |
-| 第三轮 | Windows DLNA 代理 "还没做" | **100% 完成**（DlnaCaster.cs 三端全齐） | 选了个不需要动手的任务 |
-
-**🔑 铁律原文**：新 AI 接手 → 先用 5 分钟扫一遍核心源码（MainActivity.kt + build.gradle + DlnaCaster），不要直接按台账清单干活。台账可能比代码老，代码可能比台账新。
+**🔑 台账过期铁律**（已命中 3 次，AI 不得跳过源码扫描直接干活）：
+- 第一轮：以为 ISS-001 活跃 → 实际已修 → 跟 Moto logcat 死磕
+- 第二轮：以为 ISS-003 活跃 → 实际已修 → 差点去改正确代码
+- 第三轮：以为 Windows DLNA 代理"还没做" → 实际 100% 完成
 
 ---
 
@@ -288,11 +338,11 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-14 下午 | 🔍 **全量刷新 context.md**：活跃坑全清 + 存活状态表 + 台账过期铁律 3 次命中记录 + Android/Windows/前端完成度盘点 | ✅ |
-| 2026-10-14 下午 | 🪟 **Windows DLNA 代理台账核实**：发现已 100% 完成，3 个项目 DlnaCaster.cs 哈希完全相同 | ✅ 台账更新 |
-| 2026-10-14 下午 | 📺 **前端投屏按钮 UI 落地**：videoPlayer.js + cast.js + style.css | ✅ build-web + 6/6 测试 |
-| 2026-10-14 下午 | 🔧 **ISS-002 + ISS-003 修复** + ISS-001 确认已修 | ✅ |
-| 2026-10-13 下午 | 🧹 **失效文件清理**：回收 16.4 GB | ✅ |
+| 2026-10-16 下午 | 🎉 **ISS-010 三层修复 + 真机验证**：Kotlin scanMediaStore() + .NET LocalServer + store.js `_cleanArtist()` — `getLyric(title=Acoustic Installation, artist=TK from 凛として时雨)` ✅ artist 不再是 `<unknown>`！ | ✅ 真机验证 + npm test:all 6/6 + 4/4 |
+| 2026-10-16 上午 | ✅ **云同步后端全链路验证**：test_cloud.py 9/9 + sync push/pull/last-writer-wins 409 全通 | ✅ |
+| 2026-10-16 上午 | 🔧 **LRCLIB 歌词代理字段名修复**：4 处 API 字段名变更（track_name→trackName、lrclib_id→id、syncedLyric→syncedLyrics、plainLyric→plainLyrics） | ✅ npm test:all 全绿 |
+| 2026-10-14 下午 | 🔍 **全量刷新 context.md**：活跃坑全清 + 存活状态表 + 台账过期铁律 3 次命中记录 | ✅（但遗漏了 10-16 新坑，已补） |
+| 2026-10-14 下午 | 🪟 **Windows DLNA 代理台账核实**：发现已 100% 完成 | ✅ 台账更新 |
 
 ### 📌 待做清单（**只剩 1 个**）
 

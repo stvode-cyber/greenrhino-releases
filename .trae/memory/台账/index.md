@@ -53,6 +53,8 @@
 | 模块 | 关键决策 | 踩过的坑 |
 |---|---|---|
 | 整体方案 | DEC-20260914-001（TWA → WebView 原生壳） | ISS-20260914-002（错依赖 LauncherActivity）、ISS-20260914-003（GMS 缺失） |
+| MediaStore 扫描 + artist 清洗 | — | 🔥ISS-20261016-010（`<unknown>` 字面量清洗，三层：Kotlin + .NET + store.js） |
+| RhinoBridge.getLyric 真机调试 | — | ISS-20261016-011（Moto logcat 屏蔽：不 -c，--pid 抓残留）、ISS-20261016-012（ResolverActivity tap 610,2251） |
 | MainActivity onShowFileChooser | — | ISS-20261009-021（params.createIntent() 类型松散 → SAF 混文件；手动构建 Intent + MIME 白名单） |
 | 装机验证流程 | — | ISS-20261009-022（5 个应用分身旧数据 → "没生效"假象；pm clear 全部 user + adb pull APK 解包比对） |
 | assetlinks.json | — | ISS-20260914-004（占位符域名） |
@@ -130,8 +132,8 @@
 | 指标 | 值 |
 |---|---|
 | 活跃决策 | 9 条 |
-| 活跃坑 | 13 条（P0: 5 / P1: 7 / P2: 1） |
+| 活跃坑 | 3 条（ISS-010/011/012 均 ✅ 已解决，沉淀套路） |
 | 归档坑 | 12 条 |
 | 活跃问题群 | 3 个（#android-webview 🔥、#twa-gms、#relative-path 🔥） |
 | 归档问题群 | 3 个（#gradle-directory、#playwright-mirror、#harmonyos-install） |
-| 最后更新 | 2026-10-09 |
+| 最后更新 | 2026-10-16 |

@@ -100,8 +100,11 @@ def login(username, password):
     rec = users.get(username)
     if not rec or rec["hash"] != _pw_hash(password, rec["salt"]):
         return None, "用户名或密码错误"
-    rec["token"] = new_token()  # 登录即轮换 token
-    save_users()
+    # 🔶 不轮换 token！多端（Android/Web）共用同一账号时轮换会互相踢掉
+    # token 只在 register 时生成一次，logout 时清除
+    if not rec.get("token"):
+        rec["token"] = new_token()
+        save_users()
     return rec["token"], None
 
 # ---------------- 云同步（音乐/视频两 App 打通桥梁） ----------------
@@ -192,22 +195,22 @@ def fetch_lrclib(title, artist=""):
             results = json.loads(r.read().decode("utf-8"))
         if not results:
             return ""
-        # 优先找精确匹配
+        # 优先找精确匹配（LRCLIB API 返回驼峰字段名：trackName / syncedLyrics）
         best = None
         for res in results:
-            if res.get("track_name", "").strip().lower() == title.strip().lower():
+            if res.get("trackName", "").strip().lower() == title.strip().lower():
                 best = res
                 break
         if not best:
             best = results[0]
-        lid = best.get("lrclib_id")
+        lid = best.get("id")
         if not lid:
             return ""
         get_url = f"https://lrclib.net/api/get/{lid}"
         req2 = urllib.request.Request(get_url, headers={"User-Agent": "GreenRhino/1.0"})
         with urllib.request.urlopen(req2, timeout=5) as r2:
             data = json.loads(r2.read().decode("utf-8"))
-        return data.get("syncedLyric") or data.get("plainLyric") or ""
+        return data.get("syncedLyrics") or data.get("plainLyrics") or ""
     except urllib.error.HTTPError as e:
         if e.code == 429:
             print(f"[LYRIC] LRCLIB 限流 429，稍后重试...")
@@ -274,6 +277,13 @@ class H(BaseHTTPRequestHandler):
                 if tok:
                     return self._send(200, {"token": tok, "quota": rec["quota"], "used": rec["used"]})
                 return self._send(400, {"error": err})
+            if p == "/api/logout":
+                # 安全：主动清除 token，防止泄露后长期有效
+                uname = auth_user(self._token())
+                if not uname: return self._send(401, {"error": "未登录"})
+                users[uname]["token"] = None
+                save_users()
+                return self._send(200, {"ok": True})
             if p == "/api/files":
                 uname = auth_user(self._token())
                 if not uname: return self._send(401, {"error": "未登录"})

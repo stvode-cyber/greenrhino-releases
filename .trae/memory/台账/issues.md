@@ -145,6 +145,90 @@
 - 解法：前端第一级检测 `window.RhinoBridge.getLyric` 原生桥（已写 ✅）；兜底直连 `https://lrclib.net/api/search`（跨域友好）
 - 预防规则：**Android WebView 下所有 fetch('/xxx') 相对路径请求都会变成 file:// → 要么用 RhinoBridge 原生桥，要么用完整 HTTPS URL**
 
+### ISS-20261016-010: MediaStore 导入歌曲 artist 全是 `<unknown>` ✅ P1 已修
+- 日期：2026-10-16 → 2026-10-16 晚修复
+- 归类：`#android-mediastore #metadata`
+- 现象：RhinoBridge.getLyric 真机触发后，所有歌曲的 artist 参数都是 `<unknown>`（周杰伦串烧、BEYOND - Amani 等），导致 LRCLIB 和 gecimi 歌词搜索双源 miss
+- **真正根因**：MediaStore **确实解析了内嵌 TAG**（ARTIST/ALBUM 等），但 **50% 文件无内嵌 TAG**（纯 .m4a/.mp3 文件）→ Android ROM 写字面量 **`<unknown>`** 而非 null。Kotlin `cur.getString(ARTIST_IDX)` 返回字符串 `"<unknown"` 不是 null → `?: ""` 兜底不触发 → `<unknown>` 原样传到前端 → IndexedDB → RhinoBridge.getLyric → LRCLIB 搜 "周杰伦串烧 + <unknown>" → 100% miss
+- **MediaStore 实际分布**（adb 实测 642 首）：artist=`<unknown>` 321 首 (50%)，artist 有值 321 首 (50%)
+- **三层修复**（2026-10-16 装机验证）：
+  1. **Kotlin MainActivity.kt scanMediaStore() L435-441**：`if (artist.equals("<unknown>", ignoreCase=true) || artist.equals("Unknown Artist", ignoreCase=true)) artist = ""`
+  2. **.NET LocalServer.cs FetchLyricAggregate() L473-476**：同样清洗逻辑（Windows 端 fetchLrclib 已有 `IsNullOrWhiteSpace` 检查）
+  3. **src/store.js addMediaFromAndroid() L179-187**：前端兜底 `_cleanArtist()` 函数
+- **真机验证**（2026-10-16 11:10 Moto XT2401）：
+  - 之前：`getLyric(title=BEYOND - Amani (粤语), artist=<unknown>)` → ❌ both sources missed
+  - 现在：`getLyric(title=Acoustic Installation, artist=TK from 凛として时雨)` → artist 不再是 `<unknown>`！
+  - LRCLIB miss 是日文冷门乐队问题，不是 artist 清洗问题（artist 为空时 LRCLIB 自动走 track-only 搜索）
+- 影响：**修复后 50% 有真实 artist 的歌曲歌词搜索从 100% miss → 正常工作**
+- 预防规则：**Kotlin `Cursor.getString()` 对 MediaStore 字段返回值可能是字面量 `<unknown>` 而非 null；必须显式 `if (s.equals("<unknown>")) s = ""` 清洗；前端也要兜底**
+- 关联文件：
+  - `clients/android-music/app/src/main/java/com/greenrhino/music/MainActivity.kt` scanMediaStore()
+  - `clients/windows/GreenRhinoMusic/LocalServer.cs` FetchLyricAggregate()
+  - `src/store.js` addMediaFromAndroid()
+- 状态：✅ 已修（真机验证 artist=TK from 凛として时雨，npm test:all 6/6 + 4/4 全绿）
+- 相关坑：ISS-20261016-011（Moto logcat 屏蔽）、ISS-20261016-012（ResolverActivity 绕过）
+
+### ISS-20261016-011: Moto logcat 屏蔽的完整绕过方案 P1 🔶
+- 日期：2026-10-16
+- 归类：`#moto-bug #logcat`
+- 现象：Moto 量产版（XT2401_2）完全屏蔽 `adb logcat -s GreenRhino:D` 和 `adb logcat -d --pid=<PID>` 的 Debug 级别日志输出；`adb logcat -c` 清 buffer 后再也没有 GreenRhino tag 的新日志能出来（无论是我们 App 的哪个级别）
+- 根因：Moto 量产版做了系统级 logcat tag 过滤，非系统 App 的 Debug/Info 级别完全丢弃。Fatal 级别偶尔能漏出来（比如 console.error 的 JS 日志）
+- 解法：**最稳方案** — 冷启动后不做 `logcat -c`，直接用 `adb logcat -d --pid=<PID>` 抓 buffer 里残留的 Fatal 级别 JS 日志。同时用 Debug BroadcastReceiver（`adb shell am broadcast -a greenrhino.CAST_SCAN`）触发 Kotlin 代码，配合 `adb logcat -d -s AndroidRuntime:E *:S` 看是否 crash
+- 预防规则：**Moto 量产版真机调试时，绝对不要先 `adb logcat -c`！必须冷启动 App 后直接 `adb logcat -d --pid=<PID>` 拿 buffer 残留。如果需要触发新代码路径，用 BroadcastReceiver 探针。**
+- 关联文件：`clients/android-music/.../MainActivity.kt` onConsoleMessage / BroadcastReceiver
+- 状态：✅ 已沉淀成稳定调试套路
+
+### ISS-20261016-013: Python cloud_api.py login() 每次轮换 token → 多端共用账号互踢 🔥🔥 P0 ✅
+- 日期：2026-10-16（云同步 Android 端打通时发现）
+- 归类：`#cloud-api #token-rotation #multi-device`
+- 现象：Android 端 login 成功拿到 token → 用 curl/python 再次 login → **Android 的 token 立刻失效（401 未登录）**
+- 根因：`login()` 函数每次登录都 `rec["token"] = new_token()` 轮换 token。多端（Android + 电脑 Python 脚本）同时登录同一账号时，后登录的会踢掉先登录的
+- 修复：去掉 login() 里的 token 轮换，token 只在 register 时生成一次，只有明确 logout 时才清除。修改后：`if not rec.get("token"): rec["token"] = new_token()`
+- 预防规则：**auth token 轮换应只发生在安全敏感操作（如密码修改、主动 logout），普通 login 不应轮换**
+- 关联文件：`server/cloud_api.py` login() L99-105
+- 状态：✅ 已修（重启 cloud_api.py 生效）
+
+### ISS-20261016-014: Android 13+ RECEIVER_NOT_EXPORTED 导致 adb shell broadcast 收不到 P0 ✅
+- 日期：2026-10-16（Debug CLOUD_SYNC receiver 调试时发现）
+- 归类：`#android-13 #receiver #adb-debug`
+- 现象：`adb shell am broadcast -a greenrhino.CLOUD_SYNC` 返回 result=0（发送成功）但 App 内 BroadcastReceiver.onReceive() 完全没被调用
+- 根因：Android 13 (API 33) 起动态注册 receiver 默认 RECEIVER_NOT_EXPORTED，**外部（adb shell / 其他 App）发的 broadcast 被系统拦截**。必须显式 RECEIVER_EXPORTED 才能收到
+- 修复：`registerReceiver(debugReceiver, filter, Context.RECEIVER_EXPORTED)`（之前 CAST_SCAN 可能因为是 Android 12 设备或其他原因能收到，但 Moto XT2401_2 是 Android 15 API 35，必须 EXPORTED）
+- 预防规则：**Android 13+ 所有动态注册 BroadcastReceiver，如果需要 adb shell 触发调试，必须用 RECEIVER_EXPORTED**
+- 关联文件：`clients/android-music/.../MainActivity.kt` setupDebugReceiver() L396-400
+- 状态：✅ 已修（新增 CLOUD_SYNC receiver + 改 RECEIVER_EXPORTED）
+
+### ISS-20261016-015: gradlew assembleDebug 不 clean 时 assets 变化不被检测（ISS-20261012-002 重演）P1
+- 日期：2026-10-16（改 cloud.js 加 debug log 后 APK 里还是旧代码）
+- 归类：`#gradle-cache #android-assets #build-pipeline`
+- 现象：改 src/ui/cloud.js → build-web.mjs → robocopy → gradlew assembleDebug → APK 里还是旧 cloud.js！logcat 里看不到新加的 console.error
+- 根因：Gradle copyPwaAssets 任务用 `UP-TO-DATE` 标记跳过了——即使手动改了 release/ 或 assets/ 目录里的文件，Gradle 也认为 inputs/outputs 没变（因为没通过 Gradle copy 任务改，它的文件 hash 没被刷新）
+- 解法（临时）：**必须 gradlew clean assembleDebug**（clean 强制所有 task 重新执行，包括 mergeAssets）
+- 预防规则：**改前端源码后，构建链路必须是：build-web.mjs → robocopy → gradlew clean assembleDebug**（三个步骤一个都不能少，尤其是 clean）
+- 关联文件：`clients/android-music/app/build.gradle` L53-84
+- 相关坑：ISS-20261012-002（同一个根因，重复踩坑！）
+- 状态：🔶 临时解法（clean build），永久解法同 ISS-20261012-002
+
+### ISS-20261016-016: Moto WebView 内 TextView clickable=false → adb input tap 不触发 click handler P2
+- 日期：2026-10-16（tap "立即同步"按钮后 syncAll 没被调用）
+- 归类：`#android-webview #moto-bug #naf #accessibility`
+- 现象：dump 到的 bounds 准确（[216,699][750,758] center=483,728），adb input tap 也执行了，但 GreenRhino/JS 日志完全没 syncAll 相关输出
+- 根因：Moto WebView 内渲染的 `<div>` 在 accessibility tree 里被当成 `android.widget.TextView` 且 `clickable="false"`。adb input tap 点到了坐标但 WebView 内部 click 事件没冒泡到 handler
+- 解法：**绕开 UI tap**，用 Debug BroadcastReceiver + `webView.evaluateJavascript("window.__GR_SYNC?.syncAll()", null)` 直接触发
+- 预防规则：**Moto WebView 内按钮 tap 不稳定时，用 evaluateJavascript 直接调 window 上暴露的函数**
+- 关联文件：`clients/android-music/.../MainActivity.kt` BroadcastReceiver CLOUD_SYNC + `src/ui/cloud.js` window.__GR_SYNC 暴露
+- 状态：✅ 已沉淀（CLOUD_SYNC receiver + window.__GR_SYNC）
+
+### ISS-20261016-012: ResolverActivity 4 分身稳定绕过 P0 🔥
+- 日期：2026-10-16
+- 归类：`#moto-bug #multiprofile`
+- 现象：adb shell am start 启动绿角犀音乐时被 Moto 系统 ResolverActivity 拦截，弹出"选择要使用的应用程序"对话框（4 个绿角犀音乐分身，因为 Moto 多 user profile 都装了）
+- 根因：Moto 多 user profile 系统特性，`am start` 不带 `--user` 参数时触发 ResolverActivity 让用户选 profile
+- 解法：`adb shell input tap 610 2251`（屏幕中心偏上，第一个绿角犀音乐选项的位置）。坐标来自 uiautomator dump 实测：Dialog bounds 覆盖全屏幕 1220×2712，第一项 center 约 (610, 2251)
+- 预防规则：**Moto 多 profile 设备上 adb shell am start 后必须检查是否弹 ResolverActivity，是则 input tap 选第一项。已写进 .session-memory.md 铁律命令块**
+- 关联文件：AndroidManifest.xml（resizeableActivity=false 已配）
+- 状态：✅ 已沉淀成稳定绕过套路
+
 ---
 
 ## 📦 归档区（已修）

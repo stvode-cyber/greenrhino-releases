@@ -374,6 +374,22 @@ class MainActivity : ComponentActivity() {
                     MediaHttpServer.start(ctx)
                     Log.d("GreenRhino", "📺 [DEBUG] MEDIA_HTTP_TEST url=${MediaHttpServer.publicUrlFor(uri)}")
                 }
+                "greenrhino.CLOUD_SYNC" -> {
+                    Log.e("GreenRhino", "☁️ [DEBUG] CLOUD_SYNC received → trigger window.__GR_SYNC.syncAll()")
+                    webView.evaluateJavascript(
+                        "(async()=>{" +
+                        "try{" +
+                        "const g=window.__GR_SYNC;" +
+                        "const s=g?.loadSession?.();" +
+                        "console.error('[cloud] eval CLOUD_BASE:', g?.CLOUD_BASE);" +
+                        "console.error('[cloud] eval session:', JSON.stringify(s)); " +
+                        "const r=await g?.syncAll?.();" +
+                        "console.error('[cloud] syncAll DONE:', JSON.stringify(r).slice(0,300));" +
+                        "}catch(e){console.error('[cloud] syncAll FAIL:', e.message, e.stack?.slice(0,200));}" +
+                        "})()",
+                        null
+                    )
+                }
             }
         }
     }
@@ -384,9 +400,11 @@ class MainActivity : ComponentActivity() {
             addAction("greenrhino.CAST_PLAY")
             addAction("greenrhino.CAST_STOP")
             addAction("greenrhino.MEDIA_HTTP_TEST")
+            addAction("greenrhino.CLOUD_SYNC")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(debugReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            // 🔶 Android 13+ 必须显式 EXPORTED，否则 adb shell broadcast 收不到
+            registerReceiver(debugReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(debugReceiver, filter)
         }
@@ -432,8 +450,13 @@ class MainActivity : ComponentActivity() {
                         val name = cur.getString(idxName) ?: "audio_$id"
                         val dur = cur.getLong(idxDur)
                         val size = cur.getLong(idxSize)
-                        val artist = cur.getString(idxArtist) ?: ""
-                        val album = cur.getString(idxAlbum) ?: ""
+                        var artist = cur.getString(idxArtist) ?: ""
+                        var album = cur.getString(idxAlbum) ?: ""
+                        // 🔶 ISS-20261016-010: MediaStore 对无 TAG 文件返回字面量 "<unknown>"（不是 null）
+                        // Kotlin cur.getString() 拿到的是字符串 "<unknown>" 而非 null
+                        // ?: "" 兜底只对 null 生效，所以要显式清洗 ROM 级占位符
+                        if (artist.equals("<unknown>", ignoreCase = true) || artist.equals("Unknown Artist", ignoreCase = true)) artist = ""
+                        if (album.equals("<unknown>", ignoreCase = true) || album.equals("Unknown Album", ignoreCase = true)) album = ""
                         val uri = Uri.parse("${MediaStore.Audio.Media.EXTERNAL_CONTENT_URI}/$id")
                         // 文件系统存在性校验（MediaStore 可能有僵尸条目）
                         val fd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null }

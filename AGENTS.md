@@ -16,7 +16,10 @@
 ## 技术栈
 
 - **前端**：原生 ES Module（零构建，无 framework），`src/` 直接浏览器加载
-- **后端**：Node.js（LocalServer，负责媒体扫描/流式传输）
+- **后端**：**三端分立**（按宿主平台自动选择）：
+  - 🐍 **Python** `server/cloud_api.py`（8787 端口，云同步 + /api/lyric LRCLIB 代理）
+  - 🟣 **.NET** 内嵌 LocalServer（8800 端口，Windows WebView2 侧媒体流式 + /api/lyric）
+  - 🔧 **Kotlin** MediaHttpServer（40363 端口，Android content://→HTTP Range 代理）
 - **构建工具**：仅 `scripts/build-web.mjs` + `scripts/build-assets.mjs`（自定义 Node 脚本）
 - **PWA**：手写 `sw.js`，Manifest v3
 - **Windows EXE**：.NET 8 WebView2，clients/windows/GreenRhino{Music,Player}
@@ -28,7 +31,7 @@
 ```
 src/                     # 前端源码（两个 App 共享，运行时按 winRole 裁剪 UI）
 scripts/                 # build-web.mjs / build-assets.mjs / copy-web.mjs
-server/                  # Node LocalServer（媒体扫描、流式传输）
+server/                  # 🐍 Python cloud_api.py（云同步 + LRCLIB 歌词代理，8787 端口）
 clients/                 # 各平台壳工程（android-music, windows, huawei-music 等）
 release/pwa-site-*/      # build-web.mjs 输出（Cloudflare Pages 部署目录）
 .github/workflows/       # CI：build-android.yml / build-windows.yml / build-huawei.yml
@@ -47,6 +50,20 @@ icons/                   icon-music.svg / icon-player.svg（角色专属图标�
    - **替换逻辑**：`scripts/build-web.mjs` 用精确正则 `replace(/'__SW_CACHE__'/, cfg.cache)` 替换，不再依赖隐式的 `greenrhino-v\d+` 格式
    - **测试覆盖**：改 sw.js 或 build-web.mjs 后必须跑 `npm run test:all`（单元 6 条 + E2E 4 条，全绿才安全）
 6. **源码零构建**：`src/` 目录在运行时由浏览器原生 ES Module 加载。不要引入 bundler 除非明确批准
+7. **Android MediaStore `<unknown>` 字面量清洗**：`Cursor.getString()` 对无内嵌 TAG 的文件返回字面量 `<unknown>`（**不是 null！**），`?: ""` 兜底无效。**必须显式清洗**：
+   ```kotlin
+   if (artist.equals("<unknown>", ignoreCase=true) || artist.equals("Unknown Artist", ignoreCase=true)) artist = ""
+   ```
+   三层必须全做：Kotlin MainActivity.scanMediaStore() + .NET LocalServer.FetchLyricAggregate() + 前端 store.js addMediaFromAndroid() 兜底。
+   - MediaStore 实测分布（642 首）：50% `<unknown>` / 50% 有真实值
+   - LRCLIB 对空 artist 自动走 track-only 搜索（artist 为空时 URL 不拼 `artist_name` 参数），所以 artist 空 = 搜索更宽松，不是更严格
+   - **根因**：Android ROM 对 50% 无 TAG 文件写入面量 `<unknown>` 而非 null，Kotlin `cur.getString()` 返回的是 String `"unknown"`，Kotlin 的 Elvis operator `?: ""` 只对 null 生效
+8. **Moto XT2401 真机调试铁律**（本项目 Android 唯一真机）：
+   - **绝对不要先 `adb logcat -c`！** Moto 清 buffer 后完全屏蔽 App 日志（无论 Debug/Info/Error 级别）。冷启动后直接 `adb logcat -d --pid=<PID>` 抓 buffer 残留的 Fatal 级别 JS 日志
+   - **装机必须 `adb install -r`**（覆盖安装），绝对不要 `adb uninstall`——卸载会清 IndexedDB → 633 首歌全没 → scanMediaStore 不自动触发（设计如此）→ 空库死锁
+   - **ResolverActivity 绕过**：Moto 多 user profile 导致 `am start` 被拦截，必须 `adb shell input tap 610 2251` 点第一项 center
+   - **必须 `adb shell pm grant 4 权限`**：READ_MEDIA_AUDIO + READ_MEDIA_IMAGES + READ_MEDIA_VIDEO + READ_EXTERNAL_STORAGE，否则 requestAutoImport 卡在权限等待
+   - 触发新代码路径：用 `Debug BroadcastReceiver`（`adb shell am broadcast -a greenrhino.CAST_SCAN`）而非手动点 UI（WebView 触摸在 Moto 上不稳定）
 
 ## 📚 台账系统（强制行为基线·成长型）
 
