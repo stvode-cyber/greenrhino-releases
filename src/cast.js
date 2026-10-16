@@ -10,7 +10,9 @@ const state = {
   casting: false,
   deviceId: null,
   deviceName: '',
-  status: ''
+  status: '',           // playing / paused / stopped / UNKNOWN
+  position: '',         // HH:MM:SS  当前位置
+  duration: ''          // HH:MM:SS  总时长
 }
 
 const listeners = new Map()
@@ -71,10 +73,14 @@ function handleMsg(msg) {
   } else if (msg.type === 'cast:mirror') {
     emit('mirror', msg.ok === false ? (msg.msg || '唤起系统无线显示失败') : '')
   } else if (msg.type === 'cast:status') {
+    // TV 推送的真实 AVTransport 状态 + 进度
     state.status = msg.state
     state.deviceId = msg.deviceId || state.deviceId
-    state.casting = ['playing', 'paused', 'seeked'].includes(msg.state)
-    emit('status', { state: msg.state, deviceId: state.deviceId })
+    state.casting = ['PLAYING', 'PAUSED_PLAYBACK', 'TRANSITIONING', 'RECORDING'].includes(msg.state) ||
+                    ['playing', 'paused', 'seeked'].includes(msg.state)
+    state.position = msg.position || state.position || ''
+    state.duration = msg.duration || state.duration || ''
+    emit('status', { state: msg.state, deviceId: state.deviceId, position: state.position, duration: state.duration })
   }
 }
 
@@ -153,14 +159,14 @@ function pause() {
 }
 
 // 唤起系统无线显示（Miracast）：整屏镜像到电视
-// Windows: Win+K 连接面板；Android: 系统设置里的投屏面板（需原生 Intent 唤起，TODO）
+// Windows: Win+K 连接面板（Chrome.webview.postMessage cast:mirror）
+// Android: 反射调 Settings.ACTION_WIFI_DISPLAY_SETTINGS 唤起系统面板
 function mirror() {
   if (!state.host) return
   if (state.host === 'windows') {
     post({ type: 'cast:mirror' })
   } else if (state.host === 'android') {
-    // TODO: Android 反射调 Settings.ACTION_WIFI_DISPLAY_SETTINGS 或 MediaRouter
-    emit('error', 'Android 整屏镜像需原生 Intent 唤起系统面板（TODO）')
+    try { window.RhinoBridge.castMirror() } catch (e) { emit('error', 'castMirror failed: ' + e.message) }
   }
 }
 

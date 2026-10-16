@@ -270,15 +270,24 @@ export function buildVideoPlayer(app) {
   // 监听投屏状态变化
   cast.on('devices', renderDevices)
   cast.on('status', (s) => {
-    if (s.state === 'stopped' || s.state === '') {
+    // 兼容：前端本地用小写（playing/paused），DLNA TransportState 大写（PLAYING/PAUSED_PLAYBACK）
+    const st = (s.state || '').toUpperCase()
+    const isPlaying = ['PLAYING', 'PAUSED_PLAYBACK', 'TRANSITIONING', 'RECORDING'].includes(st) ||
+                      ['PAUSED', 'SEEKED'].includes(st)
+    const isStopped = ['STOPPED', 'STOPPED_PLAYBACK', 'NO_MEDIA_PRESENT'].includes(st) || s.state === ''
+    if (isStopped) {
       castBanner.hidden = true
       castBtn.classList.remove('casting')
-    } else if (s.state === 'playing' || s.state === 'paused') {
+    } else if (isPlaying) {
       castBanner.hidden = false
-      castBtn.classList.add('casting')
       const tvName = cast.state.deviceName || '电视'
-      castBanner.querySelector('.vp-cast-text').textContent =
-        s.state === 'paused' ? `已暂停 → ${tvName}` : `正在投送到 → ${tvName}`
+      castBtn.classList.add('casting')
+      // 有 position/duration 时显示 "00:12/03:45"，没有就只显示设备名
+      const pd = (s.position && s.duration && s.duration !== '00:00:00')
+        ? ` ${s.position}/${s.duration}`
+        : ''
+      const label = st.startsWith('PAUSED') ? `已暂停` : `正在投送`
+      castBanner.querySelector('.vp-cast-text').textContent = `${label} → ${tvName}${pd}`
     }
   })
   cast.on('error', (msg) => { toast(msg, 'err') })

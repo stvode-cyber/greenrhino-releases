@@ -712,6 +712,12 @@ class MainActivity : ComponentActivity() {
                     return
                 }
             }
+            dlnaCaster.statusCallback = { state, pos, dur ->
+                runOnUiThread {
+                    val js = "if(window.__castCb)window.__castCb({type:'cast:status',state:'$state',position:'$pos',duration:'$dur',deviceId:'$deviceId'})"
+                    webView.evaluateJavascript(js, null)
+                }
+            }
             dlnaCaster.play(deviceId, httpUri)
         }
 
@@ -725,6 +731,23 @@ class MainActivity : ComponentActivity() {
         fun castPause(deviceId: String) {
             Log.d("GreenRhino", "📺 castPause(device=$deviceId)")
             dlnaCaster.pause(deviceId)
+        }
+
+        /** 唤起系统 Miracast 无线显示面板（整屏镜像） */
+        @android.webkit.JavascriptInterface
+        fun castMirror() {
+            Log.d("GreenRhino", "📺 castMirror() called")
+            dlnaCaster.mirror(this@MainActivity) { ok, msg ->
+                runOnUiThread {
+                    val js = if (ok) {
+                        "if(window.__castCb)window.__castCb({type:'cast:mirror',ok:true})"
+                    } else {
+                        val safe = msg.replace("'", "\\'")
+                        "if(window.__castCb)window.__castCb({type:'cast:mirror',ok:false,msg:'$safe'})"
+                    }
+                    webView.evaluateJavascript(js, null)
+                }
+            }
         }
     }
 }

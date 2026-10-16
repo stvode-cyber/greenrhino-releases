@@ -37,6 +37,14 @@ class DlnaCaster {
     private val _devices = ConcurrentHashMap<String, DlnaDevice>()
     val devices: List<DlnaDevice> get() = _devices.values.toList()
 
+    // ---------- 播放状态轮询（GetPositionInfo SOAP 每 2.5s） ----------
+    @Volatile private var pollingRunning = false
+    private var pollingThread: Thread? = null
+    private var pollingDeviceId: String? = null
+
+    /** 状态回调：(transportState, position HH:MM:SS, duration HH:MM:SS) */
+    var statusCallback: ((String, String, String) -> Unit)? = null
+
     fun get(id: String): DlnaDevice? = _devices[id]
 
     /**
@@ -187,16 +195,18 @@ class DlnaCaster {
     fun play(deviceId: String, mediaUri: String) {
         val d = get(deviceId) ?: return
         Thread {
-            // 先 SetAVTransportURI，再 Play
+            // 先 SetAVTransportURI，再 Play，然后开轮询
             val safeUri = escapeXml(mediaUri)
             soap(d.controlUrl, "SetAVTransportURI",
                 "<InstanceID>0</InstanceID><CurrentURI>$safeUri</CurrentURI><CurrentURIMetadata></CurrentURIMetadata>")
             soap(d.controlUrl, "Play", "<InstanceID>0</InstanceID><Speed>1</Speed>")
+            startPolling(deviceId)
         }.start()
     }
 
     fun stop(deviceId: String) {
         val d = get(deviceId) ?: return
+        stopPolling() // 停轮询（stop 后不再需要）
         Thread {
             soap(d.controlUrl, "Stop", "<InstanceID>0</InstanceID>")
         }.start()
@@ -206,6 +216,7 @@ class DlnaCaster {
         val d = get(deviceId) ?: return
         Thread {
             soap(d.controlUrl, "Pause", "<InstanceID>0</InstanceID>")
+            // 不 stopPolling：paused 状态仍在 AVTransport 里，继续轮询
         }.start()
     }
 
@@ -219,8 +230,11 @@ class DlnaCaster {
         }.start()
     }
 
-    private fun soap(controlUrl: String, action: String, bodyInner: String) {
-        try {
+    // ---------- SOAP 底层：返回 body 的版本 + 忽略返回的版本 ----------
+
+    /** SOAP POST，返回响应 XML body（用于 GetPositionInfo 轮询等需要读返回值的场景） */
+    private fun soapWithResponse(controlUrl: String, action: String, bodyInner: String): String? {
+        return try {
             val soap =
                 "<?xml version=\"1.0\"?>" +
                 "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" " +
@@ -231,19 +245,104 @@ class DlnaCaster {
 
             val conn = URL(controlUrl).openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
-            conn.connectTimeout = 8000
-            conn.readTimeout = 8000
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "text/xml; charset=\"utf-8\"")
             conn.setRequestProperty("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#$action\"")
             conn.setRequestProperty("User-Agent", "GreenRhino/16-DLNA")
             conn.outputStream.use { it.write(soap.toByteArray(StandardCharsets.UTF_8)) }
             val code = conn.responseCode
+            val body = try {
+                if (code in 200..299)
+                    conn.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+                else
+                    conn.errorStream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }
+            } catch (_: Exception) { null }
             Log.d("GreenRhino", "DLNA SOAP $action → HTTP $code")
-            // 不抛异常：部分设备返回 500 但仍正常播放
+            body
         } catch (e: Exception) {
             Log.w("GreenRhino", "DLNA SOAP $action failed: ${e.message}")
+            null
         }
+    }
+
+    /** SOAP POST，忽略返回（SetAVTransportURI/Play/Pause/Stop） */
+    private fun soap(controlUrl: String, action: String, bodyInner: String) {
+        soapWithResponse(controlUrl, action, bodyInner)
+    }
+
+    // ---------- GetPositionInfo 解析 + 轮询 ----------
+
+    /** 解析 SOAP GetPositionInfo 响应 → Triple(TransportState, TrackPosition HH:MM:SS, TrackDuration HH:MM:SS) */
+    private fun parsePositionInfo(xml: String): Triple<String, String, String> {
+        var state = "UNKNOWN"
+        var pos = "00:00:00"
+        var dur = "00:00:00"
+        try {
+            val factory = XmlPullParserFactory.newInstance()
+            factory.isNamespaceAware = false
+            val parser = factory.newPullParser()
+            parser.setInput(xml.reader())
+            while (parser.eventType != XmlPullParser.END_DOCUMENT) {
+                if (parser.eventType == XmlPullParser.START_TAG) {
+                    when (parser.name) {
+                        "TransportState" -> state = parser.nextText()
+                        "TrackPosition" -> pos = parser.nextText()
+                        "TrackDuration" -> dur = parser.nextText()
+                    }
+                }
+                parser.next()
+            }
+        } catch (e: Exception) {
+            // XML 解析失败 → 保留默认值
+        }
+        return Triple(state, pos, dur)
+    }
+
+    /** 单次 GetPositionInfo，返回 null 表示电视不支持或已断开 */
+    private fun getPositionInfo(deviceId: String): Triple<String, String, String>? {
+        val d = get(deviceId) ?: return null
+        val xml = soapWithResponse(d.controlUrl, "GetPositionInfo",
+            "<InstanceID>0</InstanceID><Channel>Master</Channel>"
+        ) ?: return null
+        return parsePositionInfo(xml)
+    }
+
+    /** 开始每 2.5s 轮询，推 statusCallback */
+    private fun startPolling(deviceId: String) {
+        stopPolling() // 先停旧的
+        pollingDeviceId = deviceId
+        pollingRunning = true
+        pollingThread = Thread {
+            while (pollingRunning) {
+                val did = pollingDeviceId ?: run { stopPolling(); return@Thread }
+                val info = getPositionInfo(did)
+                if (info != null) {
+                    val (state, pos, dur) = info
+                    Log.d("GreenRhino", "DLNA poll: state=$state pos=$pos dur=$dur")
+                    statusCallback?.invoke(state, pos, dur)
+                } else {
+                    Log.d("GreenRhino", "DLNA poll: no response, retry")
+                }
+                // 分帧等，响应 pollingRunning 立刻停（每 250ms 检查一次）
+                var waited = 0
+                while (pollingRunning && waited < 2500) {
+                    Thread.sleep(250)
+                    waited += 250
+                }
+            }
+            Log.d("GreenRhino", "DLNA polling stopped")
+        }
+        pollingThread?.name = "DLNA-Polling-$deviceId"
+        pollingThread?.isDaemon = true
+        pollingThread?.start()
+    }
+
+    private fun stopPolling() {
+        pollingRunning = false
+        pollingThread = null
+        pollingDeviceId = null
     }
 
     private fun escapeXml(s: String): String {
@@ -252,5 +351,41 @@ class DlnaCaster {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&apos;")
+    }
+
+    // ---------- Android Miracast 整屏镜像 ----------
+    // 不同 Android 版本 Wi-Fi Display 设置入口名不同：
+    //   Android 12+: Settings.ACTION_WIFI_DISPLAY_SETTINGS（公开）
+    //   旧版: 隐藏常量 ACTION_WIFI_DISPLAY_SETTINGS / WifiDisplayActivity
+    // 策略：先反射拿公开常量，再 fallback ComponentName 直开 Settings$WifiDisplayActivity
+    fun mirror(context: Context, onResult: (ok: Boolean, msg: String) -> Unit) {
+        try {
+            val action = try {
+                val f = android.provider.Settings::class.java.getField("ACTION_WIFI_DISPLAY_SETTINGS")
+                f.get(null) as String
+            } catch (_: Exception) {
+                "android.settings.WIFI_DISPLAY_SETTINGS"
+            }
+            val intent = android.content.Intent(action)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            context.startActivity(intent)
+            Log.d("GreenRhino", "DLNA mirror: ACTION=$action OK")
+            onResult(true, "")
+        } catch (e: Exception) {
+            // Fallback: 直接 ComponentName 打开 Settings$WifiDisplayActivity
+            try {
+                val cn = android.content.ComponentName("com.android.settings", "com.android.settings.Settings\$WifiDisplayActivity")
+                val intent = android.content.Intent()
+                intent.component = cn
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                Log.d("GreenRhino", "DLNA mirror: fallback ComponentName OK")
+                onResult(true, "")
+            } catch (e2: Exception) {
+                Log.w("GreenRhino", "DLNA mirror failed: ${e2.message}")
+                onResult(false, "系统无线显示面板打开失败：${e2.message}")
+            }
+        }
     }
 }
