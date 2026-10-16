@@ -354,25 +354,34 @@ class DlnaCaster {
     }
 
     // ---------- Android Miracast 整屏镜像 ----------
-    // 不同 Android 版本 Wi-Fi Display 设置入口名不同：
-    //   Android 12+: Settings.ACTION_WIFI_DISPLAY_SETTINGS（公开）
-    //   旧版: 隐藏常量 ACTION_WIFI_DISPLAY_SETTINGS / WifiDisplayActivity
-    // 策略：先反射拿公开常量，再 fallback ComponentName 直开 Settings$WifiDisplayActivity
+    // Android 12+ (API 31) Settings.ACTION_WIFI_DISPLAY_SETTINGS → 改名成 CAST_SETTINGS
+    // Moto XT2401 Android 15 (API 35) 上：ACTION_WIFI_DISPLAY_SETTINGS 找不到 → 必须用 CAST_SETTINGS
+    // 策略：按优先级依次尝试所有已知 action，再 fallback ComponentName
     fun mirror(context: Context, onResult: (ok: Boolean, msg: String) -> Unit) {
-        try {
-            val action = try {
-                val f = android.provider.Settings::class.java.getField("ACTION_WIFI_DISPLAY_SETTINGS")
-                f.get(null) as String
-            } catch (_: Exception) {
-                "android.settings.WIFI_DISPLAY_SETTINGS"
+        // ⚠️ startActivity 必须在主线程！context 可能是 Activity（RhinoBridge castMirror 在 WebView 后台线程调用）
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        mainHandler.post {
+            // 候选 action 列表（从新到旧，高优先先试）
+            // 注意：直接用字符串 — Android 15 SDK 35 里 ACTION_WIFI_DISPLAY_SETTINGS 编译期就不存在
+            val actionCandidates = listOf(
+                "android.settings.CAST_SETTINGS",           // Android 12+ 改名后的新入口
+                "android.settings.WIFI_DISPLAY_SETTINGS",   // 旧版 Miracast 入口
+            )
+
+            for (action in actionCandidates) {
+                try {
+                    val intent = android.content.Intent(action)
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    context.startActivity(intent)
+                    Log.d("GreenRhino", "DLNA mirror: ACTION=$action OK")
+                    onResult(true, "OK")
+                    return@post
+                } catch (e: Exception) {
+                    Log.d("GreenRhino", "DLNA mirror ACTION=$action failed: ${e.message}")
+                }
             }
-            val intent = android.content.Intent(action)
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            context.startActivity(intent)
-            Log.d("GreenRhino", "DLNA mirror: ACTION=$action OK")
-            onResult(true, "")
-        } catch (e: Exception) {
+
             // Fallback: 直接 ComponentName 打开 Settings$WifiDisplayActivity
             try {
                 val cn = android.content.ComponentName("com.android.settings", "com.android.settings.Settings\$WifiDisplayActivity")
@@ -381,10 +390,10 @@ class DlnaCaster {
                 intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
                 Log.d("GreenRhino", "DLNA mirror: fallback ComponentName OK")
-                onResult(true, "")
-            } catch (e2: Exception) {
-                Log.w("GreenRhino", "DLNA mirror failed: ${e2.message}")
-                onResult(false, "系统无线显示面板打开失败：${e2.message}")
+                onResult(true, "OK")
+            } catch (e: Exception) {
+                Log.e("GreenRhino", "DLNA mirror FAILED: all actions + ComponentName failed: ${e.message}")
+                onResult(false, "系统无线显示面板打开失败：${e.message}")
             }
         }
     }
