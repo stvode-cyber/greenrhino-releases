@@ -351,31 +351,38 @@ class MainActivity : ComponentActivity() {
     }
 
     // 🔶 Debug-only broadcast receiver for testing DLNA via adb shell
+    // Moto 铁律：Log.d 被彻底屏蔽 → 入口日志必须用 Log.e（Error 级别能漏出来）
     private var debugReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
-            when (intent.action) {
+            val action = intent.action ?: ""
+            Log.e("GreenRhino", "📺 [DEBUG] BroadcastReceiver onReceive: $action")
+            when (action) {
                 "greenrhino.CAST_SCAN" -> {
-                    Log.d("GreenRhino", "📺 [DEBUG] CAST_SCAN received")
+                    Log.e("GreenRhino", "📺 [DEBUG] CAST_SCAN → rhinoBridge.castScan()")
                     rhinoBridge.castScan()
                 }
                 "greenrhino.CAST_PLAY" -> {
                     val deviceId = intent.getStringExtra("deviceId") ?: ""
                     val uri = intent.getStringExtra("uri") ?: ""
-                    Log.d("GreenRhino", "📺 [DEBUG] CAST_PLAY device=$deviceId uri=$uri")
+                    Log.e("GreenRhino", "📺 [DEBUG] CAST_PLAY device=$deviceId uri=$uri")
                     rhinoBridge.castPlay(deviceId, uri)
                 }
                 "greenrhino.CAST_STOP" -> {
                     val deviceId = intent.getStringExtra("deviceId") ?: ""
-                    Log.d("GreenRhino", "📺 [DEBUG] CAST_STOP device=$deviceId")
+                    Log.e("GreenRhino", "📺 [DEBUG] CAST_STOP device=$deviceId")
                     rhinoBridge.castStop(deviceId)
+                }
+                "greenrhino.CAST_MIRROR" -> {
+                    Log.e("GreenRhino", "📺 [DEBUG] CAST_MIRROR → rhinoBridge.castMirror()")
+                    rhinoBridge.castMirror()
                 }
                 "greenrhino.MEDIA_HTTP_TEST" -> {
                     val uri = intent.getStringExtra("uri") ?: "content://media/external/audio/media/1000028670"
                     MediaHttpServer.start(ctx)
-                    Log.d("GreenRhino", "📺 [DEBUG] MEDIA_HTTP_TEST url=${MediaHttpServer.publicUrlFor(uri)}")
+                    Log.e("GreenRhino", "📺 [DEBUG] MEDIA_HTTP_TEST url=${MediaHttpServer.publicUrlFor(uri)}")
                 }
                 "greenrhino.CLOUD_SYNC" -> {
-                    Log.e("GreenRhino", "☁️ [DEBUG] CLOUD_SYNC received → trigger window.__GR_SYNC.syncAll()")
+                    Log.e("GreenRhino", "☁️ [DEBUG] CLOUD_SYNC → trigger window.__GR_SYNC.syncAll()")
                     webView.evaluateJavascript(
                         "(async()=>{" +
                         "try{" +
@@ -399,6 +406,7 @@ class MainActivity : ComponentActivity() {
             addAction("greenrhino.CAST_SCAN")
             addAction("greenrhino.CAST_PLAY")
             addAction("greenrhino.CAST_STOP")
+            addAction("greenrhino.CAST_MIRROR")
             addAction("greenrhino.MEDIA_HTTP_TEST")
             addAction("greenrhino.CLOUD_SYNC")
         }
@@ -408,9 +416,7 @@ class MainActivity : ComponentActivity() {
         } else {
             registerReceiver(debugReceiver, filter)
         }
-        Log.d("GreenRhino", "📺 [DEBUG] BroadcastReceiver registered. Use:")
-        Log.d("GreenRhino", "  adb shell am broadcast -a greenrhino.CAST_SCAN")
-        Log.d("GreenRhino", "  adb shell am broadcast -a greenrhino.CAST_PLAY --es deviceId xxx --es uri 'content://...'")
+        Log.e("GreenRhino", "📺 [DEBUG] BroadcastReceiver registered. Actions: CAST_SCAN/PLAY/STOP/MIRROR + MEDIA_HTTP + CLOUD_SYNC")
     }
 
     // 🔶 ISS-20261009-018: Music App 完整 MediaStore.Audio 扫描（之前缺失）
