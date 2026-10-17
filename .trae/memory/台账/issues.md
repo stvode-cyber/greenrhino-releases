@@ -130,7 +130,7 @@
 - **预防**：✅ copy-web.mjs 已自动重压；但仍依赖人工记得跑
 - **归类标签**：`#build-cache` `#dotnet-publish`
 
-### ⚠️ ISS-20260908-001 SW CORE 预缓存漏模块（待自动校验脚本）
+### ✅ ISS-20260908-001 SW CORE 预缓存漏模块（已关单：补 cast.js/id3.js/lyricFetch.js + B 层新增 src/app/format.js + src/player/utils.js + src/css/ 三文件）
 
 - **严重度**：P1
 - **现象**：sw v12 漏列 `videoThumb.js` / `videoPlayer.js`，离线兜底时这两个模块不在缓存桶

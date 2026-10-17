@@ -6,7 +6,30 @@
 
 ## 2026-10-17
 
-### 📋 任务 T20261017-09 A 层台账止血（用户确认 A→B→C 顺序）
+### 📋 任务 T20261017-10 B 层代码质量升级（保守拆分零回归）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| B0 基线 | ✅ | preflight 14/14 + 单元 6/6 |
+| B1 main.js 保守抽离 | ✅ | fmtQuota → src/app/format.js；SW CORE 补 cast.js/id3.js/lyricFetch.js → ISS-0908-001 关单 |
+| B2 player.js 保守抽离 | ✅ | parseChapters/EQ_FREQS/EQ_PRESETS/guessMime/_extOf/_bufToB64/MIME_BY_EXT → src/player/utils.js（7 个纯函数/常量）；PROBE_A/PROBE_V 留 player.js（DOM 依赖） |
+| B3 style.css @import 拆分 | ✅ | 1481 行 → 8 行入口；拆 src/css/base.css（48）+ components.css（455）+ role.css（885） |
+| B4 sw.js CORE 同步 | ✅ | +6 条（format.js + utils.js + base.css + components.css + role.css + cast.js/id3.js/lyricFetch.js） |
+| B5 全量回归 | ✅ | preflight 14/14 + 单元 6/6 + build 双站点 + Android sync 47 项 |
+| B6 commit + push | ✅ | c3626c0 → main |
+| B7 台账更新 | ✅ | ISS-0908-001 关单 + index.md 新模块 + daily.md 本条目 |
+
+**改了哪些文件**：
+- 新增 6 个：src/app/format.js、src/player/utils.js、src/css/base.css、src/css/components.css、src/css/role.css
+- 修改 4 个：src/main.js、src/player.js、src/style.css、sw.js
+
+**行数变化**：
+- main.js 928→921 | player.js 856→796 | style.css 1481→8
+- 新增总行数：6+67+48+455+885 = 1461（原 style.css 1481 + player.js 抽离 60 行 ≈ 1541 行，净减 80 行）
+
+**活跃坑从 5 条 → 4 条**（ISS-0908-001 关单）
+
+### 📋 任务 T20261017-09 A 层台账止血
 
 | 动作 | 状态 | 说明 |
 |---|---|---|

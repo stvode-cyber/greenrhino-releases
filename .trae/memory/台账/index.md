@@ -7,23 +7,33 @@
 
 ## 📁 src/（前端源码，零构建 ES Module）
 
-### src/main.js（48KB 应用装配）
+### src/main.js（921 行 · 原 928，B 层已抽 fmtQuota 到 app/）
 - **决策**：DEC-20260909-001（拆双 App，__winRole 运行时裁剪）、DEC-20261017-003（设定体系升级）
 - **坑**：ISS-20261017-014（promise 链缺 catch，已补）
-- **TODO**：⚠️ 文件过大，未来需拆分
+- **TODO**：⚠️ 仍偏大（921 行），但与 app 对象/showPage 闭包强耦合，继续抽风险高
 
-### src/player.js（41KB 播放引擎）
+### src/app/（🆕 B 层新增）
+- `format.js` — fmtQuota 字节格式化
+- **TODO**：⏳ importManager.js / bootstrap.js 待抽（耦合 app 对象）
+
+### src/player.js（796 行 · 原 856，B 层已抽纯函数到 player/utils.js）
 - **决策**：DEC-20260908-001（播放模式分离）、DEC-20260903-001（HEVC 转码）
 - **坑**：ISS-20260903-001（视频黑屏 E4，已关单）
-- **TODO**：⚠️ 文件过大，未来需拆分
+- **TODO**：⚠️ 仍偏大，AudioEngine/PlayerEngine 类可进一步拆
+
+### src/player/（🆕 B 层新增）
+- `utils.js` — parseChapters / EQ_FREQS / EQ_PRESETS / guessMime / _extOf / _bufToB64 / MIME_BY_EXT
 
 ### src/store.js（IndexedDB 持久化 + 事件总线）
 - **坑**：ISS-20261017-009（三 getter 缺 || []）、ISS-20261017-016（同根因拆分）、#indexeddb 问题群
 - **修复**：2026-10-17 三个 getter 统一加 `|| []` 兜底
 
-### src/style.css（73KB 全量样式）
-- **决策**：DEC-20260909-001（双主题色）
-- **TODO**：⚠️ 文件过大，未来需拆分
+### src/style.css（8 行 · 原 1481，B 层 @import 拆三层）
+- **结构**：base.css（:root 变量 + reset）+ components.css（通用组件）+ role.css（🎵 音乐绿/🎬 琥珀主题）
+- **SW CORE**：三文件已加进 CORE 列表
+
+### src/css/（🆕 B 层新增）
+- `base.css` 48 行 | `components.css` 455 行 | `role.css` 885 行
 
 ### src/ui/（15 个组件）
 - bottombar.js / library.js / music.js / videoPlayer.js / queue.js / settings.js / favorites.js / playlists.js / recent.js / cloud.js / spectrum.js / gestures.js / dom.js / stats.js / onlinesearch.js
