@@ -72,3 +72,16 @@
 4. ✅ GitHub Secrets 是生产环境唯一密码来源
 5. ❌ 严禁任何 AI 把密码/私钥/指纹贴进源码、日志、台账正文
 6. ❌ 严禁把 `.secrets.env` 提交到 git 或复制到公共位置
+
+---
+
+## 📦 版本追踪 & 推送记录
+
+| 日期 | 版本 | Commit | 推送目标 | 备注 |
+|---|---|---|---|---|
+| 2026-10-17 | v16 | `3923222` → main | GitHub main ✅ + Cloudflare Pages 双站 | MJPEG 屏幕镜像 + 台账 A 层止血 |
+| 2026-10-17 | v16 | `05b6969` | GitHub main ✅ | AGENTS 瘦身 + 漂移修复 + 进程跟踪 |
+| 2026-09-14 | v15 | （历史） | GitHub main ✅ | TWA → 原生 WebView 壳（DEC-001） |
+| 2026-09-09 | v14 | （历史） | GitHub main ✅ + Cloudflare Pages | 拆双 App（DEC-001） |
+
+**推送前必查**：preflight 14/14 绿 + 单元 6/6 绿 + 远程无新冲突

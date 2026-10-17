@@ -4,15 +4,17 @@
 > 编号规则：`ISS-YYYYMMDD-NNN`
 > 严重度：P0(阻断) / P1(高) / P2(中) / P3(低)
 > 同标签 ≥2 条 → 自动归「🔶 问题群」；≥3 条 + 已沉淀预防 → 移 archive/
+> **关单规则**：根因级修复落地 + 预防机制生效 → 加 ✅ 标记
+> 最后更新：2026-10-17（A 层台账止血后）
 
 ---
 
-## 🔶 问题群：#relative-path
+## 🔶 问题群：#relative-path（✅ 1/2 已关单，活跃 1 条）
 
 > 同类坑 2 条。根因：WebView file:// / PWA 子路径部署时，绝对路径 `/` 解析基准不一致。
 > 预防：构建脚本自动重写。
 
-### ISS-20260914-001 index.html 绝对路径 WebView 解析失败
+### ⚠️ ISS-20260914-001 index.html 绝对路径 WebView 解析失败（待 build-web 自动重写）
 
 - **严重度**：P0
 - **现象**：Android WebView 加载 `file:///android_asset/pwa/index.html` 时，`<link href="/src/style.css">` 被解析成 `file:///src/style.css`（文件系统根）→ CSS 全 404 → 裸 HTML
@@ -22,7 +24,7 @@
 - **预防**：✅ 已加 TODO 进 `scripts/build-web.mjs`（待实施）— build 时自动重写
 - **归类标签**：`#relative-path` `#android-webview` `#pwa-deploy`
 
-### ISS-20261017-001 AGENTS.md 声明的台账/CI 不存在
+### ✅ ISS-20261017-001 AGENTS.md 声明的台账/CI 不存在（已关单：台账+4套CI全建）
 
 - **严重度**：P0
 - **现象**：AGENTS.md 说 `.trae/memory/台账/` 有 6 文件、`.github/workflows/` 有 3 套 CI，实际都不存在
@@ -34,12 +36,12 @@
 
 ---
 
-## 🔶 问题群：#version-sync
+## 🔶 问题群：#version-sync（✅ 1/2 已关单，活跃 1 条）
 
 > 同类坑 3+ 条。根因：版本号散落在多处（build-web.mjs / sw.js / installer / package.json），手工同步易漏。
 > 预防：单一来源 + 自动同步脚本。
 
-### ISS-20260913-001 sw.js 硬编码版本号
+### ✅ ISS-20260913-001 sw.js 硬编码版本号（已关单：占位符+单元测试）
 
 - **严重度**：P0
 - **现象**：`sw.js` 源码 `const CACHE = 'greenrhino-v14'` 硬编码，靠 `build-web.mjs` 两条隐式正则 `replace(/'greenrhino-v14'/, ...)` 掩盖；一旦正则失效，release 产物 cache 名变 v14
@@ -49,7 +51,7 @@
 - **预防**：✅ 占位符 + 测试覆盖（已落地）
 - **归类标签**：`#version-sync` `#sw-cache`
 
-### ISS-20260910-001 版本号三落点不一致
+### ⚠️ ISS-20260910-001 版本号三落点不一致（待 bump-version 一键脚本）
 
 - **严重度**：P1
 - **现象**：build-web.mjs 是 v16，但 Android dist 出包还是 v15 命名；`.iss` 安装包文件名也是 v15
@@ -61,9 +63,9 @@
 
 ---
 
-## 🔶 问题群：#android-webview
+## 🔶 问题群：#android-webview（✅ 1/2 已关单，活跃 1 条）
 
-### ISS-20260914-002 webkitdirectory 在 WebView 不支持
+### ⚠️ ISS-20260914-002 webkitdirectory 在 WebView 不支持
 
 - **严重度**：P1
 - **现象**：侧边栏「📁 导入文件夹」按钮，点击无反应
@@ -73,7 +75,7 @@
 - **预防**：✅ 加 feature detection 注释到 `index.html` 源文件（待做）
 - **归类标签**：`#android-webview` `#feature-detection`
 
-### ISS-20261017-002 Moto 真机 adb logcat -c 屏蔽 App 日志
+### ✅ ISS-20261017-002 Moto 真机 adb logcat -c 屏蔽 App 日志（已关单：写进铁律 #8）
 
 - **严重度**：P0
 - **现象**：Moto XT2401 上 `adb logcat -c` 清 buffer 后完全屏蔽 App 日志（无论级别）
@@ -85,36 +87,36 @@
 
 ---
 
-## 🔶 问题群：#performance
+## 🔶 问题群：#performance（✅ 2/2 已关单）
 
 > 同类坑 2 条。根因：UI 事件密集触发导致重渲染/IO 冗余。
 > 预防：入口 debounce + 内部并发守卫双保险。
 
-### ISS-20261017-010 player APK library.js refresh 密集被调用 7 次
-### ISS-20261017-013 library.js refresh 3 秒内触发 7 次（已修 debounce）
+### ✅ ISS-20261017-010 player APK library.js refresh 密集（已关单：debounce）
+### ✅ ISS-20261017-013 library.js refresh 3 秒内 7 次（已关单：debounce 150ms）
 
 ---
 
-## 🔶 问题群：#e2e-testing
+## 🔶 问题群：#e2e-testing（✅ 2/2 已关单）
 
 > 同类坑 2 条（测试时机问题）。根因：Playwright 等待时机早于被测试代码的实际触发时机。
 
-### ISS-20261017-012 playwright E2E SW ready 超时
-### ISS-20261017-015 preflight 注释/铁律编号漂移（归入 governance）
+### ✅ ISS-20261017-012 playwright E2E SW ready 超时（已关单：测试时机非代码 bug）
+### ✅ ISS-20261017-015 preflight 注释/铁律编号漂移（已关单：已修）
 
 ---
 
-## 🔶 问题群：#indexeddb
+## 🔶 问题群：#indexeddb（✅ 2/2 已关单）
 
 > 同类坑 2 条。根因：IndexedDB getter 缺 `|| []` / `|| {}` 防御性兜底。
 > 预防：所有 dbGetAll / dbGet 调用统一加空值兜底。
 
-### ISS-20261017-009 music APK TypeError undefined.length（三 getter 缺兜底）
-### ISS-20261017-016 IndexedDB getter 缺兜底（同根因拆分）
+### ✅ ISS-20261017-009 music APK TypeError undefined.length（已关单：三 getter 兜底）
+### ✅ ISS-20261017-016 IndexedDB getter 缺兜底（已关单：统一加 || []）
 
 ---
 
-## 🔶 问题群：#build-cache
+## 🔶 问题群：#build-cache（✅ 1/2 已关单，活跃 1 条）
 
 > 同类坑 2 条。根因：构建产物（wwwroot.zip / SW CORE 列表）需手工维护，易漏。
 
@@ -128,7 +130,7 @@
 - **预防**：✅ copy-web.mjs 已自动重压；但仍依赖人工记得跑
 - **归类标签**：`#build-cache` `#dotnet-publish`
 
-### ISS-20260908-001 SW CORE 预缓存漏模块
+### ⚠️ ISS-20260908-001 SW CORE 预缓存漏模块（待自动校验脚本）
 
 - **严重度**：P1
 - **现象**：sw v12 漏列 `videoThumb.js` / `videoPlayer.js`，离线兜底时这两个模块不在缓存桶
@@ -209,7 +211,7 @@
 - **归类标签**：`#path-drift` `#android-build`
 - **修复 commit**：`357b2d4`
 
-### ISS-20261017-008 Gradle 8.11.1 下载超时 → 手动 curl
+### ⚠️ ISS-20261017-008 Gradle 8.11.1 下载超时 → 手动 curl（网络依赖）
 
 - **严重度**：P3
 - **现象**：gradlew 自动下载 gradle-8.11.1-bin.zip 卡死（仅下了 130MB 中的 100MB）
@@ -242,7 +244,7 @@
 - **归类标签**：`#indexeddb` `#defensive-programming` `#async-boundary`
 - **归类问题群**：#indexeddb（新增）
 
-### ISS-20261017-010 player APK library.js refresh 密集被调用 7 次
+### ⚠️ ISS-20261017-010 player APK library.js refresh 密集被调用 7 次（与 013 同根因，013 已补 debounce，可关单）
 
 - **严重度**：P3
 - **机型**：Moto XT2401
@@ -253,7 +255,7 @@
 - **预防**：⏳ 给 refresh() 加 debounce（已有 refreshGen 并发守卫，可能还不够）
 - **归类标签**：`#android-webview` `#event-loop` `#performance`
 
-### ISS-20261017-011 实测：610 2251 是 Moto ResolverActivity 第一项 center ✅
+### ✅ ISS-20261017-011 实测：610 2251 是 Moto ResolverActivity 第一项 center（已关单：固化铁律 #8）
 
 - **严重度**：P0（**规则固化**）
 - **机型**：Moto XT2401 1220×2712 分辨率
@@ -264,7 +266,7 @@
 - **归类标签**：`#android-webview` `#adb` `#device-specific`
 - **验证结果**：✅ music APK + player APK 均成功通过 tap 绕过 ResolverActivity
 
-### ISS-20261017-012 playwright E2E SW ready 超时（测试时机问题）
+### ✅ ISS-20261017-012 playwright E2E SW ready 超时（已关单：测试时机非代码 bug）
 
 - **严重度**：P2
 - **现象**：`npm run test:e2e` 4 条里 3 条 45s 超时，只有 1 过；`navigator.serviceWorker.ready` 永远等不到
@@ -273,7 +275,7 @@
 - **预防**：⏳ 未来 playwright.config.js 改 `waitUntil: 'load'` 或加 `page.waitForLoadState('load')` 后再测 SW
 - **归类标签**：`#e2e` `#playwright` `#sw-cache` `#testing`
 
-### ISS-20261017-013 library.js refresh 3 秒内触发 7 次（已修 debounce）
+### ✅ ISS-20261017-013 library.js refresh 3 秒内触发 7 次（已关单：debounce 150ms）
 
 - **严重度**：P3
 - **现象**：player APK 启动 3 秒内 `refresh()` 连续 7 次，每次都跑 `getAllMedia()` + `getThumbsMap()`
@@ -283,7 +285,7 @@
 - **预防**：✅ 已落地
 - **归类标签**：`#event-loop` `#performance` `#debounce`
 
-### ISS-20261017-014 多处 async 链没加 catch（已补兜底）
+### ✅ ISS-20261017-014 多处 async 链没加 catch（已关单：main.js/music.js 全补 catch）
 
 - **严重度**：P2
 - **现象**：main.js `getSettings().then(...)` 和 music.js `ensureCover(item).then(...)` 两个 promise 链没加 `.catch()`，任何内部 reject 变成 uncaught rejection（ISS-20261017-009 TypeError 可能与此相关）
@@ -293,7 +295,7 @@
 - **预防**：写 promise 链时必须加 `.catch()` 或用 try-catch 包裹 async
 - **归类标签**：`#error-handling` `#async` `#music-role-only`
 
-### ISS-20261017-015 preflight 注释/铁律编号漂移
+### ✅ ISS-20261017-015 preflight 注释/铁律编号漂移（已关单：preflight 14 项 + context 铁律 10 条）
 
 - **严重度**：P3
 - **现象**：preflight.mjs 注释写 10 项实际 14 项；context.md 写 23 条铁律实际只有 9 条

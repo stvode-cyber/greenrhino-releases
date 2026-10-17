@@ -1,7 +1,7 @@
 # 模块索引 · 绿角犀
 
 > 按目录/模块索引台账条目。改某模块前 → 先看这页 → 扫对应坑。
-> 最后更新：2026-10-17
+> 最后更新：2026-10-17（A 层台账止血）
 
 ---
 
@@ -53,8 +53,8 @@
 
 ## 📁 server/（Python 后端）
 
-### server/cloud_api.py（16.9KB 单文件，8787 端口）
-- **TODO**：⚠️ 单文件过千行，按路由/模型/工具拆分（见 F 任务）
+### server/cloud_api.py（~500 行单文件，8787 端口）
+- **TODO**：⚠️ 单文件过千行（含路由+模型+工具混写），B 层拆分目标
 - **坑**：无专属
 
 ---
@@ -103,15 +103,19 @@
 - **覆盖**：SW 占位符、cache 名格式、双 App 隔离、版本号一致
 - **坑**：ISS-20260913-001
 
-### test/e2e/sw-cache.spec.js
-- **TODO**：⏳ AGENTS.md 说 E2E 4 条，实际只有 1 个 spec 文件，需补齐
+### test/e2e/sw-cache.spec.js（1 个 spec，实际 1 条）
+- **现状**：Playwright E2E 只有 SW cache 验证 1 条 spec，AGENTS 声明的 4 条是规划目标
+- **坑**：ISS-20261017-012（Playwright SW ready 超时，waitUntil 时机问题）
 
 ---
 
-## 📁 .github/workflows/（待建立）
+## 📁 .github/workflows/（4 套已建 ✅）
 
-- **坑**：ISS-20261017-001（不存在）
-- **TODO**：⏳ 建 3 套基础 CI（build-web / test:all / 可选 build-android）
+- **ci.yml** — preflight 14 项 + 单元测试 6 条 + build-web 双 PWA
+- **build-android.yml** — Gradle assembleRelease（ASCII 路径 workaround 内联）
+- **build-windows.yml** — dotnet publish + Inno Setup 打包
+- **build-huawei.yml** — AppGallery 上架资产检查
+- **坑**：ISS-20261017-001（已解决：AGENTS 声明 vs 实际落地差）
 
 ---
 

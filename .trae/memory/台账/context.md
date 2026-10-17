@@ -14,10 +14,10 @@
 | **双站** | https://greenrhino-music.pages.dev / https://greenrhino-player.pages.dev |
 | **包名** | `com.greenrhino.music` / `com.greenrhino.player` |
 | **主题色** | 音乐绿 `#00D8A6` / 播放器琥珀 `#FFB03A` |
-| **Preflight** | ✅ 12/12 绿 |
+| **Preflight** | ✅ 14/14 绿 |
 | **单元测试** | ✅ 6/6 绿 |
 | **CI** | ✅ `.github/workflows/ci.yml` |
-| **远程** | ✅ main 分支已推送 `2b9cb77` |
+| **远程** | ✅ main 分支已推 `3923222`（2026-10-17 傍晚） |
 | **投屏三方案** | ✅ DLNA 推视频（已有）+ **🆕 MJPEG 屏幕镜像 /screen.mjpg**（MediaProjection 抓屏，任何有浏览器的电视都能用，95%+ 覆盖）+ Miracast 原生兜底 |
 | **当前重点** | 🆕 屏幕镜像 MJPEG 已部署，用户在绿角犀 App 里点「📺 屏幕镜像」→ 系统弹框允许 → 电视浏览器开 /tv 页面自动显示手机画面 |
 
@@ -77,18 +77,27 @@ cd C:\greenrhino-build\android-player
 
 | Commit | 内容 |
 |---|---|
-| 1124423 | `feat: autoNext 设置 — 播放完默认停，用户可开关 (DEC-005)` |
-| d0c434a | `feat(cast): Android player 壳投屏同步` |
-| 94783b5 | `fix(e2e): playwright waitUntil load 修 ISS-012` |
-| 7c7ad24 | `fix(iss009): store.js 三 getter \|\| [] 兜底` |
-| 05b6969 | `feat(setup): AGENTS瘦身+漂移修复+进程跟踪` |
+| 3923222 | `feat: 前端 UI 加 MJPEG 屏幕镜像按钮（投屏面板三选项全齐）` |
+| 2b9cb77 | `feat: 屏幕镜像 MJPEG /screen.mjpg — MediaProjection 抓屏` |
+| 61dbafb | `feat: MediaHttpServer TV browser + BootReceiver + 双壳全量 sync` |
+| 1124423 | `feat: autoNext 设置 — 播放完默认停（DEC-005）` |
+| 94401b5 | `docs(ledger): 修 DEC-003/004 header + context 更新` |
 
-**最新动态**（2026-10-17 傍晚）：
-- ✅ autoNext 设置落地（默认播完停，用户可开）
-- ✅ ISS-009 TypeError 真机验证通过
-- ✅ player 壳投屏代码同步 + 编译通过
-- ⏳ 三星电视 SSDP 没扫到 MediaRenderer——等待电视端开启 DLNA 或用 Miracast 系统级投屏
-- ⏳ 6 个 commit 本地，未推远程
+---
+
+## 🚨 活跃坑清单（新 AI 必看）
+
+> 已修 16 条（✅ 关单），活跃 5 条（⚠️ 待跟进）。详见 [issues.md](./issues.md)
+
+| 编号 | 标题 | 严重度 | 状态 |
+|---|---|---|---|
+| ⚠️ ISS-20260914-001 | index.html 绝对路径 WebView（待 build-web 自动重写） | P0 | 待 B 层实现 |
+| ⚠️ ISS-20260910-001 | 版本号三落点（待 bump-version 覆盖 .iss） | P1 | 待补 .iss 字段 |
+| ⚠️ ISS-20260908-001 | SW CORE 预缓存漏模块（待自动校验脚本） | P1 | 可加 preflight |
+| ⚠️ ISS-20260914-002 | webkitdirectory WebView 不支持 | P1 | feature detection 已注 TODO |
+| ⚠️ ISS-20261017-008 | Gradle 下载超时 | P3 | 网络依赖，可预打包 |
+
+**全部已关单 16 条**：0903-001 视频黑屏、0904-001 wwwroot.zip、0913-001 SW 占位符、20261017-001/002/003/004/005/006/007/009/011/012/013/014/015/016
 
 ---
 

@@ -6,6 +6,36 @@
 
 ## 2026-10-17
 
+### 📋 任务 T20261017-09 A 层台账止血（用户确认 A→B→C 顺序）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A0 基线验证 | ✅ | preflight 14/14 + 单元 6/6，零漂移 |
+| A1 index.md 漂移修复 | ✅ | workflows 4 个已建不再写"待建立"、E2E 实际 1 个 spec、cloud_api.py 状态更新 |
+| A2 issues.md 关单瘦身 | ✅ | 已修 16 条 ISS 加 ✅ 标记，活跃坑 5 条加 ⚠️ 标记（0914-001/0910-001/0908-001/0914-002/008） |
+| A3 context.md 同步 | ✅ | commit 3923222 已推、preflight 14/14、活跃坑清单集中化、最近 5 动作更新 |
+| A4 secrets-keys.md 升级 | ✅ | 补版本追踪 + 推送记录表 |
+| A5 AGENTS.md 用户偏好加强 | ✅ | 8→10 条，核心明确「只做决定权」+ 自动闭环 + 上下文减负 |
+| A6 回归验证 | ✅ | preflight 14/14 + 单元 6/6 全绿，台账改动零影响 |
+| A7 daily.md 记录 + 汇报 | ✅ | 本条目 |
+
+**改动文件**：index.md / issues.md / context.md / secrets-keys.md / AGENTS.md（5 个台账文件，零代码改动）
+**活跃坑从 21 条 → 5 条**（16 条已关单）
+
+### 📋 任务 T20261017-08 前端 UI 加 MJPEG 屏幕镜像按钮（最后一块拼图）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| F1 cast.js | ✅ | screenCastStart/screenCastStop + state.screenCasting + handleMsg mirror 回调 |
+| F2 bottombar.js | ✅ | 投屏面板加「🖥️ 屏幕镜像 (通用)」按钮 + cast.on('screenCast') toast |
+| F3 build + preflight + test | ✅ | build PWA sync assets + preflight 14/14 + test 6/6 |
+| F4 commit + push | ✅ | 2b9cb77→3923222 main→main |
+
+**投屏面板现在三个镜像选项**：
+1. 📺 DLNA 视频推送（扫描设备 → SetAVTransportURI 推视频文件）
+2. 🖥️ 系统镜像 (Miracast)（唤起 Win+K / Settings.WIFI_DISPLAY_SETTINGS）
+3. 🆕 🖥️ 屏幕镜像 (通用)（MJPEG /screen.mjpg，任何有浏览器的电视都能用）
+
 ### 📋 任务 T20261017-07 屏幕镜像 MJPEG 投屏（通用方案，95%+ 智能电视覆盖）
 
 | 动作 | 状态 | 说明 |
