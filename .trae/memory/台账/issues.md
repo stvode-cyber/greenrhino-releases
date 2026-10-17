@@ -104,6 +104,16 @@
 
 ---
 
+## 🔶 问题群：#indexeddb
+
+> 同类坑 2 条。根因：IndexedDB getter 缺 `|| []` / `|| {}` 防御性兜底。
+> 预防：所有 dbGetAll / dbGet 调用统一加空值兜底。
+
+### ISS-20261017-009 music APK TypeError undefined.length（三 getter 缺兜底）
+### ISS-20261017-016 IndexedDB getter 缺兜底（同根因拆分）
+
+---
+
 ## 🔶 问题群：#build-cache
 
 > 同类坑 2 条。根因：构建产物（wwwroot.zip / SW CORE 列表）需手工维护，易漏。
@@ -209,16 +219,28 @@
 - **预防**：⏳ 可把 gradle zip 作为项目资产预打包
 - **归类标签**：`#network` `#gradle-directory`
 
-### ISS-20261017-009 music APK 启动时 TypeError: undefined.length（非致命）
+### ISS-20261017-009 music APK 启动时 TypeError: undefined.length（**根因修复 + 诊断增强**）
 
 - **严重度**：P2
 - **机型**：Moto XT2401 (ZY22KJLPHK) · Android 14
-- **现象**：music APK 启动 ~1.5s 后，logcat 出现 `E GreenRhino/JS: [105] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'length')`
-- **根因**：待挖 — WebView 行号映射 `[105]` 不是源码行号，是编译后的 bundle 行号。player APK（同源码）没有这个错，说明是 music 角色独有的代码分支
-- **影响**：**非致命**。633 首歌正常加载、RhinoBridge 正常注册、UI 显示「已就绪」正常。是某个异步回调里没 catch 到
-- **关联文件**：`src/main.js`（music 独有分支）、build-web.mjs 重写绝对路径
-- **预防**：⏳ 需要 `adb logcat --pid=$pid *:E` 抓完整 JS 堆栈，看具体哪个 async 函数
-- **归类标签**：`#android-webview` `#js-runtime` `#role-specific`
+- **现象**：music APK 启动 ~1.5s 后 `E GreenRhino/JS: [105] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'length')`
+- **根因（推断）**：store.js 的 `getAllMedia()` / `getRecent()` / `getFavorites()` 三个 IndexedDB getter 在 `dbGetAll()` 极罕见返回 undefined 时，`.sort()` / `.length` 崩。player APK 同源码没这错——因为 player role 不走 mineEl 的 Promise.all 密集调用链
+- **解决**：✅ 2026-10-17 给三个 getter 加 `|| []` 兜底（`getPlaylists` 本来就有）+ showMine catch 补完整 stack 打印 + 打印各 getter typeof 类型
+- **关联文件**：`src/store.js`（三 getter 兜底）、`src/main.js`（showMine stack）
+- **预防**：✅ 已落地；下次真机回归跑 `adb logcat -d --pid=$pid *:E` 应能看到完整 stack + 各 getter 类型
+- **归类标签**：`#android-webview` `#js-runtime` `#role-specific` `#indexeddb` `#defensive-programming`
+- **状态**：已修复 + 诊断增强，待真机验证
+
+### ISS-20261017-016 IndexedDB getter 缺兜底（已修）
+
+- **严重度**：P2（与 ISS-009 同根因）
+- **现象**：`getAllMedia` / `getRecent` / `getFavorites` 三个函数对 `dbGetAll()` 的返回值直接调用 `.sort()` 或 `.length`，缺 `|| []` 兜底
+- **根因**：与 `getPlaylists`（有 `|| []`）写法不一致；极罕见情况下 IndexedDB 事务 abort 或就绪时序问题导致 `dbGetAll` 返回 undefined
+- **解决**：✅ 2026-10-17 三个函数统一加 `|| []`；`getAllMedia` 的 `.sort()` 也加了 `(b.addedAt || 0)` 兜底防 null
+- **关联文件**：`src/store.js`（line ~218, ~287, ~320）
+- **预防**：所有 IndexedDB 读操作统一加 `|| []` / `|| {}` 兜底
+- **归类标签**：`#indexeddb` `#defensive-programming` `#async-boundary`
+- **归类问题群**：#indexeddb（新增）
 
 ### ISS-20261017-010 player APK library.js refresh 密集被调用 7 次
 

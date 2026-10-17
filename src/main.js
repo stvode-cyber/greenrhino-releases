@@ -333,12 +333,14 @@ function buildMusicHome(app) {
         hintPls.textContent = pls.length + ' 个'
         hintRecent.textContent = recent.length + ' 首'
       } catch (e) {
-        console.error('[mine] 拉数据失败:', e)
+        // ISS-20261017-009: 打印完整 stack + 各 getter 类型，下次真机可定位根因
+        console.error('[mine] 拉数据失败:', e?.message, 'stack:', e?.stack)
+        console.error('[mine] debug favs type=', typeof favs, 'pls type=', typeof pls, 'recent type=', typeof recent, 'all type=', typeof all)
         header.querySelector('.wm-sub').textContent = '加载失败：' + (e?.message || e)
       }
     } catch (e) {
       // 兜底：任何异常都不应该让页面空白
-      console.error('[mine] showMine 崩溃:', e)
+      console.error('[mine] showMine 崩溃:', e?.message, 'stack:', e?.stack)
       toast('我的页面加载失败：' + (e?.message || e), 'err')
       el.hidden = false
       mineEl.hidden = true

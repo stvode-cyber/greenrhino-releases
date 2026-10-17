@@ -17,9 +17,9 @@
 - **坑**：ISS-20260903-001（视频黑屏 E4，已关单）
 - **TODO**：⚠️ 文件过大，未来需拆分
 
-### src/store.js（20KB IndexedDB）
-- **决策**：DEC-20260909-001（按 __winRole 选 DB 名 `gr-music-v1` / `gr-player-v1`）
-- **坑**：无专属
+### src/store.js（IndexedDB 持久化 + 事件总线）
+- **坑**：ISS-20261017-009（三 getter 缺 || []）、ISS-20261017-016（同根因拆分）、#indexeddb 问题群
+- **修复**：2026-10-17 三个 getter 统一加 `|| []` 兜底
 
 ### src/style.css（73KB 全量样式）
 - **决策**：DEC-20260909-001（双主题色）

@@ -6,7 +6,20 @@
 
 ## 2026-10-17
 
-### 📋 任务 T20261017-01 设定体系升级（下午）
+### 📋 任务 T20261017-02 ISS-009 TypeError 根因修复（下午晚段）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| B0 基线 | ✅ | preflight 14/14 + 单元 6/6 |
+| B1 store.js 三 getter \|\| [] 兜底 | ✅ | getAllMedia / getRecent / getFavorites + getAllMedia sort 防 null |
+| B2 showMine catch 补 stack 打印 | ✅ | 下次真机可看到完整 stack + 各 getter typeof |
+| B3 回归验证 | ✅ | preflight 14/14 + 单元 6/6，零回归 |
+| B4 build + android sync | ✅ | release/pwa-site-* + android assets/pwa 双同步 |
+| B5 归档台账 + secrets-keys.md | ✅ | ISS-009 状态更新、ISS-016 新归档、secrets 索引文件 |
+| B6 commit | ⏳ | 待 |
+| B7 汇报 | ⏳ | 待 |
+
+### 📋 任务 T20261017-01 设定体系升级（下午早段）
 
 | 动作 | 状态 | 说明 |
 |---|---|---|

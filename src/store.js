@@ -1,4 +1,4 @@
-﻿// store.js — IndexedDB 持久化 + 状态管理（事件总线）
+// store.js — IndexedDB 持久化 + 状态管理（事件总线）
 // 媒体文件以 Blob 形式存入 IndexedDB，实现真正离线、重启可续播。
 
 // 数据库按窗口角色隔离：拆分后 音乐/视频播放器 是独立 App，数据互不可见。
@@ -216,8 +216,10 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描', pr
 }
 
 export async function getAllMedia() {
-  const all = await dbGetAll('media')
-  return all.sort((a, b) => b.addedAt - a.addedAt)
+  // ISS-20261017-009: dbGetAll 极罕见返回 undefined（IndexedDB 就绪时序或 abort），
+  // 兜底为空数组，防止下游 `.sort()` / `.filter()` 崩 undefined.length
+  const all = (await dbGetAll('media')) || []
+  return all.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0))
 }
 // 媒体库重复检测：优先按 标题+歌手+专辑 元数据匹配，缺失时退回 文件名+大小。
 // 返回分组数组，每组内已按 addedAt 降序排好（[0] 为建议保留的最先后入项）。
@@ -283,7 +285,7 @@ export async function toggleFavorite(id) {
   return fav
 }
 export async function getFavorites() {
-  const ids = await dbGetAll('favorites')
+  const ids = (await dbGetAll('favorites')) || []
   const out = []
   for (const id of ids) { const m = await dbGet('media', id); if (m) out.push(m) }
   return out
@@ -316,7 +318,7 @@ export async function recordPlayback(id) {
 
 // ---------- 最近播放（复用续播进度表，按更新时间排序） ----------
 export async function getRecent(limit = 60) {
-  const progs = await dbGetAll('progress')
+  const progs = (await dbGetAll('progress')) || []
   progs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
   const out = []
   for (const p of progs) {
