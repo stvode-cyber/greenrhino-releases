@@ -356,6 +356,7 @@ const DEFAULT_SETTINGS = {
   theme: 'dark',
   defaultVolume: 0.8,
   resumeEnabled: true,
+  autoNext: false,        // 🆕 播放完自动下一首（默认关：用户点播放才播完停）
   crossfade: 0,          // 0 = 关闭
   playModes: { music: 'loop', video: 'order' }, // 音乐/视频各自独立的播放模式
   eqPreset: 'flat',
@@ -391,7 +392,8 @@ export async function exportSyncData() {
   const s = await getSettings()
   const settings = {
     theme: s.theme, defaultVolume: s.defaultVolume, resumeEnabled: s.resumeEnabled,
-    crossfade: s.crossfade, playModes: s.playModes, eqPreset: s.eqPreset, eqBands: s.eqBands,
+    autoNext: s.autoNext, crossfade: s.crossfade, playModes: s.playModes,
+    eqPreset: s.eqPreset, eqBands: s.eqBands,
     lastMode: s.lastMode
   }
   return {

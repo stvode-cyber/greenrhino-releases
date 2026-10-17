@@ -1,4 +1,4 @@
-﻿// settings.js — 设置模态（主题/音量/续播/EQ/存储/导入记录）
+// settings.js — 设置模态（主题/音量/续播/EQ/存储/导入记录）
 import { h, toast, openModal } from './dom.js'
 import { player, EQ_FREQS, EQ_PRESETS } from '../player.js'
 import { getSettings, saveSettings, getAllMedia, dbDelete, dbClear, dbGetAll, getImportRecords, exportSyncData, importSyncData } from '../store.js'
@@ -18,6 +18,10 @@ export async function openSettings(app, focus = '') {
   const resumeSeg = seg(['on', 'off'], s.resumeEnabled ? 'on' : 'off', (v) => {
     saveSettings({ resumeEnabled: v === 'on' }); player.resumeEnabled = v === 'on'
   }, { on: '开启', off: '关闭' })
+  // 🆕 播放完自动下一首（默认关）
+  const autoNextSeg = seg(['on', 'off'], s.autoNext ? 'on' : 'off', (v) => {
+    saveSettings({ autoNext: v === 'on' }); player.autoNext = v === 'on'
+  }, { on: '自动', off: '播完停' })
   // 交叉淡入
   const cf = h('select', { class: 'opt', onchange: (e) => { saveSettings({ crossfade: +e.target.value }); player.setCrossfade(+e.target.value) } },
     ...[0, 3, 5, 8].map((v) => h('option', { value: String(v), selected: v === s.crossfade }, v === 0 ? '关闭' : v + ' 秒')))
@@ -93,6 +97,7 @@ export async function openSettings(app, focus = '') {
     row('主题', '深浅色外观', themeSeg),
     row('默认音量', '新播放的初始音量', vol),
     row('退出续播', '记住进度，下次继续', resumeSeg),
+    row('自动下一首', '播完自动续播下一首（默认关闭）', autoNextSeg),
     row('设为默认播放器', '双击音频/视频直接用本软件打开', h('button', { class: 'opt', onclick: setAsDefaultPlayer }, '设为系统默认')),
     row('交叉淡入', '歌曲间平滑过渡', cf),
     row('均衡器 EQ', '10 段频率调节', eqWrap),

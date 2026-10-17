@@ -107,7 +107,19 @@
 
 ---
 
-## DEC-20261017-004 Android player 壳投屏同步（DlnaCaster + MediaHttpServer）
+## DEC-20261017-005 播放完自动下一首设为默认关闭
+
+- **日期**：2026-10-17
+- **决策**：`autoNext: false` 设为默认值，用户可在设置页开关切换
+- **原因**：用户明确要求「一个视频播放完就停止，不要自动播放下一个」。当前代码硬编码 `_advance(true)` 自动下一首，没开关
+- **备选方案**：改播放模式默认值（被否决，playMode 控制的是 loop/shuffle，和自动下一首是两个概念）
+- **改动**：
+  - `store.js DEFAULT_SETTINGS` 加 `autoNext: false` + `exportSyncData` settings 加字段
+  - `player.js` 启动从 settings 读 `player.autoNext` + `_advance(auto)` 检查开关（关时 auto 触发的 advance → 直接 pause + emit('ended')，手动 prev/next 不受影响）
+  - `settings.js` UI 加 seg 开关「自动/播完停」
+- **落地效果**：preflight 14/14 + 单元 6/6 零回归；老用户升级后因 DB settings 里没有 autoNext 字段，DEFAULT_SETTINGS 的合并逻辑自动给 false → 默认播完停
+- **关联文件**：`src/store.js`、`src/player.js`、`src/ui/settings.js`
+- **相关坑**：无
 
 - **日期**：2026-10-17
 - **决策**：把 music 壳已验证的 DLNA 投屏代码完整同步到 player 壳（2 新文件 + MainActivity 大改）

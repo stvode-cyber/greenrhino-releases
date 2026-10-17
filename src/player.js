@@ -499,6 +499,9 @@ class PlayerEngine {
   }
   _advance(auto) {
     if (!this.queue.length) return
+    // 🆕 autoNext 关闭时，播完自动触发的 advance → 直接停，不自动下一首
+    // 手动 prev()/next() 不受影响（它们传 auto=false）
+    if (auto && this.autoNext === false) { this.pause(); this.emit('ended'); return }
     if (this._sleepAfterTrack && auto) { this._sleepAfterTrack = false; this.pause(); this.emit('ended'); return }
     if (this.playMode === 'one' && auto) { this.seek(0); this.play(); return }
     const ni = this._nextIndex(auto)
@@ -879,6 +882,7 @@ if (window.chrome && window.chrome.webview && typeof window.chrome.webview.addEv
 getSettings().then((s) => {
   player.volume = s.defaultVolume
   player.resumeEnabled = s.resumeEnabled
+  player.autoNext = s.autoNext ?? false  // 🆕 播放完自动下一首（默认关）
   player.crossfade = s.crossfade
   player.eqBands = s.eqBands
   player.eqPreset = s.eqPreset
