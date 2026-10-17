@@ -2,6 +2,7 @@ package com.greenrhino.player
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.media.projection.MediaProjectionManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -47,6 +48,19 @@ class MainActivity : ComponentActivity() {
     // 🔶 DLNA 投屏：与 music 壳对齐
     private val dlnaCaster = DlnaCaster()
     private val rhinoBridge = RhinoBridge()
+
+    // 🔶 屏幕镜像：MediaProjection 抓屏授权（系统弹框）
+    private val mediaProjectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            ScreenCaster.start(this, result.resultCode, result.data!!)
+        } else {
+            webView.evaluateJavascript(
+                "if(window.__castCb)window.__castCb({type:'mirror',ok:false,msg:'授权被拒绝'})", null
+            )
+        }
+    }
 
     // 🔶 ISS-20261009-009：现代 ActivityResultLauncher 处理 WebView 文件选择（支持多选）
     private val fileChooserLauncher = registerForActivityResult(
@@ -575,6 +589,26 @@ class MainActivity : ComponentActivity() {
                     webView.evaluateJavascript(js, null)
                 }
             }
+        }
+
+        @JavascriptInterface
+        fun startScreenCast(): String {
+            if (ScreenCaster.isRunning()) return "OK: already running"
+            val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+                ?: return "ERROR: MediaProjectionManager unavailable"
+            mediaProjectionLauncher.launch(mpm.createScreenCaptureIntent())
+            return "OK: system capture permission requested"
+        }
+
+        @JavascriptInterface
+        fun stopScreenCast(): String {
+            ScreenCaster.stop()
+            return "OK"
+        }
+
+        @JavascriptInterface
+        fun getScreenMirrorUrl(): String {
+            return "http://${MediaHttpServer.lanIp}:${MediaHttpServer.port}/screen.mjpg"
         }
     }
 }

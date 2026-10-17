@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.projection.MediaProjectionManager
 import android.annotation.SuppressLint
 import android.Manifest
 import android.net.Uri
@@ -14,6 +15,7 @@ import android.provider.MediaStore
 import android.util.Log
 import android.view.WindowManager
 import android.webkit.ConsoleMessage
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -65,6 +67,21 @@ class MainActivity : ComponentActivity() {
 
     // 🔶 RhinoBridge 实例（同时用于 WebView 注册 + Debug BroadcastReceiver）
     private val rhinoBridge = RhinoBridge()
+
+    // 🔶 屏幕镜像：MediaProjection 抓屏授权（系统弹框「允许屏幕捕获」）
+    private val mediaProjectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            android.util.Log.e("GreenRhino", "✅ MediaProjection granted → start ScreenCaster")
+            ScreenCaster.start(this, result.resultCode, result.data!!)
+        } else {
+            android.util.Log.e("GreenRhino", "❌ MediaProjection denied or cancelled")
+            webView.evaluateJavascript(
+                "if(window.__castCb)window.__castCb({type:'mirror',ok:false,msg:'授权被拒绝'})", null
+            )
+        }
+    }
 
     // 🔶 ISS-20261009-018: Music App 也需要 MediaStore.Audio 扫描！
     // 之前只有 Player 版有 MediaStore 扫描逻辑，Music 版完全是空壳 → 自动扫描按钮静默失败
@@ -768,6 +785,27 @@ class MainActivity : ComponentActivity() {
                     webView.evaluateJavascript(js, null)
                 }
             }
+        }
+
+        // 🆕 屏幕镜像（MJPEG /screen.mjpg，最通用——任何有浏览器的电视都能用）
+        @JavascriptInterface
+        fun startScreenCast(): String {
+            if (ScreenCaster.isRunning()) return "OK: already running"
+            val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+                ?: return "ERROR: MediaProjectionManager unavailable"
+            mediaProjectionLauncher.launch(mpm.createScreenCaptureIntent())
+            return "OK: system capture permission requested"
+        }
+
+        @JavascriptInterface
+        fun stopScreenCast(): String {
+            ScreenCaster.stop()
+            return "OK"
+        }
+
+        @JavascriptInterface
+        fun getScreenMirrorUrl(): String {
+            return "http://${MediaHttpServer.lanIp}:${MediaHttpServer.port}/screen.mjpg"
         }
     }
 }

@@ -14,12 +14,11 @@
 | **双站** | https://greenrhino-music.pages.dev / https://greenrhino-player.pages.dev |
 | **包名** | `com.greenrhino.music` / `com.greenrhino.player` |
 | **主题色** | 音乐绿 `#00D8A6` / 播放器琥珀 `#FFB03A` |
-| **Preflight** | ✅ 14/14 绿 |
+| **Preflight** | ✅ 12/12 绿 |
 | **单元测试** | ✅ 6/6 绿 |
 | **CI** | ✅ `.github/workflows/ci.yml` |
-| **远程** | ✅ main 分支已推送 `https://github.com/stvode-cyber/greenrhino-releases.git` |
-| **双 APK（今天新鲜的）** | 🎵 music 3.49MB 10/17 10:13 · 🎬 player 3.47MB 10/17 10:10 |
-| **当前卡点** | Moto XT2401 USB 未连接 → 真机回归无法进行 |
+| **远程** | ✅ main 分支已推送 `61dbafb` |
+| **当前重点** | 🎬 MediaHttpServer `/tv` 电视浏览器投屏已通（HTTP 200），`/list` workprofile fallback 已加（空数组是 Moto 真机 MediaStore 权限隔离待实机验证） |
 
 ---
 

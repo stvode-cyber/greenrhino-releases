@@ -6,6 +6,27 @@
 
 ## 2026-10-17
 
+### 📋 任务 T20261017-06 MediaHttpServer 电视浏览器投屏 + 双壳全量 sync（深夜）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| I0 路由 | ✅ | MediaHttpServer 加 /tv /list / 路由，IPv6 dual-stack |
+| I1 BootReceiver | ✅ | 开机自启 + 网络变化重启 MediaHttpServer |
+| I2 常量修 | ✅ | Intent.ACTION_WIFI_STATE_CHANGED → WifiManager.WIFI_STATE_CHANGED_ACTION |
+| I3 handleList | ✅ | workprofile fallback + 去 LIMIT 字符串 + DISPLAY_NAME/TITLE 双列 fallback |
+| I4 onResume/onNewIntent | ✅ | singleTask杀进程后Activity恢复自动重启MediaHttpServer |
+| I5 双壳sync | ✅ | player壳全量覆盖：MediaHttpServer/BootReceiver/MainActivity(4处MediaHttpService→MediaHttpServer) |
+| I6 双壳rebuild | ✅ | music+player BUILD SUCCESSFUL |
+| I7 preflight+test | ✅ | preflight 12/12 + unit test 6/6 零回归 |
+| I8 commit+push | ✅ | be76163→61dbafb main→main |
+
+**关键发现**：
+- Android Studio clean 不够！`Copy-Item -Recurse -Force` 覆盖旧目录时**旧文件不删除**，只覆盖同名文件。必须 `Remove-Item -Recurse -Force` 先删旧目录再 Copy
+- `/data/local/tmp/ghs_status.txt` Moto 量产版**无写权限**。调试必须用 `context.cacheDir/ghs_xxx.txt`
+- `adb run-as com.greenrhino.music` 能看到 cache 目录的文件
+- MediaHttpServer 路由 `/list` 查不到视频的根因：Moto 多用户（user 904）+ MediaStore 查询列名兼容性（`_display_name` vs `DISPLAY_NAME`）
+- player MainActivity castPlay 里 MediaHttpService 引用 → 全改成 MediaHttpServer
+
 ### 📋 任务 T20261017-05 自动下一首设置 + 投屏验证收尾（傍晚）
 
 | 动作 | 状态 | 说明 |

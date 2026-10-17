@@ -127,6 +127,13 @@ object MediaHttpServer {
 
             if (method != "GET") { sendError(output, 405, "Method Not Allowed"); socket.close(); return }
 
+            // 🆕 屏幕镜像：/screen.mjpg → MJPEG 流（电视浏览器 <img src=...> 直接显示）
+            if (path == "/screen.mjpg" || path == "/screen.mjpeg") {
+                sendMjpeg(output); socket.close(); return
+            }
+            if (path == "/screen/status") {
+                sendJson(output, """{"casting":${com.greenrhino.player.ScreenCaster.isRunning()},"port":$port}"""); socket.close(); return
+            }
             // 🆕 /list — 返回 Moto 上所有视频文件（JSON）
             if (path == "/list" || path == "/list/") {
                 handleList(output); socket.close(); return
@@ -224,6 +231,33 @@ object MediaHttpServer {
         } catch (_: Exception) {}
     }
 
+    /** MJPEG 推流：multipart/x-mixed-replace，浏览器原生支持 */
+    private fun sendMjpeg(out: OutputStream) {
+        val header = StringBuilder().apply {
+            append("HTTP/1.1 200 OK\r\n")
+            append("Content-Type: multipart/x-mixed-replace; boundary=frame\r\n")
+            append("Cache-Control: no-cache\r\n")
+            append("Connection: keep-alive\r\n")
+            append("Access-Control-Allow-Origin: *\r\n")
+            append("\r\n")
+        }.toString()
+        out.write(header.toByteArray(charset("ISO-8859-1")))
+        out.flush()
+        while (com.greenrhino.player.ScreenCaster.isRunning()) {
+            val frame = com.greenrhino.player.ScreenCaster.latestFrame()
+            if (frame != null) {
+                try {
+                    out.write("--frame\r\n".toByteArray())
+                    out.write("Content-Type: image/jpeg\r\nContent-Length: ${frame.size}\r\n\r\n".toByteArray())
+                    out.write(frame)
+                    out.write("\r\n".toByteArray())
+                    out.flush()
+                } catch (e: Exception) { break }
+            }
+            Thread.sleep(60)
+        }
+    }
+
     /** 从 WifiManager 获取手机局域网 IP（如 192.168.1.105） */
     private fun getLanIp(context: Context): String {
         return try {
@@ -304,19 +338,25 @@ object MediaHttpServer {
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#000;color:#fff;font-family:sans-serif;padding:16px}
 h1{font-size:20px;margin-bottom:12px;color:#FFB03A}
-#player{width:100%;max-height:70vh;background:#111;border-radius:12px}
+#mirror{width:100%;max-height:45vh;background:#111;border-radius:12px;display:none;object-fit:contain}
+#mirror.active{display:block}
+#player{width:100%;max-height:55vh;background:#111;border-radius:12px}
 #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:16px}
 .item{background:#1a1a1a;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #333}
 .item:hover{border-color:#FFB03A;background:#222}
 #empty{color:#888;padding:32px;text-align:center}
+#status{color:#666;font-size:12px;margin-top:8px}
+#status.online{color:#FFB03A}
 </style>
 </head>
 <body>
-<h1>📺 绿角犀 · 手机上的视频</h1>
+<h1>📺 绿角犀 · 电视投屏</h1>
+<img id="mirror" alt="屏幕镜像"/>
 <video id="player" controls playsinline></video>
+<div id="status">等待手机投屏…</div>
 <div id="list"><div id="empty">加载中…</div></div>
 <script>
-const p=document.getElementById('player'),l=document.getElementById('list');
+const p=document.getElementById('player'),l=document.getElementById('list'),m=document.getElementById('mirror'),s=document.getElementById('status');
 fetch('/list').then(r=>r.json()).then(arr=>{
   if(!arr.length){l.innerHTML='<div id="empty">手机上没找到视频</div>';return}
   l.innerHTML='';arr.forEach(v=>{
@@ -324,6 +364,14 @@ fetch('/list').then(r=>r.json()).then(arr=>{
     d.onclick=()=>{p.src=v.url;p.play()};l.appendChild(d)
   })
 }).catch(()=>{l.innerHTML='<div id="empty">加载失败，刷新试试</div>'});
+setInterval(async()=>{
+  try{const r=await fetch('/screen/status');const j=await r.json();
+    if(j.casting){
+      if(!m.classList.contains('active')){m.classList.add('active');s.textContent='📱 手机屏幕镜像中';s.classList.add('online')}
+    }else{m.classList.remove('active');s.textContent='等待手机投屏…';s.classList.remove('online')}
+  }catch(e){}
+},2000);
+m.src='/screen.mjpg';
 </script>
 </body></html>"""
         writeResponseHeader(out, 200, "OK", "text/html; charset=utf-8", html.length.toLong(), null)
