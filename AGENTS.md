@@ -197,16 +197,70 @@ icons/                   icon-music.svg / icon-player.svg（角色专属图标�
 - `.secrets.env` 在 `.gitignore` 中，本地临时用，禁止提交
 - `assetlinks.json` 的 SHA256 指纹必须从真实 keystore 生成，**不要手写**
 
-## 发布检查清单
+## 🧑‍💼 用户行为偏好（必须遵守）
+
+> 1号的行为偏好，写死在规则里，下次换 AI 自动遵守。
+
+1. **大白话回复**：不用术语、不用 markdown 标题层级嵌套、不写长段落。一句话就一句话，别啰嗦。
+2. **我只确认，不手动操作**：所有事情你自己想办法干。别让我跑命令、别让我改配置、别让我选路径。干完了给我汇报，我只需要说"行"或者指出哪里不对。
+3. **不要给我输出运行指令**（如 `npm run dev`、`adb install -r`）。你自己执行就行，汇报结果即可。
+4. **发现我需要动手才能做的事**（如插 USB、登录账号、点 UI），直接告诉我"这事需要你干：XXX"，别绕弯。
+5. **不要越界**：跟绿角犀无关的仓库/项目，别瞎搞。发现不在本仓库的需求，先告诉我"这仓库里没有 XXX，是不是另一个项目？"
+
+## 📦 常用命令（我替你跑的）
+
+| 命令 | 作用 |
+|---|---|
+| `npm run build` | 构建双 PWA 站点 |
+| `npm run build:android` | 构建 + 同步到 Android assets |
+| `npm run preflight` | 发布前 14 项自动检查（必须全绿） |
+| `npm run bump` | 一键版本升级 |
+| `npm run test` | 单元测试 |
+| `git push origin main` | 推远程 |
+
+## 📦 Android 构建铁律（**必须**）
+
+```powershell
+# 路径必须 ASCII，不能有中文/emoji
+Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
+$env:ANDROID_HOME = "C:\Users\Administrator\Android\Sdk"
+cd C:\greenrhino-build\android-player
+.\gradlew.bat assembleDebug --no-daemon
+```
+根因：JDK 17 路径含非 ASCII 字符会 `ClassNotFoundException GradleWrapperMain`
+
+## 📦 Moto 真机铁律
+
+- 别先 `adb logcat -c`！Moto 清了就屏蔽日志
+- 装机 `adb install -r`（覆盖，别卸载 — 卸载清 IndexedDB 633 首歌没了）
+- 必须 `adb shell pm grant 4 权限`
+
+## 📦 发布检查清单
 
 每次推主版本 tag 前：
 
-- [ ] `npm run preflight` 全绿（14 项自动化检查，含版本三落点、SW 占位符、cache 隔离、Android 同步、manifest 主题色、assetlinks 包名、ffmpeg 存在）
+- [ ] `npm run preflight` 全绿（14 项自动化检查）
 - [ ] `npm run test:all` 全绿（单元 6/6 + E2E 4/4）
-- [ ] `scripts/build-web.mjs APP_VERSION` 已递增（或用 `npm run bump`）
-- [ ] Windows dotnet publish 本地跑过（`dotnet publish` 无警告）
-- [ ] `wrangler pages deploy release/pwa-site-music --project-name=greenrhino-music` 已执行
-- [ ] `wrangler pages deploy release/pwa-site-player --project-name=greenrhino-player` 已执行
-- [ ] Cloudflare Pages CDN 缓存已刷新（`curl -H Cache-Control: no-cache` 验证 manifest）
-- [ ] `.github/workflows/ci.yml` 已手动触发且 SUCCESS
-- [ ] 根目录旧文档（HANDOVER/HANDOFF/交接总结/R0/FD/overview）已归档到 `.trae/memory/台账/archive/`
+- [ ] 版本号已递增（`npm run bump`）
+- [ ] Windows dotnet publish 本地跑过
+- [ ] Cloudflare Pages 双站已部署
+- [ ] CI `.github/workflows/ci.yml` 已手动触发 SUCCESS
+
+## 📚 台账导航（新 AI 进门先读这 1 页）
+
+| 文件 | 什么时候读 |
+|---|---|
+| `.trae/memory/台账/context.md` | **第一读**：版本/阻塞/最近动作/常用命令 |
+| `.trae/memory/台账/index.md` | 改某模块前先查关联坑 |
+| `.trae/memory/台账/issues.md` | 改文件后追坑的根因和预防 |
+| `.trae/memory/台账/decisions.md` | 做关键决策前看历史取舍 |
+
+---
+
+## 🔧 技术栈（瘦身版）
+
+- **前端**：原生 ES Module + IndexedDB + Web Audio（零构建）
+- **后端**：🐍 Python cloud_api.py（8787 云同步/歌词）/ 🟣 .NET LocalServer（8800 媒体流式）/ 🔧 Kotlin MediaHttpServer（40363 content://）
+- **壳**：Windows .NET 8 WebView2 + Android Kotlin WebView
+- **部署**：Cloudflare Pages + wrangler + GitHub Actions
