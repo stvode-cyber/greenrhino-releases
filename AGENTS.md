@@ -53,11 +53,14 @@ test/                    # 单元 + E2E
 
 ## 不可变约束（10 条铁律）
 
-### 1. 版本三落点一致
-`scripts/build-web.mjs` 的 `APP_VERSION = 'v16'` 是所有产物的版本基线。必须同步：
+### 1. 版本五落点一致（ISS-20260910-001 已关单）
+`scripts/build-web.mjs` 的 `APP_VERSION = 'v16'` 是所有产物的版本基线。五落点必须同步：
 - `build-web.mjs` APP_VERSION
 - `gr-music-v16` / `gr-player-v16` cache 桶
-- `clients/windows/*/*.iss` 安装包文件名
+- `.iss` OutputBaseFilename（GreenRhinoMusic-setup-v16 / GreenRhinoPlayer-setup-v16）
+- `android-music/build.gradle` versionName + versionCode
+- `android-player/build.gradle` versionName + versionCode
+- **工具**：`npm run bump` 一键覆盖五落点；`npm run preflight` 18 项自动验
 
 ### 2. Android 包名唯一
 两个 App 的 `package_name`（`com.greenrhino.music` / `com.greenrhino.player`）和 `assetlinks.json` 的包名/指纹必须严格对应，不可互换。

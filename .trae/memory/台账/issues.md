@@ -51,14 +51,15 @@
 - **预防**：✅ 占位符 + 测试覆盖（已落地）
 - **归类标签**：`#version-sync` `#sw-cache`
 
-### ⚠️ ISS-20260910-001 版本号三落点不一致（待 bump-version 一键脚本）
+### ✅ ISS-20260910-001 版本号五落点同步（已关单：bump-version 一键覆盖 + preflight 18 项自动验）
 
 - **严重度**：P1
 - **现象**：build-web.mjs 是 v16，但 Android dist 出包还是 v15 命名；`.iss` 安装包文件名也是 v15
-- **根因**：版本号硬编码在 3+ 处，手工同步
-- **解决**：交接时强调「三落点必须同步」
-- **关联文件**：`scripts/build-web.mjs`、`clients/windows/GreenRhino{Music,Player}/*.iss`、`dist/`
-- **预防**：⏳ 待做 — `scripts/bump-version.mjs` 一键改三处
+- **根因**：版本号硬编码在多处，手工同步
+- **解决**：✅ 2026-10-17 bump-version.mjs 覆盖 **5 处**（build-web APP_VERSION + 双 cache + 2 .iss OutputBaseFilename + 2 .gradle versionName/versionCode）；preflight.mjs 14→18 项自动验所有落点
+- **验证**：bump v16→v17→v16 五落点全改，preflight 18/18 绿
+- **关联文件**：`scripts/bump-version.mjs`、`scripts/preflight.mjs`、`scripts/build-web.mjs`、`clients/windows/GreenRhino{Music,Player}/*.iss`、`clients/android-{music,player}/app/build.gradle`
+- **预防**：preflight 18 项全验，bump 一键覆盖
 - **归类标签**：`#version-sync` `#release`
 
 ---
