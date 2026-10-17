@@ -6,6 +6,33 @@
 
 ## 2026-10-17
 
+### 📋 任务 T20261017-13 活跃坑清零（3→0）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| E0 ISS-0914-001 关单 | ✅ | preflight 第 4 项已自动验 + build-web 自动重写兜底 |
+| E1 ISS-010 关单 | ✅ | 同根因 013 已补 debounce 150ms |
+| E2 ISS-0914-002 代码修复 | ✅ | importFolderDialog() feature detection（'webkitdirectory' in probe），不支持自动降级多文件 + toast |
+| E3 全量回归 | ✅ | preflight 18/18 + 单元 6/6 + Android sync 47 项 |
+| E4 commit + push | ✅ | 582b821 + d17d688 → main |
+| E5 context.md 同步 | ✅ | 活跃坑清单清零 + 铁律速查同步五落点 |
+
+**注意**：ISS-20261017-008（Gradle 8.11.1 下载超时）是网络依赖，没真修，但已固化到 AGENTS.md 铁律 #9（纯 ASCII 路径 + Gradle 缓存手动放置），属于「不修但有规避方案」，不算活跃坑
+
+### 📋 任务 T20261017-12 ISS-0910-001 版本号五落点同步（已关单）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| D0 摸家底 | ✅ | bump-version.mjs 原 3 落点 + Android .gradle 2 处漏 + preflight 14 项 |
+| D1 bump-version.mjs 升级 | ✅ | 3→5 落点，加 .gradle versionName/versionCode |
+| D2 preflight.mjs 升级 | ✅ | 14→18 项，加 .iss + .gradle 4 个新检查 |
+| D3 bump 往返验证 | ✅ | v16→v17 五落点全改 + v17→v16 回滚 |
+| D4 preflight 全绿 | ✅ | 18/18 绿 |
+| D5 AGENTS.md 铁律 #1 同步 | ✅ | 三落点→五落点 |
+| D6 关 ISS-0910-001 | ✅ | issues.md 加 ✅ |
+
+**活跃坑 3→2 条**（ISS-0910-001 关单）
+
 ### 📋 任务 T20261017-11 C 层 SKILL 维护
 
 | 动作 | 状态 | 说明 |
