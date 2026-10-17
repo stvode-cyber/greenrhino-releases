@@ -133,25 +133,27 @@
 - **归类标签**：`#dependencies` `#cleanup`
 - **修复 commit**：`efcb31e`
 
-### ISS-20261017-004 vite.config.js 残留
+### ISS-20261017-004 vite.config.js 残留 ✅ 已解决
 
 - **严重度**：P3
 - **现象**：根目录 `vite.config.js` + `package.json devDependencies.vite`，但项目零构建
 - **根因**：历史尝试 bundler 后未清理
 - **解决**：删除 vite.config.js + 移除 devDependencies.vite
-- **关联文件**：`vite.config.js`、`package.json`
-- **预防**：零
+- **关联文件**：`vite.config.js`（已删）、`package.json`
+- **预防**：✅ AGENTS.md 零构建铁律 #6
 - **归类标签**：`#cleanup` `#dead-code`
+- **修复 commit**：`efcb31e`
 
-### ISS-20261017-005 HANDOVER.md 路径过期
+### ISS-20261017-005 HANDOVER.md 路径过期 ✅ 已解决
 
 - **严重度**：P1
 - **现象**：HANDOVER.md 写的项目根是 `d:\源码存档\音乐影视播放器\`，实际是 `d:\1号\项目部\🛠️工具\音乐影视播放器\`
 - **根因**：项目搬家后文档没同步
-- **解决**：本次建立台账取代散落文档，HANDOVER.md 标记为「已归档」
-- **关联文件**：`HANDOVER.md`、`HANDOFF.md`、`交接总结.md`
-- **预防**：✅ 台账系统落地后，路径全用相对路径
+- **解决**：本次建立台账取代散落文档，HANDOVER.md/HANDOFF.md/交接总结.md/R0.md/FD.md/overview.md 全归档到 `.trae/memory/台账/archive/`
+- **关联文件**：归档目录 + AGENTS.md（已补台账真实路径）
+- **预防**：✅ 台账系统落地后，所有路径全用相对路径
 - **归类标签**：`#documentation` `#path-drift`
+- **修复 commit**：`efcb31e`
 
 ---
 

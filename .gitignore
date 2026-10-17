@@ -20,6 +20,9 @@ clients/**/assets/pwa/
 
 # Android Gradle 缓存（每次 build 自动变，严禁入库）
 clients/android-*/.gradle/
+clients/android-*/app/build/
+clients/android-*/build/
+C:/greenrhino-build/
 
 # 内置 ffmpeg 转码器（98MB 大二进制，构建必需但严禁入库；缺失会导致转码链路失效）
 clients/windows/GreenRhino/ffmpeg.exe

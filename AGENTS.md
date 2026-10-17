@@ -64,6 +64,10 @@ icons/                   icon-music.svg / icon-player.svg（角色专属图标�
    - **ResolverActivity 绕过**：Moto 多 user profile 导致 `am start` 被拦截，必须 `adb shell input tap 610 2251` 点第一项 center
    - **必须 `adb shell pm grant 4 权限`**：READ_MEDIA_AUDIO + READ_MEDIA_IMAGES + READ_MEDIA_VIDEO + READ_EXTERNAL_STORAGE，否则 requestAutoImport 卡在权限等待
    - 触发新代码路径：用 `Debug BroadcastReceiver`（`adb shell am broadcast -a greenrhino.CAST_SCAN`）而非手动点 UI（WebView 触摸在 Moto 上不稳定）
+9. **Android 构建必须在纯 ASCII 目录**（`d:\1号\项目部\🛠️工具\音乐影视播放器` 含 emoji+中文 → JDK 17 `Illegal char <?>`）：
+   - gradle 报错 `ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain` 90% 是路径含非 ASCII 字符
+   - 构建前必须把 `clients/android-{music,player}` 复制到纯 ASCII 路径如 `C:\greenrhino-build\{android-music,android-player}` 再跑 `gradlew.bat assembleDebug`
+   - HANDOVER.md 早有记录但不是显式铁律（2026-10-17 再次验证）
 
 ## 📚 台账系统（强制行为基线·成长型）
 
