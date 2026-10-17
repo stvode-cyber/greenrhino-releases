@@ -34,6 +34,7 @@ import { parseTags, guessFromFilename } from './metadata.js'
 import { parseLRC } from './lrc.js'
 import { fetchOnlineLyric } from './lyricFetch.js'
 import { initBottomBar } from './ui/bottombar.js'
+import { initCastStatusBar } from './ui/castStatusBar.js'
 import { songRow } from './ui/library.js'
 import { buildMusic } from './ui/music.js'
 import { buildVideoPlayer } from './ui/videoPlayer.js'
@@ -516,6 +517,7 @@ showPage(isHub ? 'home' : (ROLE === 'music' ? 'home' : ROLE))
 
 // 底栏 + 队列 + 手势
 initBottomBar(app)
+initCastStatusBar()
 const queue = buildQueue(app)
 initGestures(app)
 

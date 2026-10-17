@@ -20,7 +20,8 @@ const CORE = [
   '/src/ui/videoPlayer.js', '/src/ui/queue.js', '/src/ui/settings.js', '/src/ui/spectrum.js',
   '/src/ui/gestures.js', '/src/ui/favorites.js', '/src/ui/playlists.js', '/src/ui/recent.js',
   '/src/ui/cloud.js', '/src/ui/stats.js', '/src/ui/onlinesearch.js',
-  '/src/ui/castCenter.js'
+  '/src/ui/castCenter.js',
+  '/src/ui/castStatusBar.js'
 ]
 
 self.addEventListener('install', (e) => {

@@ -198,7 +198,7 @@ export function buildVideoPlayer(app) {
     h('span', { class: 'opt opt-ab ab-label', id: 'abA' }, 'A:--'),
     h('span', { class: 'opt opt-ab ab-label', id: 'abB' }, 'B:--')
   )
-  // ---------- 📺 投屏按钮 + 设备面板 ----------
+  // ---------- 📺 投屏按钮 + 设备面板（状态条已统一到 castStatusBar.js）----------
   const castBtn = h('button', { class: 'opt vp-cast', title: '投屏到电视', onclick: toggleCastPanel }, '📺 投屏')
   const castPanel = h('div', { class: 'vp-cast-panel', hidden: true },
     h('div', { class: 'vp-cast-head' }, '投屏到电视',
@@ -207,24 +207,10 @@ export function buildVideoPlayer(app) {
     h('button', { class: 'opt vp-cast-scan', onclick: startCastScan }, '🔍 扫描设备')
   )
   stage.appendChild(castPanel)
-  opts.insertBefore(castBtn, opts.querySelector('.vp-fs'))  // 投屏放在全屏之前
-
-  // 投屏中状态条（显示"正在投送 → XX 电视" + 停止/暂停按钮）
-  const castBanner = h('div', { class: 'vp-cast-banner', hidden: true },
-    h('span', { class: 'vp-cast-ico' }, '📺'),
-    h('span', { class: 'vp-cast-text' }, '正在投送到电视…'),
-    h('button', { class: 'opt', title: '暂停', onclick: () => cast.pause() }, '⏸'),
-    h('button', { class: 'opt', title: '停止投屏', onclick: () => { cast.stop(); toast('已停止投屏') } }, '■ 停止')
-  )
-  stage.appendChild(castBanner)
+  opts.insertBefore(castBtn, opts.querySelector('.vp-fs'))
 
   function toggleCastPanel() {
     if (!cast.isHost()) { toast('当前环境不支持投屏', 'warn'); return }
-    if (cast.state.casting) {
-      // 投屏中 → 打开停止/暂停面板
-      castBanner.hidden = !castBanner.hidden
-      return
-    }
     castPanel.hidden = !castPanel.hidden
     if (!castPanel.hidden) startCastScan()
   }
@@ -267,29 +253,8 @@ export function buildVideoPlayer(app) {
     await cast.castTo(d.id)
   }
 
-  // 监听投屏状态变化
+  // 监听投屏设备扫描（状态条已统一到 castStatusBar.js）
   cast.on('devices', renderDevices)
-  cast.on('status', (s) => {
-    // 兼容：前端本地用小写（playing/paused），DLNA TransportState 大写（PLAYING/PAUSED_PLAYBACK）
-    const st = (s.state || '').toUpperCase()
-    const isPlaying = ['PLAYING', 'PAUSED_PLAYBACK', 'TRANSITIONING', 'RECORDING'].includes(st) ||
-                      ['PAUSED', 'SEEKED'].includes(st)
-    const isStopped = ['STOPPED', 'STOPPED_PLAYBACK', 'NO_MEDIA_PRESENT'].includes(st) || s.state === ''
-    if (isStopped) {
-      castBanner.hidden = true
-      castBtn.classList.remove('casting')
-    } else if (isPlaying) {
-      castBanner.hidden = false
-      const tvName = cast.state.deviceName || '电视'
-      castBtn.classList.add('casting')
-      // 有 position/duration 时显示 "00:12/03:45"，没有就只显示设备名
-      const pd = (s.position && s.duration && s.duration !== '00:00:00')
-        ? ` ${s.position}/${s.duration}`
-        : ''
-      const label = st.startsWith('PAUSED') ? `已暂停` : `正在投送`
-      castBanner.querySelector('.vp-cast-text').textContent = `${label} → ${tvName}${pd}`
-    }
-  })
   cast.on('error', (msg) => { toast(msg, 'err') })
 
   stage.appendChild(opts)

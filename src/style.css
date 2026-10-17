@@ -991,3 +991,31 @@ body.win-music .cc-btn-primary { background: #00D8A6; }
 [data-theme="dark"] .cc-card { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.08); }
 [data-theme="dark"] .cc-device { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.06); }
 [data-theme="dark"] .cc-device:hover { background: rgba(255,255,255,.08); }
+
+/* ============================================================
+   🔌 全局常驻投屏状态条（castStatusBar.js）
+   任何页面底部都看得到，cast stopped 自动隐藏
+   ============================================================ */
+.cc-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  color: #fff;
+  font-size: 13px; font-weight: 500;
+  box-shadow: 0 -2px 12px rgba(0,0,0,.25);
+  animation: ccBarSlideUp .25s cubic-bezier(.2,.0,.0,1);
+}
+@keyframes ccBarSlideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+body.win-video .cc-bar { background: linear-gradient(135deg, #FF9A1F, #E08000); }
+body.win-music .cc-bar { background: linear-gradient(135deg, #00C496, #009672); }
+
+.cc-bar-ico { font-size: 18px; }
+.cc-bar-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-bar-btn {
+  padding: 6px 12px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.5);
+  background: rgba(255,255,255,.15); color: #fff; cursor: pointer;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  transition: background .15s;
+}
+.cc-bar-btn:hover { background: rgba(255,255,255,.25); }
+.cc-bar-btn:active { transform: scale(.96); }
