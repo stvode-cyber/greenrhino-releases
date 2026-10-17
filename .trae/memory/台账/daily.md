@@ -33,6 +33,9 @@
 - ISS-20261017-017 Gradle 超时：AGENTS.md 铁律 #9 已固化规避方案（⚠️ 发现原 ISS-008 编号与 main.js allowedViews 裁剪不全冲突，修正为 017）
 - 5 个活跃 SKILL 中 2 个已同步 v16（code-review-checklist/frontend-component-spec），3 个有过时（端口 4173→8787、测试框架 Vitest→Node原生、server/index.js→cloud_api.py）
 - 根目录 vite.config.js/ui.xml/log 等残留已不存在（之前可能在 .gitignore 或早已删除）
+- 🆕 新建 ledger-health-check SKILL（T20261018-01 流程固化：11步体检，大任务前必走）
+- AGENTS.md SKILL 核心 5→6（加 ledger-health-check）
+- 2 commits 已推 main（2410288 + ee1a3bc）
 
 ---
 

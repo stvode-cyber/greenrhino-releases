@@ -229,6 +229,6 @@ cd C:\greenrhino-build\android-player; .\gradlew.bat assembleDebug --no-daemon
 
 `.trae/memory/台账/` → `context.md`(驾驶舱) / `issues.md`(活跃坑) / `decisions.md`(决策) / `index.md`(模块索引) / `daily.md`(流水)
 
-### SKILL 核心 5 个
+### SKILL 核心 6 个
 
-`.trae/skills/` → frontend-component-spec / code-review-checklist / unit-test-spec / docker-deploy-guide / security-audit-guide
+`.trae/skills/` → ledger-health-check（台账体检·大任务前必走）/ frontend-component-spec / code-review-checklist / unit-test-spec / docker-deploy-guide / security-audit-guide
