@@ -36,6 +36,7 @@
 - 🆕 新建 ledger-health-check SKILL（T20261018-01 流程固化：11步体检，大任务前必走）
 - AGENTS.md SKILL 核心 5→6（加 ledger-health-check）
 - 2 commits 已推 main（2410288 + ee1a3bc）
+- ⚠️ commit 21841d9（A10 状态 🔄→✅）本地已好，push 因网络中断待重试（下次开工前先补推）
 
 ---
 
