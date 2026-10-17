@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build dual PWA sites
+        run: node scripts/build-web.mjs
+
+      - name: Unit tests (sw-cache)
+        run: npm run test
+
+      - name: Preflight checks
+        run: node scripts/preflight.mjs
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-sites
+          path: |
+            release/pwa-site-music/
+            release/pwa-site-player/
+          retention-days: 7
