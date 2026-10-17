@@ -12,7 +12,9 @@ const state = {
   deviceName: '',
   status: '',           // playing / paused / stopped / UNKNOWN
   position: '',         // HH:MM:SS  当前位置
-  duration: ''          // HH:MM:SS  总时长
+  duration: '',         // HH:MM:SS  总时长
+  screenCasting: false, // 🆕 MJPEG 屏幕镜像状态
+  screenUrl: ''         // 🆕 屏幕镜像 HTTP URL
 }
 
 const listeners = new Map()
@@ -72,6 +74,16 @@ function handleMsg(msg) {
     emit('devices', state.devices)
   } else if (msg.type === 'cast:mirror') {
     emit('mirror', msg.ok === false ? (msg.msg || '唤起系统无线显示失败') : '')
+  } else if (msg.type === 'mirror') {
+    // 🆕 MediaProjection 授权回调（ScreenCaster）
+    if (msg.ok === false) {
+      state.screenCasting = false
+      emit('screenCast', { on: false, error: msg.msg })
+    } else {
+      state.screenCasting = true
+      state.screenUrl = window.RhinoBridge?.getScreenMirrorUrl?.() || ''
+      emit('screenCast', { on: true, url: state.screenUrl })
+    }
   } else if (msg.type === 'cast:status') {
     // TV 推送的真实 AVTransport 状态 + 进度
     state.status = msg.state
@@ -170,6 +182,33 @@ function mirror() {
   }
 }
 
+// 🆕 MJPEG 屏幕镜像（通用方案：任何有浏览器的电视都能用）
+// 原理：MediaProjection 抓屏 → JPEG → /screen.mjpg → 电视浏览器 <img> 显示
+function screenCastStart() {
+  if (!state.host) return
+  if (state.host !== 'android') { emit('error', '屏幕镜像仅 Android 支持'); return }
+  try {
+    const url = window.RhinoBridge.startScreenCast()
+    if (url && url.startsWith('OK')) {
+      state.screenCasting = true
+      state.screenUrl = window.RhinoBridge.getScreenMirrorUrl() || ''
+      emit('screenCast', { on: true, url: state.screenUrl })
+    } else {
+      emit('error', url || '启动屏幕镜像失败')
+    }
+  } catch (e) { emit('error', 'screenCastStart failed: ' + e.message) }
+}
+
+function screenCastStop() {
+  if (!state.host) return
+  if (state.host === 'android') {
+    try { window.RhinoBridge.stopScreenCast() } catch (e) {}
+  }
+  state.screenCasting = false
+  state.screenUrl = ''
+  emit('screenCast', { on: false })
+}
+
 export const cast = {
   state,
   isHost,
@@ -178,7 +217,9 @@ export const cast = {
   castTo,
   stop,
   pause,
-  mirror
+  mirror,
+  screenCastStart,
+  screenCastStop
 }
 
 initHost()

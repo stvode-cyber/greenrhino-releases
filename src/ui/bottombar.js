@@ -105,13 +105,17 @@ export function initBottomBar(app) {
   const castList = h('div', { class: 'cast-list' })
   const castScan = h('button', { class: 'cast-scan', onclick: () => cast.scan() }, '扫描设备')
   const castStop = h('button', { class: 'cast-stop', onclick: () => cast.stop() }, '■ 停止投屏')
-  const castMirror = h('button', { class: 'cast-scan', onclick: () => cast.mirror() }, '🖥️ 系统镜像')
+  const castMirror = h('button', { class: 'cast-scan', onclick: () => cast.mirror() }, '🖥️ 系统镜像 (Miracast)')
+  const castScreen = h('button', { class: 'cast-scan', onclick: () => {
+    if (cast.state.screenCasting) cast.screenCastStop()
+    else cast.screenCastStart()
+  } }, '🖥️ 屏幕镜像 (通用)')
   const castClose = h('button', { class: 'cast-close', onclick: () => { castPanel.hidden = true } }, '✕')
   castPanel.hidden = true
   castPanel.append(
     h('div', { class: 'cast-head' }, h('span', {}, '投屏到'), castClose),
     h('div', { class: 'cast-actions' }, castScan, castStop),
-    h('div', { class: 'cast-actions' }, castMirror),
+    h('div', { class: 'cast-actions' }, castMirror, castScreen),
     castList
   )
   document.body.appendChild(castPanel)
@@ -152,6 +156,14 @@ export function initBottomBar(app) {
   cast.on('mirror', (m) => {
     if (m) app.toast('系统镜像唤起失败：' + m, 'err')
     else app.toast('已唤起系统无线显示，请在弹出的面板中选择你的电视', 'info')
+  })
+  cast.on('screenCast', (sc) => {
+    if (sc.on) {
+      app.toast('📱 屏幕镜像已开启！电视浏览器打开: ' + (sc.url || '/tv'), 'info')
+    } else {
+      if (sc.error) app.toast('屏幕镜像失败: ' + sc.error, 'err')
+      else app.toast('屏幕镜像已停止', 'info')
+    }
   })
   cast.on('error', (m) => app.toast(m, 'err'))
 

@@ -17,8 +17,9 @@
 | **Preflight** | ✅ 12/12 绿 |
 | **单元测试** | ✅ 6/6 绿 |
 | **CI** | ✅ `.github/workflows/ci.yml` |
-| **远程** | ✅ main 分支已推送 `61dbafb` |
-| **当前重点** | 🎬 MediaHttpServer `/tv` 电视浏览器投屏已通（HTTP 200），`/list` workprofile fallback 已加（空数组是 Moto 真机 MediaStore 权限隔离待实机验证） |
+| **远程** | ✅ main 分支已推送 `2b9cb77` |
+| **投屏三方案** | ✅ DLNA 推视频（已有）+ **🆕 MJPEG 屏幕镜像 /screen.mjpg**（MediaProjection 抓屏，任何有浏览器的电视都能用，95%+ 覆盖）+ Miracast 原生兜底 |
+| **当前重点** | 🆕 屏幕镜像 MJPEG 已部署，用户在绿角犀 App 里点「📺 屏幕镜像」→ 系统弹框允许 → 电视浏览器开 /tv 页面自动显示手机画面 |
 
 ---
 

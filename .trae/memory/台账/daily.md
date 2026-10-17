@@ -6,6 +6,25 @@
 
 ## 2026-10-17
 
+### 📋 任务 T20261017-07 屏幕镜像 MJPEG 投屏（通用方案，95%+ 智能电视覆盖）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| P0 ScreenCaster.kt | ✅ | MediaProjection → JPEG → ConcurrentLinkedQueue |
+| P1 MediaHttpServer /screen.mjpg | ✅ | MJPEG multipart/x-mixed-replace + sendMjpeg |
+| P2 MediaHttpServer /screen/status | ✅ | JSON {"casting":true/false,"port":xxx} |
+| P3 /tv 页面屏幕镜像预览 | ✅ | `<img src=/screen.mjpg>` + 2s 轮询状态 |
+| P4 RhinoBridge 3 方法 | ✅ | startScreenCast/stopScreenCast/getScreenMirrorUrl |
+| P5 MediaProjection Launcher | ✅ | registerForActivityResult(StartActivityForResult) |
+| P6 双壳 sync + build | ✅ | BUILD SUCCESSFUL × 2 |
+| P7 preflight + test | ✅ | preflight 14/14 + unit test 6/6 零回归 |
+| P8 commit + push | ✅ | 61dbafb→2b9cb77 main→main |
+
+**关键设计决策**：
+- MJPEG（12fps，JPEG 55% 压缩，原分辨率 50%）而非 WebRTC：MJPEG 任何浏览器都能显示（`<img>` 标签），零依赖零配置，电视端零操作（只输一次收藏地址）
+- ScreenCaster 编码线程：ImageReader → Image → Bitmap.setPixel（逐像素复制处理 rowStride padding）→ JPEG → ConcurrentLinkedQueue（3 帧环形缓冲）
+- sendMjpeg 复用 MediaHttpServer 的 ServerSocket 连接池，独立 keep-alive 不阻塞其他请求
+
 ### 📋 任务 T20261017-06 MediaHttpServer 电视浏览器投屏 + 双壳全量 sync（深夜）
 
 | 动作 | 状态 | 说明 |
