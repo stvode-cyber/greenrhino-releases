@@ -7,6 +7,15 @@
 功能：注册 / 登录(JWT 风格 token) / 配额(5GB) / 上传 / 列举 / 下载 / 删除 /
       云同步（/api/sync GET/POST last-writer-wins）/ 歌词代理（/api/lyric LRCLIB 兜底）。
 
+# TODO(#cloud_api_split): 当前单文件 342 行，未来按路由分拆为：
+#   server/routes/auth.py   — 注册/登录/token 验证
+#   server/routes/files.py  — 上传/列举/下载/删除/配额
+#   server/routes/sync.py   — /api/sync last-writer-wins 云同步
+#   server/routes/lyric.py  — /api/lyric LRCLIB 代理
+#   server/storage.py       — JSON 持久化 + OSS/Mock 切换
+#   server/app.py           — ThreadingHTTPServer 入口 + 路由分发（保留本文件名）
+#   触发时机：当新增路由到 400+ 行，或引入签名中间件时。
+
 存储模式：
 - MOCK（默认）：文件存本地 server/data/files/<user_id>/，元数据 server/data/files.json
 - OSS：设环境变量 OSS_MODE=oss + OSS_ENDPOINT/BUCKET/KEY/SECRET 后，文件走阿里云 OSS

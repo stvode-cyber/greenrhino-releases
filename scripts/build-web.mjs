@@ -93,6 +93,12 @@ function buildRole(key) {
     /<script type="module" src="\.\/src\/main\.js[^"]*"><\/script>/,
     `<script>window.__winRole='${cfg.winRole}';window.__appVersion='${cfg.version}';</script>\n  <script type="module" src="./src/main.js"></script>`
   )
+  // 1.5) 自动重写绝对路径为相对路径（修复 ISS-20260914-001：
+  //      WebView file:// 下 /src/style.css 解析成 file:///src/，必须改成 ./src/）
+  //      规则：(href|src)="/xxx" → "$1="./xxx"，但跳过 "//"（协议相对 URL）和已带 ./ 的
+  const absBefore = (html.match(/(href|src)="\/(?!\/)/g) || []).length
+  html = html.replace(/(href|src)="\/(?!\/)/g, '$1="./')
+  if (absBefore > 0) console.log(`   ↳ 重写绝对路径 ${absBefore} 处（WebView file:// 兼容）`)
   fs.writeFileSync(path.join(out, 'index.html'), html)
 
   // 2) manifest.webmanifest
@@ -139,8 +145,28 @@ function buildRole(key) {
 
 const argRole = process.argv.find((a) => a.startsWith('--role='))
 const role = argRole ? argRole.split('=')[1] : 'all'
+const syncAndroid = process.argv.includes('--sync-android')
+
 if (role === 'all') { buildRole('music'); buildRole('player') }
 else if (ROLES[role]) buildRole(role)
 else { console.error('未知角色：' + role); process.exit(1) }
 
+// 6) 可选：同步到 Android assets/pwa/（避免手动 robocopy，修复 HANDOVER §7.7 体力活）
+if (syncAndroid) {
+  const targets = role === 'all' ? ['music', 'player'] : [role]
+  for (const key of targets) {
+    const src = path.join(REL, `pwa-site-${key}`)
+    const dst = path.join(ROOT, 'clients', `android-${key}`, 'app', 'src', 'main', 'assets', 'pwa')
+    if (!fs.existsSync(path.dirname(path.dirname(path.dirname(path.dirname(dst)))))) {
+      console.warn(`⚠️  clients/android-${key}/ 不存在，跳过同步`)
+      continue
+    }
+    fs.rmSync(dst, { recursive: true, force: true })
+    copyPath(src, dst)
+    const count = fs.readdirSync(dst, { recursive: true }).length
+    console.log(`   ↳ 已同步到 clients/android-${key}/app/src/main/assets/pwa/（${count} 项）`)
+  }
+}
+
 console.log('\n✅ 完成。两套独立站点已就绪：\n  - release/pwa-site-music/  → https://greenrhino-music.pages.dev\n  - release/pwa-site-player/ → https://greenrhino-player.pages.dev')
+if (!syncAndroid) console.log('   💡 提示：加 --sync-android 可同步到 Android assets/pwa/')

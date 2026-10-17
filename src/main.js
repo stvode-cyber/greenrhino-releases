@@ -1,3 +1,13 @@
+// TODO(#main_js_split): 当前单文件 48KB ~1200 行，建议未来按职责分拆：
+//   src/main.js              — 保留：启动装配 + 入口路由（<10KB）
+//   src/app/bootstrap.js     — 启动引导：版本检查、PWA 安装提示、首次启动引导
+//   src/app/router.js        — view/showPage 路由表
+//   src/app/importManager.js — 文件/文件夹导入、去重、并发队列
+//   src/app/syncBridge.js    — 与 .NET/Kotlin 壳通信（LocalServer URL、cast、外部打开）
+//   拆分时机：每次 main.js 改 3KB+ 时触发，或引入新角色时。
+//   相关坑：ISS-20261017-004（vite.config.js 残留）
+//   相关决策：DEC-20260909-001（拆双 App 时共享模块不物理删除）
+
 // main.js — 应用装配与编排
 window.__grModuleRan = true  // 🔶 终极诊断：如果 module 执行到这里就打标记
 // 🔶 DEBUG: 打印 RhinoBridge 对象到底有哪些方法
