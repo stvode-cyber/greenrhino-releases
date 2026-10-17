@@ -42,3 +42,7 @@ grep -n "APP_VERSION\|cache.*v" scripts/build-web.mjs sw.js
 # 3. 看两个角色的 theme_color
 grep -A2 "theme_color" scripts/build-web.mjs
 ```
+
+## 开发环境陷阱（踩过）
+
+- [ ] **本地 server 锁 release**：跑 `python -m http.server` 做本地验证后必须关，否则 `release/pwa-site-*` 目录被占用 → build-web.mjs 的 `fs.rmSync` 崩（Node 退出码 3221226505）→ 单元测试 child_process 也崩。解决：`Get-Process python | Stop-Process -Force`
