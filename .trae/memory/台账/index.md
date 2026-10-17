@@ -1,139 +1,141 @@
-# 🗂️ 台账索引 index.md
+# 模块索引 · 绿角犀
 
-> 按模块归类，找决策/找坑最快的入口。
-> 指向 [decisions.md](decisions.md) / [issues.md](issues.md) / [context.md](context.md) / [daily.md](daily.md) 中的具体条目。
->
-> 🆕 **台账文件 6 个**：context.md（驾驶舱）/ decisions.md（决策）/ issues.md（坑）/ daily.md（每日流水）/ index.md（本索引）/ .session-memory.md（会话临时）
+> 按目录/模块索引台账条目。改某模块前 → 先看这页 → 扫对应坑。
+> 最后更新：2026-10-17
 
 ---
 
-## 🔶 高频问题群 TOP（成长型自动归群）
+## 📁 src/（前端源码，零构建 ES Module）
 
-| 问题群标签 | 活跃坑 | 归档坑 | 严重度 | 详见 issues.md 第几段 |
-|---|---|---|---|---|
-| `#css-grid-overflow` 🔥 | 2 | 0 | 🔴 P0 | **P0 活跃坑第一段（最新！）** |
-| `#css-z-index` | 1 | 0 | 🟠 P1 | P1 活跃坑最新条（ISS-20261010-025） |
-| `#android-webview` 🔥 | 2 | 2 | 🔴 P0 | P0 活跃坑第三段 |
-| `#android-webview-cache` | 2 | 0 | 🔴 P0 | P0 活跃坑第二段 |
-| `#relative-path` 🔥 | 1 | 1 | 🔴 P0 | P0 活跃坑第三段 + 归档区 |
-| `#twa-gms` | 2 | 0 | 🔴 P0 | P0 活跃坑第四段 |
-| `#gradle-directory` | 0 | 2 | 🟠 P1 | 归档区第一段 |
-| `#playwright-mirror` | 0 | 1 | 🟡 P2 | 归档区（已提升 user shared） |
+### src/main.js（48KB 应用装配）
+- **决策**：DEC-20260909-001（拆双 App，__winRole 运行时裁剪）
+- **坑**：无专属
+- **TODO**：⚠️ 文件过大，未来需拆分（见 F 任务）
+
+### src/player.js（41KB 播放引擎）
+- **决策**：DEC-20260908-001（播放模式分离）、DEC-20260903-001（HEVC 转码）
+- **坑**：ISS-20260903-001（视频黑屏 E4，已关单）
+- **TODO**：⚠️ 文件过大，未来需拆分
+
+### src/store.js（20KB IndexedDB）
+- **决策**：DEC-20260909-001（按 __winRole 选 DB 名 `gr-music-v1` / `gr-player-v1`）
+- **坑**：无专属
+
+### src/style.css（73KB 全量样式）
+- **决策**：DEC-20260909-001（双主题色）
+- **TODO**：⚠️ 文件过大，未来需拆分
+
+### src/ui/（15 个组件）
+- bottombar.js / library.js / music.js / videoPlayer.js / queue.js / settings.js / favorites.js / playlists.js / recent.js / cloud.js / spectrum.js / gestures.js / dom.js / stats.js / onlinesearch.js
+- **决策**：DEC-20260909-001（按角色裁剪显隐）
+- **坑**：ISS-20260908-001（SW CORE 漏模块）
+
+### src/videoThumb.js（视频缩略图抽帧）
+- **决策**：DEC-20260905-001
 
 ---
 
-## 📁 src/ — 前端源码
+## 📁 scripts/（构建脚本）
 
-| 模块 | 关键决策 | 踩过的坑 |
+### scripts/build-web.mjs（双 App 拆分核心）
+- **决策**：DEC-20260909-001
+- **坑**：ISS-20260913-001（SW 占位符）、ISS-20260910-001（版本号三落点）
+- **TODO**：
+  - ⏳ 自动重写 index.html 绝对路径为相对路径
+  - ⏳ 一键同步到 android assets/pwa/
+  - ⏳ 版本号 bump 子命令
+
+### scripts/import-secrets.ps1
+- 无关联条目
+
+---
+
+## 📁 server/（Python 后端）
+
+### server/cloud_api.py（16.9KB 单文件，8787 端口）
+- **TODO**：⚠️ 单文件过千行，按路由/模型/工具拆分（见 F 任务）
+- **坑**：无专属
+
+---
+
+## 📁 clients/（平台壳工程）
+
+### clients/android-music/ + clients/android-player/
+- **决策**：DEC-20260914-001（TWA → 原生 WebView）
+- **坑**：
+  - ISS-20260914-001（index.html 绝对路径）
+  - ISS-20260914-002（webkitdirectory 不支持）
+  - ISS-20261017-002（Moto adb logcat -c）
+- **关键文件**：
+  - `app/src/main/java/com/greenrhino/{music,player}/MainActivity.kt`
+  - `app/src/main/assets/pwa/index.html`（从 release 拷来后必须重改绝对路径）
+
+### clients/windows/（.NET 8 WebView2）
+- **决策**：DEC-20260904-001（GPU 软件渲染）、DEC-20260903-001（ffmpeg 转码）
+- **坑**：ISS-20260903-001（视频黑屏，已关单）、ISS-20260904-001（wwwroot.zip 重生成）
+- **关键文件**：
+  - `GreenRhino/MainWindow.xaml.cs`
+  - `GreenRhino/LocalServer.cs`（8800 端口）
+  - `GreenRhino/ffmpeg.exe`（98MB 勿提交）
+
+### clients/huawei*/ + clients/ios/
+- **状态**：⚠️ 待实机验证 / 待上架
+- **决策**：DEC-20260914-001（TWA 放弃后，华为走 AppGallery PWA）
+
+### clients/node_modules/（应删除）
+- **坑**：ISS-20261017-003
+
+---
+
+## 📁 test/
+
+### test/build-sw-cache.test.js（6 条断言）
+- **覆盖**：SW 占位符、cache 名格式、双 App 隔离、版本号一致
+- **坑**：ISS-20260913-001
+
+### test/e2e/sw-cache.spec.js
+- **TODO**：⏳ AGENTS.md 说 E2E 4 条，实际只有 1 个 spec 文件，需补齐
+
+---
+
+## 📁 .github/workflows/（待建立）
+
+- **坑**：ISS-20261017-001（不存在）
+- **TODO**：⏳ 建 3 套基础 CI（build-web / test:all / 可选 build-android）
+
+---
+
+## 📁 docs/screenshots/（新建，2026-10-17）
+
+- 64 张历史 PNG 归档至此
+- **归类**：审计截图 / 调试图 / 验收图 / 品牌图
+
+---
+
+## 📁 根目录文档（待合并进台账后归档）
+
+| 文档 | 状态 | 去向 |
 |---|---|---|
-| 整体架构 | DEC-20260909-002（原生 ES Module 零构建） | ISS-20260914-001（资源路径相对路径）、ISS-20260914-010（webkitdirectory feature detection）、🔥ISS-20260916-003（WebView 绝对路径白屏） |
-| style.css（全局） | DEC-20261008-001（object-fit contain/cover 策略） | 🔥ISS-20261008-001（#main 缺 overflow:hidden）、🔥ISS-20261008-002（grid 1fr 缺 minmax）、ISS-20261008-005（video object-fit 默认黑边）、ISS-20261010-025（drawer z-index 被 fullpage 盖住） |
-| ui/videoPlayer.js | DEC-20261008-002（控制条 auto-hide 策略） | ISS-20261008-003（WebView 缓存旧 JS） |
-| ui/bottombar.js | — | — |
-| library.js | — | ISS-20260914-006（refresh 并发去重）、ISS-20261009-020（空库 setTimeout 自动扫描漏删） |
-| main.js | DEC-20261009-005（整页导入页 openImportPage，弃弹窗） | ISS-20260915-002（video role 同步 data-theme） |
-| player.js | — | — |
-| store.js（IndexedDB） | — | — |
-| sw.js | DEC-20260913-001（cache 占位符） | ISS-20260913-001（硬编码版本号漂移） |
+| AGENTS.md | ✅ 保留（项目规则基线） | 根目录 |
+| CHANGELOG.md | ✅ 保留（版本史） | 根目录 |
+| HANDOVER.md | 📦 已提炼进台账 | archive/ |
+| HANDOFF.md | 📦 已提炼进台账 | archive/ |
+| 交接总结.md | 📦 已提炼进台账 | archive/ |
+| R0.md | 📦 待提炼 | archive/ |
+| FD.md | 📦 待提炼 | archive/ |
+| overview.md | 📦 待提炼 | archive/ |
+| HELP.md | ✅ 保留（用户说明） | 根目录 |
+| UI-design.md | ✅ 保留（设计稿） | 根目录 |
+| vite.config.js | ❌ 删除（零构建残留） | - |
+| ui.xml / ui2.xml | ❌ 删除（调试残留） | - |
+| .push.log / install.log | ❌ 删除 | - |
 
 ---
 
-## 📁 scripts/ — 构建工具
+## 🔍 快速查询
 
-| 模块 | 关键决策 | 踩过的坑 |
-|---|---|---|
-| build-web.mjs | DEC-20260909-001（双 App 按角色裁剪）、DEC-20260913-001（cache 精确替换） | ISS-20260913-001（隐式正则不可靠）、🔥ISS-20260916-003（regex 同步改相对路径） |
-| build-assets.mjs | — | — |
-| copy-web.mjs | — | ISS-20260914-005（PWA 改完忘重跑） |
-
----
-
-## 📁 clients/android-* — Android 壳
-
-| 模块 | 关键决策 | 踩过的坑 |
-|---|---|---|
-| 整体方案 | DEC-20260914-001（TWA → WebView 原生壳） | ISS-20260914-002（错依赖 LauncherActivity）、ISS-20260914-003（GMS 缺失） |
-| MediaStore 扫描 + artist 清洗 | — | 🔥ISS-20261016-010（`<unknown>` 字面量清洗，三层：Kotlin + .NET + store.js） |
-| RhinoBridge.getLyric 真机调试 | — | ISS-20261016-011（Moto logcat 屏蔽：不 -c，--pid 抓残留）、ISS-20261016-012（ResolverActivity tap 610,2251） |
-| MainActivity onShowFileChooser | — | ISS-20261009-021（params.createIntent() 类型松散 → SAF 混文件；手动构建 Intent + MIME 白名单） |
-| 装机验证流程 | — | ISS-20261009-022（5 个应用分身旧数据 → "没生效"假象；pm clear 全部 user + adb pull APK 解包比对） |
-| assetlinks.json | — | ISS-20260914-004（占位符域名） |
-| Huawei 上架 | — | ISS-20260914-007（截图比例不达标） |
-| index.html 资源路径 | DEC-20260914-002（相对路径） | ISS-20260914-001（绝对路径 WebView 404）、🔥ISS-20260916-003（相对路径 regex） |
-| console→logcat 桥接 | — | — |
-| HANDOVER.md 交接文档 | DEC-20260914-005（新增） | — |
-| themes.xml 缺 Launcher 子主题 | — | ISS-20260914-012（AAPT 资源链接失败）📦 |
-| build.gradle UTF-8 BOM | — | ISS-20260914-011（Gradle 启动失败）📦 |
-| build.gradle assets 目录 | — | ISS-20260916-001（copyPwaAssets 去标准目录）📦 |
-
----
-
-## 📁 clients/windows/ — Windows 壳
-
-| 模块 | 关键决策 | 踩过的坑 |
-|---|---|---|
-| 双 EXE 端口隔离 | — | ISS-20260914-005（PWA 改完忘重打包）📦 |
-| publish.ps1 脚本 bug | — | ISS-20260914-013（csproj 路径错）📦、ISS-20260914-014（dotnet 不在 PATH）📦 |
-
----
-
-## 📁 clients/huawei-music — 华为端
-
-| 模块 | 关键决策 | 踩过的坑 |
-|---|---|---|
-| AppGallery 上架 | 走 PWA 上架而非 TWA（缺 GMS） | ISS-20260914-007（截图比例）📦 |
-
----
-
-## 📁 server/ — Node LocalServer
-
-| 模块 | 关键决策 | 踩过的坑 |
-|---|---|---|
-| auth middleware | — | ISS-20260914-009（koa-connect wrapper ctx 泄漏）📦 |
-
----
-
-## 📁 .trae/ — AI 工作台
-
-| 模块 | 关键决策 | 踩过的坑 |
-|---|---|---|
-| UX Agent 体系 | DEC-20260914-003（4 Agent 分工 + 执行型） | — |
-| 审计报告模板 | — | — |
-| **台账系统**（本目录） | DEC-20260914-004（5 文件 + 会话层 + 用户共享层 + **五步闭环 + 成长型归类**） | — |
-
----
-
-## 📁 .github/workflows/ — CI
-
-| 模块 | 关键决策 | 踩过的坑 |
-|---|---|---|
-| workflow 清理 | — | ISS-20260914-008（废弃 workflow 留红叉）📦 |
-
----
-
-## 🆔 role 命名备注（写条件分支时必看）
-
-- music 站点 __winRole = `'music'` → 🎵 绿角犀音乐
-- player 站点 __winRole = `'video'` → 🎬 绿角犀播放器（**内部代号 video，不是 player**）
-- 关联坑：ISS-20260915-001 📦
-
----
-
-## 🔗 用户级共享台账（跨项目通用）
-
-- **跨项目通用坑**：`%userprofile%/.trae-cn/memory/shared-issues.md`
-- **跨项目通用决策**：`%userprofile%/.trae-cn/memory/shared-decisions.md`
-- 当前项目已提升：ISS-20260914-015（#playwright-mirror）→ shared-issues GS-0xx
-
----
-
-## 📊 台账健康度
-
-| 指标 | 值 |
-|---|---|
-| 活跃决策 | 9 条 |
-| 活跃坑 | 3 条（ISS-010/011/012 均 ✅ 已解决，沉淀套路） |
-| 归档坑 | 12 条 |
-| 活跃问题群 | 3 个（#android-webview 🔥、#twa-gms、#relative-path 🔥） |
-| 归档问题群 | 3 个（#gradle-directory、#playwright-mirror、#harmonyos-install） |
-| 最后更新 | 2026-10-16 |
+- 改 `sw.js` → 看 ISS-20260913-001 + ISS-20260908-001
+- 改 `scripts/build-web.mjs` → 看 DEC-20260909-001 + ISS-20260910-001
+- 改 `clients/android-*` → 看 ISS-20260914-001 + ISS-20261017-002
+- 改 `clients/windows` → 看 ISS-20260904-001 + DEC-20260904-001
+- 改 `src/player.js` → 看 DEC-20260903-001 + DEC-20260908-001

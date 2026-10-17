@@ -34,7 +34,7 @@ scripts/                 # build-web.mjs / build-assets.mjs / copy-web.mjs
 server/                  # 🐍 Python cloud_api.py（云同步 + LRCLIB 歌词代理，8787 端口）
 clients/                 # 各平台壳工程（android-music, windows, huawei-music 等）
 release/pwa-site-*/      # build-web.mjs 输出（Cloudflare Pages 部署目录）
-.github/workflows/       # CI：build-android.yml / build-windows.yml / build-huawei.yml
+.github/workflows/ci.yml # CI：build-web.mjs + 单元测试 + preflight + artifact
 .wrangler/               # Cloudflare Pages 部署缓存
 icons/                   icon-music.svg / icon-player.svg（角色专属图标）
 ```
@@ -80,7 +80,8 @@ icons/                   icon-music.svg / icon-player.svg（角色专属图标�
 | `issues.md` | 所有踩过的坑（问题/解决/根因/预防/严重度/归类标签/关联文件） | `ISS-YYYYMMDD-NNN` |
 | `index.md` | 按模块做索引（src/, scripts/, clients/ 等） | 指针条目 |
 | `daily.md` | 🆕 **每日工作流水**：当天干了啥、改了哪些文件、跑了啥命令 | 日期分行，每条一句话 |
-| `.session-memory.md` | **本次会话**的临时约定 / 临时代码片段 | 会话结束前清空 |
+| `.session-memory.md` | **本次会话**的临时约定 / 临时代码片段（本目录的草稿区，会话结束前清空） | `.trae/memory/台账/.session-memory.md` |
+| `archive/` | 已沉淀归档（同标签 ≥3 条 + 预防规则已落地） | - |
 
 用户级共享台账（自动加载，跨项目通用）：
 - `%userprofile%/.trae-cn/memory/shared-issues.md`
@@ -196,11 +197,12 @@ icons/                   icon-music.svg / icon-player.svg（角色专属图标�
 
 每次推主版本 tag 前：
 
-- [ ] `scripts/build-web.mjs` APP_VERSION 已递增
-- [ ] **`npm run test:all` 全绿**（单元 6/6 + E2E 4/4，SW cache 占位符 + 浏览器行为双保险）
-- [ ] SW cache 名已对应更新
+- [ ] `npm run preflight` 全绿（14 项自动化检查，含版本三落点、SW 占位符、cache 隔离、Android 同步、manifest 主题色、assetlinks 包名、ffmpeg 存在）
+- [ ] `npm run test:all` 全绿（单元 6/6 + E2E 4/4）
+- [ ] `scripts/build-web.mjs APP_VERSION` 已递增（或用 `npm run bump`）
 - [ ] Windows dotnet publish 本地跑过（`dotnet publish` 无警告）
 - [ ] `wrangler pages deploy release/pwa-site-music --project-name=greenrhino-music` 已执行
 - [ ] `wrangler pages deploy release/pwa-site-player --project-name=greenrhino-player` 已执行
 - [ ] Cloudflare Pages CDN 缓存已刷新（`curl -H Cache-Control: no-cache` 验证 manifest）
-- [ ] GitHub Actions 三套 workflow 已手动触发且 SUCCESS
+- [ ] `.github/workflows/ci.yml` 已手动触发且 SUCCESS
+- [ ] 根目录旧文档（HANDOVER/HANDOFF/交接总结/R0/FD/overview）已归档到 `.trae/memory/台账/archive/`

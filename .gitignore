@@ -69,6 +69,5 @@ server/data/
 server/__pycache__/
 __pycache__/
 
-# Python 缓存
-server/__pycache__/
-__pycache__/
+# 台账本地草稿（只留 .trae/memory/ 下的正式台账进 git，跨机共享）
+.trae/memory/台账/.session-memory.md
