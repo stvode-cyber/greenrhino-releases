@@ -204,47 +204,27 @@ Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -E
 |---|---|
 | `npm run build` | 构建双 PWA 站点 |
 | `npm run build:android` | 构建 + 同步到 Android assets |
-| `npm run preflight` | 发布前 14 项自动检查 |
+| `npm run preflight` | 发布前 18 项自动检查 |
 | `npm run bump` | 一键版本升级 |
 | `npm run test` / `test:all` | 单元 / 单元+E2E |
 | `git push origin main` | 推远程 |
 
-### Android 构建速查
+### Android 构建速查（铁律 #9 强制 ASCII 路径）
 
 ```powershell
-# 1. 复制到 ASCII 路径（必须！）
 Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -Exclude build,.gradle
-# 2. 同步 release 产物
-Copy-Item release\pwa-site-music\* C:\greenrhino-build\android-music\app\src\main\assets\pwa\ -Recurse -Force
-Copy-Item release\pwa-site-player\* C:\greenrhino-build\android-player\app\src\main\assets\pwa\ -Recurse -Force
-# 3. 设环境 + 构建
+Copy-Item release\pwa-site-* C:\greenrhino-build\android-*\app\src\main\assets\pwa\ -Recurse -Force
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
 $env:ANDROID_HOME = "C:\Users\Administrator\Android\Sdk"
-cd C:\greenrhino-build\android-player
-.\gradlew.bat assembleDebug --no-daemon
+cd C:\greenrhino-build\android-player; .\gradlew.bat assembleDebug --no-daemon
 ```
-
-### Moto 真机速查
-
-- 别先 `adb logcat -c`！清了就屏蔽日志
-- 装机 `adb install -r`（覆盖，别卸载）
-- 必须 `adb shell pm grant 4 权限`
-
-### 发布检查清单（推主版本 tag 前）
-
-- [x] `npm run preflight` 全绿（14 项）
-- [x] `npm run test:all` 全绿（单元 6/6 + E2E）
-- [x] 版本号已递增（`npm run bump`）
-- [x] Windows dotnet publish 本地跑过
-- [x] Cloudflare Pages 双站已部署
-- [x] CI `.github/workflows/ci.yml` 已触发 SUCCESS
 
 ### 台账导航
 
-| 文件 | 什么时候读 |
-|---|---|
-| `.trae/memory/台账/context.md` | **第一读**：版本/阻塞/最近动作/常用命令 |
-| `.trae/memory/台账/index.md` | 改某模块前先查关联坑 |
-| `.trae/memory/台账/issues.md` | 追坑的根因和预防 |
-| `.trae/memory/台账/decisions.md` | 做决策前看历史取舍 |
-| `.trae/memory/台账/daily.md` | 当天流水 |
+`.trae/memory/台账/` → `context.md`(驾驶舱) / `issues.md`(活跃坑) / `decisions.md`(决策) / `index.md`(模块索引) / `daily.md`(流水)
+
+### SKILL 核心 5 个
+
+`.trae/skills/` → frontend-component-spec / code-review-checklist / unit-test-spec / docker-deploy-guide / security-audit-guide
+
+## 安全基线
