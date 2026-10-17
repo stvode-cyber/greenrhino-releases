@@ -49,7 +49,7 @@
 | E4 commit + push | ✅ | 582b821 + d17d688 → main |
 | E5 context.md 同步 | ✅ | 活跃坑清单清零 + 铁律速查同步五落点 |
 
-**注意**：ISS-20261017-008（Gradle 8.11.1 下载超时）是网络依赖，没真修，但已固化到 AGENTS.md 铁律 #9（纯 ASCII 路径 + Gradle 缓存手动放置），属于「不修但有规避方案」，不算活跃坑
+**注意**：ISS-20261017-017（原编号冲突修正，Gradle 8.11.1 下载超时）是网络依赖，没真修，但已固化到 AGENTS.md 铁律 #9（纯 ASCII 路径 + Gradle 缓存手动放置），属于「不修但有规避方案」，不算活跃坑
 
 ### 📋 任务 T20261017-12 ISS-0910-001 版本号五落点同步（已关单）
 
@@ -236,7 +236,7 @@
 ### 上午流水（同天）
 
 - 上午 build-web.mjs + preflight.mjs + bump-version.mjs 三脚本落地 + CI.yml 建立 + AGENTS.md 同步
-- 上午 Android 构建：ASCII 路径 workaround（ISS-20261017-006）+ SDK 路径修复（ISS-20261017-007）+ Gradle 手动 curl（ISS-20261017-008）→ 双 APK BUILD SUCCESSFUL
+- 上午 Android 构建：ASCII 路径 workaround（ISS-20261017-006）+ SDK 路径修复（ISS-20261017-007）+ Gradle 手动 curl（ISS-20261017-017，原编号冲突修正）→ 双 APK BUILD SUCCESSFUL
 - 上午 21 commits 全部推 origin/main `stvode-cyber/greenrhino-releases`
 - 下午 AGENTS.md 瘦身 208→266 行 + 新增用户行为偏好 5 条 + 常用命令表 + Android/Moto 铁律速查块
 - **10:20 Moto XT2401 USB 连接 真机回归启动**

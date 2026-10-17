@@ -110,4 +110,4 @@
 
 ---
 
-**归档后 issues.md 保留活跃坑 ≤ 5 条（ISS-20260904-001 wwwroot.zip + ISS-20261017-008 Gradle 超时网络依赖）**
+**归档后 issues.md 保留活跃坑 ≤ 5 条（ISS-20260904-001 wwwroot.zip + ISS-20261017-017 Gradle 超时网络依赖，后发现编号冲突修正，原用 ISS-008）**
