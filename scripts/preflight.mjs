@@ -1,7 +1,7 @@
 // preflight.mjs — 发布前检查（AGENTS.md 发布检查清单自动化）
 // 用法：node scripts/preflight.mjs
 //
-// 检查项（共 14 项）：
+// 检查项（共 17 项）：
 //   1. sw.js 源码必须含 '__SW_CACHE__' 占位符
 //   2. sw.js 源码不含 greenrhino-v\d+ 硬编码
 //   3. build-web.mjs APP_VERSION 与 ROLES.cache 版本一致
@@ -16,7 +16,10 @@
 //  12. player assetlinks 包名 com.greenrhino.player
 //  13. clients/node_modules 不存在（防嵌套）
 //  14. ffmpeg.exe 在 clients/windows/GreenRhino/ 且未被 git 追踪
-//  （AGENTS.md 声明为 14 项，与实际一致）
+//  15. .iss OutputBaseFilename 含正确版本号（ISS-20260910-001）
+//  16. android-music build.gradle versionName/versionCode 同步
+//  17. android-player build.gradle versionName/versionCode 同步
+//  （AGENTS.md 声明 14 项 + ISS-0910 补 3 项 = 17 项）
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -113,6 +116,30 @@ if (fs.existsSync(ffmpeg)) {
   }
 } else {
   warn_('ffmpeg.exe 不存在（HEVC 转码链路失效）')
+}
+
+// 15. .iss OutputBaseFilename 版本号（ISS-20260910-001）
+for (const role of ['music', 'player']) {
+  const iss = path.join(ROOT, 'clients', 'windows', `GreenRhino${role.charAt(0).toUpperCase() + role.slice(1)}`, role === 'music' ? 'installer-music.iss' : 'installer-player.iss')
+  if (!fs.existsSync(iss)) continue
+  const content = fs.readFileSync(iss, 'utf8')
+  const m = content.match(/OutputBaseFilename=(\S+)-v(\d+)/)
+  if (!m) { bad(`${role}.iss OutputBaseFilename 格式异常`); continue }
+  if (m[2] === appVer?.slice(1)) ok(`${role}.iss OutputBaseFilename 版本 ${appVer}`)
+  else bad(`${role}.iss OutputBaseFilename 版本 v${m[2]} ≠ APP_VERSION ${appVer}`)
+}
+
+// 16-17. Android build.gradle versionName/versionCode
+for (const role of ['music', 'player']) {
+  const g = path.join(ROOT, 'clients', `android-${role}`, 'app', 'build.gradle')
+  if (!fs.existsSync(g)) continue
+  const gSrc = fs.readFileSync(g, 'utf8')
+  const vn = gSrc.match(/versionName\s+"(v\d+)"/)?.[1]
+  const vc = gSrc.match(/versionCode\s+(\d+)/)?.[1]
+  const majorNum = parseInt(appVer?.slice(1) || '0', 10)
+  if (vn === appVer && parseInt(vc || '0', 10) === majorNum)
+    ok(`android-${role} build.gradle versionName=${vn} versionCode=${vc}`)
+  else bad(`android-${role} build.gradle 版本不同步：versionName=${vn}（期望 ${appVer}）versionCode=${vc}（期望 ${majorNum}）`)
 }
 
 console.log(`\n📊 结果：✅ ${pass} 通过  ❌ ${fail} 失败  ⚠️  ${warn} 警告`)

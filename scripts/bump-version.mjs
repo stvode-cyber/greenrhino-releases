@@ -1,14 +1,16 @@
-// bump-version.mjs — 一键递增 APP_VERSION，同步三处落点
+// bump-version.mjs — 一键递增 APP_VERSION，同步五处落点
 // 解决 ISS-20260910-001：版本号散落在多处手工同步易漏
 //
 // 用法：
 //   node scripts/bump-version.mjs          # v16 → v17
 //   node scripts/bump-version.mjs v18      # 直接指定版本
 //
-// 三落点：
+// 五落点：
 //   1. scripts/build-web.mjs 的 APP_VERSION 常量
 //   2. scripts/build-web.mjs 的 ROLES.{music,player}.cache（gr-music-vN / gr-player-vN）
-//   3. clients/windows/GreenRhino{Music,Player}/*.iss 的 OutputBaseFilename（如果存在）
+//   3. clients/windows/GreenRhino{Music,Player}/*.iss 的 OutputBaseFilename
+//   4. clients/android-music/app/build.gradle 的 versionName + versionCode
+//   5. clients/android-player/app/build.gradle 的 versionName + versionCode
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -64,6 +66,22 @@ if (fs.existsSync(issGlob)) {
   walk(issGlob)
 }
 if (issCount === 0) console.log(`  ⏭  未找到 .iss 安装包脚本（可跳过）`)
+
+// 5. 扫 clients/android-{music,player}/app/build.gradle 改 versionName + versionCode
+const gradleCount = 0
+const majorNum = parseInt(next.slice(1), 10) // v16 → 16
+for (const role of ['music', 'player']) {
+  const gPath = path.join(ROOT, 'clients', `android-${role}`, 'app', 'build.gradle')
+  if (!fs.existsSync(gPath)) { console.log(`  ⏭  未找到 android-${role}/app/build.gradle`); continue }
+  const g = fs.readFileSync(gPath, 'utf8')
+  const newG = g
+    .replace(/versionName\s+"v\d+"/, `versionName "${next}"`)
+    .replace(/versionCode\s+\d+/, `versionCode ${majorNum}`)
+  if (newG !== g) {
+    fs.writeFileSync(gPath, newG)
+    console.log(`  ✅ clients/android-${role}/app/build.gradle（versionName + versionCode）`)
+  }
+}
 
 console.log(`\n✅ 完成。下一步建议：`)
 console.log(`  1. npm run test:all                      # 跑测试`)
