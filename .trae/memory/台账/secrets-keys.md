@@ -79,6 +79,14 @@
 
 | 日期 | 版本 | Commit | 推送目标 | 备注 |
 |---|---|---|---|---|
+| 2026-10-18 | v16 | `ad834da` | GitHub main ✅ | debug清理+secrets SKILL+AGENTS SKILL 7 |
+| 2026-10-18 | v16 | `6b92b8f` | GitHub main ✅ | 46→18 console.error + security-secrets-index SKILL 新建 |
+| 2026-10-18 | v16 | `dc6d732` | GitHub main ✅ | T20261018-02 台账归档 |
+| 2026-10-18 | v16 | `b25e573` | GitHub main ✅ | 投屏 QR 码入口（castCenter.js + style.css） |
+| 2026-10-18 | v16 | `21841d9` | GitHub main ✅ | ledger-health-check SKILL 体检（daily.md A10 状态修） |
+| 2026-10-18 | v16 | `39328ae` | GitHub main ✅ | ledger-health-check SKILL 新建 |
+| 2026-10-18 | v16 | `ee1a3bc` | GitHub main ✅ | ISS-008→017 编号冲突修复剩余 3 处 |
+| 2026-10-18 | v16 | `2410288` | GitHub main ✅ | 设定台账全面升级：漂移修复+SKILL同步v16 |
 | 2026-10-17 | v16 | `3923222` → main | GitHub main ✅ + Cloudflare Pages 双站 | MJPEG 屏幕镜像 + 台账 A 层止血 |
 | 2026-10-17 | v16 | `05b6969` | GitHub main ✅ | AGENTS 瘦身 + 漂移修复 + 进程跟踪 |
 | 2026-09-14 | v15 | （历史） | GitHub main ✅ | TWA → 原生 WebView 壳（DEC-001） |
