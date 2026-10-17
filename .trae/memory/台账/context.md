@@ -77,13 +77,13 @@ cd C:\greenrhino-build\android-player
 
 | Commit | 内容 |
 |---|---|
+| d0c434a | `feat(cast): Android player 壳投屏同步 — DlnaCaster+MediaHttpServer+MainActivity cast 5方法` |
+| 94783b5 | `fix(e2e): playwright waitUntil load 修 ISS-012 SW ready 超时 + context/session 收尾` |
 | 7c7ad24 | `fix(iss009): store.js 三 getter \|\| [] 兜底 + showMine stack 诊断 + secrets-keys.md` |
 | 05b6969 | `feat(setup): T20261017-01 AGENTS瘦身+漂移修复+进程跟踪+debounce+catch兜底` |
 | 357b2d4 | `fix(android): 加 ASCII 路径铁律 + local.properties SDK 路径 + gitignore` |
-| 753bfcb | `docs(ledger): 台账同步 — DEC-20261017-002 + ISS-20261017-003/004/005` |
-| 352f958 | `chore: player.js 补模块级 TODO 分拆计划` |
 
-**最新动态**（2026-10-17 傍晚）：T20261017-02 ISS-009 根因修复完成。store.js 三 getter 加 `|| []` 兜底 + showMine catch 补完整 stack + 各 getter typeof 打印。preflight 14/14 绿 + 单元 6/6 绿 + 零回归。**待真机验证**：下次插 Moto USB → music APK 启动不崩 + logcat 能看到完整 stack（如果还有其他崩点）。
+**最新动态**（2026-10-17 傍晚）：T20261017-03 投屏推动完成。player 壳从只有 MainActivity.kt → 完整投屏后端。compileDebug BUILD SUCCESSFUL。preflight 14/14 + 单元 6/6 零回归。**三端投屏全齐了**：Windows .NET ✅ + Android music ✅ + Android player ✅。待 Moto 真机验证 + 推远程。
 
 ---
 
