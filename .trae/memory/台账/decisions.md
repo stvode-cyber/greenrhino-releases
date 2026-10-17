@@ -94,6 +94,19 @@
 
 ---
 
+## DEC-20261017-002 发布前自动化：preflight + bump
+
+- **日期**：2026-10-17
+- **决策**：新建 `scripts/preflight.mjs`（14 项检查）+ `scripts/bump-version.mjs`（一键改版本）
+- **原因**：手工核对 AGENTS.md 发布检查清单（9 项）易漏；版本号三落点（APP_VERSION + 双 cache 桶 + .iss）手工同步易错
+- **备选方案**：靠人工 review（被否决，历史上曾因此出 v14→v15 漏更新）
+- **落地效果**：preflight 覆盖 sw 占位符、cache 隔离、版本三落点、Android 同步、manifest 主题色、assetlinks 包名、ffmpeg 存在、clients/node_modules 嵌套、release 产物完整性
+- **关联文件**：`scripts/preflight.mjs`、`scripts/bump-version.mjs`、`scripts/build-web.mjs`
+- **相关坑**：ISS-20260910-001（版本号三落点）、ISS-20261017-003（clients/node_modules 嵌套）
+- **CI 接入**：`.github/workflows/ci.yml` 已把 preflight 作为必跑项
+
+---
+
 ## 模板（新决策复制此块）
 
 ```markdown

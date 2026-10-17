@@ -122,15 +122,16 @@
 - **归类标签**：`#video-codec` `#windows-webview2` `#gpu`
 - **状态**：已关单（2026-09-03）
 
-### ISS-20261017-003 clients/node_modules 嵌套
+### ISS-20261017-003 clients/node_modules 嵌套 ✅ 已解决
 
 - **严重度**：P2
 - **现象**：`clients/node_modules/` 存在，根目录已有一份
 - **根因**：某次在 clients/ 下误跑 `npm install`
-- **解决**：删除 clients/node_modules + 检查 clients/package.json 是否真需要
-- **关联文件**：`clients/node_modules/`、`clients/package.json`
-- **预防**：CI 加嵌套 node_modules 检测
+- **解决**：删除 clients/node_modules + preflight 第 13 项自动检测
+- **关联文件**：`clients/node_modules/`（已删）、`scripts/preflight.mjs`
+- **预防**：✅ preflight + CI 双重兜底
 - **归类标签**：`#dependencies` `#cleanup`
+- **修复 commit**：`efcb31e`
 
 ### ISS-20261017-004 vite.config.js 残留
 
