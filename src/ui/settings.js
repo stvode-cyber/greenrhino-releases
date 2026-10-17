@@ -1,7 +1,8 @@
-// settings.js — 设置模态（主题/音量/续播/EQ/存储/导入记录）
+// settings.js — 设置模态（主题/音量/续播/EQ/存储/导入记录/投屏中心）
 import { h, toast, openModal } from './dom.js'
 import { player, EQ_FREQS, EQ_PRESETS } from '../player.js'
 import { getSettings, saveSettings, getAllMedia, dbDelete, dbClear, dbGetAll, getImportRecords, exportSyncData, importSyncData } from '../store.js'
+import { showCastCenter } from './castCenter.js'
 
 const HZ_LABEL = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '16k']
 
@@ -101,6 +102,8 @@ export async function openSettings(app, focus = '') {
     row('设为默认播放器', '双击音频/视频直接用本软件打开', h('button', { class: 'opt', onclick: setAsDefaultPlayer }, '设为系统默认')),
     row('交叉淡入', '歌曲间平滑过渡', cf),
     row('均衡器 EQ', '10 段频率调节', eqWrap),
+    row('📺 投屏中心', 'DLNA 推视频 / Miracast 系统镜像 / MJPEG 屏幕镜像（空库也能开）',
+      h('button', { class: 'opt', onclick: () => { close(); setTimeout(() => showCastCenter(app, { mode: 'overlay', needMedia: false }), 200) } }, '打开投屏中心')),
     // 🔶 个人空间后端：手机填 PC 局域网 IP + 8787 端口
     (() => {
       const savedBase = localStorage.getItem('__GR_CLOUD_BASE__')?.trim() || ''
