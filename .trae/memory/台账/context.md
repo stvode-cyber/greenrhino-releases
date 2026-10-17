@@ -77,13 +77,18 @@ cd C:\greenrhino-build\android-player
 
 | Commit | 内容 |
 |---|---|
-| d0c434a | `feat(cast): Android player 壳投屏同步 — DlnaCaster+MediaHttpServer+MainActivity cast 5方法` |
-| 94783b5 | `fix(e2e): playwright waitUntil load 修 ISS-012 SW ready 超时 + context/session 收尾` |
-| 7c7ad24 | `fix(iss009): store.js 三 getter \|\| [] 兜底 + showMine stack 诊断 + secrets-keys.md` |
-| 05b6969 | `feat(setup): T20261017-01 AGENTS瘦身+漂移修复+进程跟踪+debounce+catch兜底` |
-| 357b2d4 | `fix(android): 加 ASCII 路径铁律 + local.properties SDK 路径 + gitignore` |
+| 1124423 | `feat: autoNext 设置 — 播放完默认停，用户可开关 (DEC-005)` |
+| d0c434a | `feat(cast): Android player 壳投屏同步` |
+| 94783b5 | `fix(e2e): playwright waitUntil load 修 ISS-012` |
+| 7c7ad24 | `fix(iss009): store.js 三 getter \|\| [] 兜底` |
+| 05b6969 | `feat(setup): AGENTS瘦身+漂移修复+进程跟踪` |
 
-**最新动态**（2026-10-17 傍晚）：T20261017-03 投屏推动完成。player 壳从只有 MainActivity.kt → 完整投屏后端。compileDebug BUILD SUCCESSFUL。preflight 14/14 + 单元 6/6 零回归。**三端投屏全齐了**：Windows .NET ✅ + Android music ✅ + Android player ✅。待 Moto 真机验证 + 推远程。
+**最新动态**（2026-10-17 傍晚）：
+- ✅ autoNext 设置落地（默认播完停，用户可开）
+- ✅ ISS-009 TypeError 真机验证通过
+- ✅ player 壳投屏代码同步 + 编译通过
+- ⏳ 三星电视 SSDP 没扫到 MediaRenderer——等待电视端开启 DLNA 或用 Miracast 系统级投屏
+- ⏳ 6 个 commit 本地，未推远程
 
 ---
 
