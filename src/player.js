@@ -1,3 +1,12 @@
+// TODO(#player_js_split): 当前单文件 ~40KB，建议未来按职责分拆：
+//   src/player.js           — 保留：Player 类主入口（<10KB）
+//   src/player/audioEngine.js   — 音频引擎：双 <audio> + Web Audio 图（EQ/频谱/淡入）
+//   src/player/videoEngine.js   — 视频引擎：<video> + 字幕轨/音轨轨/章节
+//   src/player/transcode.js     — HEVC 检测 + ffmpeg 转码触发 + 产物缓存
+//   src/player/clipper.js       — A/B 循环 + 片段生成（clip 消息到 C#）
+//   相关决策：DEC-20260903-001（ffmpeg 转码）、DEC-20260908-001（播放模式分离）
+//   相关坑：ISS-20260903-001（视频黑屏 E4 关单）
+
 // player.js — 统一播放引擎（音频 Web Audio 图 + 视频原生）
 import { getProgress, saveProgress, getSettings, recordPlayback } from './store.js'
 import { srtToVtt } from './lrc.js'
