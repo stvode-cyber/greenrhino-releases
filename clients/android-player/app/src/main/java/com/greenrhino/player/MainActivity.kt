@@ -208,7 +208,7 @@ class MainActivity : ComponentActivity() {
         android.util.Log.d("GreenRhino", "Loading index.html (cache cleared)")
         webView.loadUrl("file:///android_asset/pwa/index.html")
 
-        // 🔶 预启动 MediaHttpServer（content:// → HTTP 代理），让 DLNA 电视能拉到局域网流
+        // 🔶 预启动 MediaHttpServer（直接 object，避开 Service 编译问题）
         MediaHttpServer.start(this)
     }
 
@@ -397,8 +397,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 🔶 singleTask 杀进程后 Activity 恢复 → 重启 MediaHttpServer
+        if (!MediaHttpServer.running) MediaHttpServer.start(this)
         webView.onResume()
         webView.resumeTimers()
+    }
+
+    // 🆕 singleTask Activity 收到重复 intent 时走这里（不走 onCreate）
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        if (!MediaHttpServer.running) MediaHttpServer.start(this)
     }
 
     // 🔶 原生沉浸式全屏切换（JS Bridge 调这个）

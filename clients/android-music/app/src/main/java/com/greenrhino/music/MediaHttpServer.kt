@@ -6,6 +6,7 @@ package com.greenrhino.music
 import android.content.Context
 import android.net.Uri
 import android.net.wifi.WifiManager
+import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
 import java.io.BufferedReader
@@ -36,27 +37,41 @@ object MediaHttpServer {
     private const val BUF_HEADER = 8192        // HTTP header 读缓冲
 
     private var serverSocket: ServerSocket? = null
-    private var port = -1
-    private var lanIp: String = ""
+    var port = -1
+    var lanIp: String = ""
     private var ctx: Context? = null
     private var pool = Executors.newFixedThreadPool(4)
-    @Volatile private var running = false
+    @Volatile var running = false
 
     @Synchronized
     fun start(context: Context) {
-        if (running) return
+        // 🆕 调试：写到 App 内部 cache（始终有写权限）
+        fun debugFile(msg: String) {
+            try {
+                val f = java.io.File(context.cacheDir, "ghs_status.txt")
+                f.appendText("${System.currentTimeMillis()} $msg\n")
+            } catch (_: Exception) {}
+        }
+        debugFile("start() called, running=$running")
+        // 每次都强制关旧的再重新起——避免进程被杀后 running=true 但 serverSocket 已死
+        if (running) {
+            try { serverSocket?.close() } catch (_: Exception) {}
+            running = false; serverSocket = null; port = -1
+            debugFile("force reset running=false")
+        }
         ctx = context.applicationContext
         try {
             serverSocket = ServerSocket().apply { bind(java.net.InetSocketAddress("0.0.0.0", 0), 4) }
             port = serverSocket!!.localPort
             lanIp = getLanIp(context)
             running = true
-            // 后台 accept 循环
             Thread({ acceptLoop() }, "MediaHttpServer-accept").start()
-            Log.d(TAG, "🚀 MediaHttpServer started on 0.0.0.0:$port (LAN: http://$lanIp:$port)")
+            debugFile("✅ STARTED port=$port lanIp=$lanIp")
+            Log.e(TAG, "🚀 MediaHttpServer started on 0.0.0.0:$port (LAN: http://$lanIp:$port)")
         } catch (e: Exception) {
+            debugFile("❌ FAILED ${e.javaClass.simpleName}: ${e.message}")
             Log.e(TAG, "❌ MediaHttpServer start FAILED: ${e.message}")
-            serverSocket = null
+            serverSocket = null; running = false
         }
     }
 
@@ -115,12 +130,24 @@ object MediaHttpServer {
             if (parts.size < 2) { sendError(output, 400, "Bad Request"); socket.close(); return }
             val method = parts[0].uppercase()
             val rawPath = parts[1]
+            val path = rawPath.substringBefore('?')
 
             if (method != "GET") { sendError(output, 405, "Method Not Allowed"); socket.close(); return }
-            if (!rawPath.startsWith(ROUTE_PREFIX)) { sendError(output, 404, "Not Found"); socket.close(); return }
 
-            // 去掉 query string
-            val path = rawPath.substringBefore('?')
+            // 🆕 /list — 返回 Moto 上所有视频文件（JSON）
+            if (path == "/list" || path == "/list/") {
+                handleList(output); socket.close(); return
+            }
+            // 🆕 /tv — 电视浏览器极简播放页
+            if (path == "/tv" || path == "/tv/" || path == "/tv.html") {
+                handleTv(output); socket.close(); return
+            }
+            // 🆕 / — 重定向到 /tv
+            if (path == "/" || path == "") {
+                sendRedirect(output, "/tv"); socket.close(); return
+            }
+            // 原 /stream/{base64} 路由（保留）
+            if (!path.startsWith(ROUTE_PREFIX)) { sendError(output, 404, "Not Found"); socket.close(); return }
             val encoded = path.removePrefix(ROUTE_PREFIX)
             val contentUriStr = String(Base64.decode(encoded, Base64.NO_WRAP or Base64.URL_SAFE))
             val contentUri = Uri.parse(contentUriStr)
@@ -232,5 +259,98 @@ object MediaHttpServer {
                 if (cur.moveToFirst()) cur.getLong(cur.getColumnIndexOrThrow(android.provider.OpenableColumns.SIZE)) else -1L
             } ?: -1L
         } catch (_: Exception) { -1L }
+    }
+
+    // ================== 🆕 电视浏览器路由 ==================
+
+    /** /list — 返回 Moto 上所有视频文件 JSON（MediaStore 查询 + work profile fallback） */
+    private fun handleList(out: OutputStream) {
+        val videos = mutableListOf<String>()
+        val cr = ctx?.contentResolver ?: run { sendJson(out, "[]"); return }
+        // 主用户 + work profile 两个 URI 都查（Moto 多用户隔离）
+        val uris = listOf(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            Uri.parse("content://media/workprofile/video/media")
+        )
+        for (uri in uris) {
+            try {
+                cr.query(uri, arrayOf(
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.TITLE
+                ), null, null, "${MediaStore.Video.Media.DATE_ADDED} DESC")?.use { cur ->
+                    val nameIdx = cur.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+                    val titleIdx = cur.getColumnIndex(MediaStore.Video.Media.TITLE)
+                    val idIdx = cur.getColumnIndex(MediaStore.Video.Media._ID)
+                    while (cur.moveToNext() && videos.size < 80) {
+                        val id = cur.getLong(idIdx)
+                        val name = (if (nameIdx >= 0) cur.getString(nameIdx)
+                                    else if (titleIdx >= 0) cur.getString(titleIdx)
+                                    else "video_$id") ?: "video_$id"
+                        val uriStr = "$uri/$id"
+                        val encoded = Base64.encodeToString(uriStr.toByteArray(), Base64.NO_WRAP or Base64.URL_SAFE)
+                        val streamUrl = "/stream/$encoded"
+                        val esc = name.replace("\"", "\\\"").replace("<unknown>", "")
+                        videos.add("""{"name":"$esc","url":"$streamUrl"}""")
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        sendJson(out, "[${videos.joinToString(",")}]")
+    }
+
+    /** /tv — 返回电视浏览器极简 HTML 播放页 */
+    private fun handleTv(out: OutputStream) {
+        val html = """<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>绿角犀 · 电视投屏</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#fff;font-family:sans-serif;padding:16px}
+h1{font-size:20px;margin-bottom:12px;color:#00D8A6}
+#player{width:100%;max-height:70vh;background:#111;border-radius:12px}
+#list{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:16px}
+.item{background:#1a1a1a;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid #333}
+.item:hover{border-color:#00D8A6;background:#222}
+#empty{color:#888;padding:32px;text-align:center}
+</style>
+</head>
+<body>
+<h1>📺 绿角犀 · 手机上的视频</h1>
+<video id="player" controls playsinline></video>
+<div id="list"><div id="empty">加载中…</div></div>
+<script>
+const p=document.getElementById('player'),l=document.getElementById('list');
+fetch('/list').then(r=>r.json()).then(arr=>{
+  if(!arr.length){l.innerHTML='<div id="empty">手机上没找到视频</div>';return}
+  l.innerHTML='';arr.forEach(v=>{
+    const d=document.createElement('div');d.className='item';d.textContent=v.name;
+    d.onclick=()=>{p.src=v.url;p.play()};l.appendChild(d)
+  })
+}).catch(()=>{l.innerHTML='<div id="empty">加载失败，刷新试试</div>'});
+</script>
+</body></html>"""
+        writeResponseHeader(out, 200, "OK", "text/html; charset=utf-8", html.length.toLong(), null)
+        out.write(html.toByteArray(charset("UTF-8")))
+        out.flush()
+    }
+
+    private fun sendJson(out: OutputStream, json: String) {
+        writeResponseHeader(out, 200, "OK", "application/json; charset=utf-8", json.length.toLong(), null)
+        out.write(json.toByteArray(charset("UTF-8")))
+        out.flush()
+    }
+
+    private fun sendRedirect(out: OutputStream, location: String) {
+        val sb = StringBuilder()
+        sb.append("HTTP/1.1 302 Found\r\n")
+        sb.append("Location: $location\r\n")
+        sb.append("Content-Length: 0\r\n")
+        sb.append("Connection: close\r\n\r\n")
+        out.write(sb.toString().toByteArray(charset("ISO-8859-1")))
+        out.flush()
     }
 }

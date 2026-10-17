@@ -83,6 +83,8 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 🆕 绕过 Moto Log.e 过滤的调试
+        run { try { java.io.File(cacheDir, "ghs_status.txt").appendText("${System.currentTimeMillis()} onCreate CALLED bundle=${savedInstanceState != null}\n") } catch (_: Exception) {} }
         Log.e("GreenRhino", "🟢 MainActivity.onCreate CALLED! pid=${android.os.Process.myPid()} user=${android.os.Process.myUserHandle()}")
 
         // 沉浸式全屏
@@ -116,7 +118,10 @@ class MainActivity : ComponentActivity() {
         setContentView(container)
 
         // 🔶 预启动 MediaHttpServer（content:// → HTTP 代理），让 DLNA 电视能拉到局域网流
+        // 直接 object.start()，不走 Service（避开 Service 编译问题）
+        Log.e("GreenRhino", "✅ onCreate → MediaHttpServer.start()")
         MediaHttpServer.start(this)
+        Log.e("GreenRhino", "✅ MediaHttpServer port=${MediaHttpServer.port}")
         // 🔶 Debug BroadcastReceiver: adb shell am broadcast -a greenrhino.CAST_SCAN / CAST_PLAY / CAST_STOP
         setupDebugReceiver()
         setupWebView()
@@ -334,11 +339,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        run { try { java.io.File(cacheDir, "ghs_status.txt").appendText("${System.currentTimeMillis()} onResume CALLED\n") } catch (_: Exception) {} }
+        if (!MediaHttpServer.running) MediaHttpServer.start(this)
         // 🔶 ISS-20261009-019: 必须先检查 isHeld 再 release！
         // onPause 时若 isPlaying=false 不会 acquire，onResume 直接 release 会抛
         // "WakeLock under-locked" RuntimeException 导致 App 崩溃
         if (wakeLock.isHeld) wakeLock.release()
         if (!isPlaying) webView.onResume()
+    }
+
+    // 🆕 singleTask Activity 收到重复 intent 时走这里（不走 onCreate）
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        run { try { java.io.File(cacheDir, "ghs_status.txt").appendText("${System.currentTimeMillis()} onNewIntent CALLED\n") } catch (_: Exception) {} }
+        if (!MediaHttpServer.running) MediaHttpServer.start(this)
     }
 
     override fun onDestroy() {
@@ -707,7 +721,7 @@ class MainActivity : ComponentActivity() {
             val httpUri = when {
                 anyUri.startsWith("http://") || anyUri.startsWith("https://") -> anyUri
                 anyUri.startsWith("content://") -> {
-                    // 起 MediaHttpServer（零依赖 HttpServer，绑定 0.0.0.0）
+                    // 起 MediaHttpServer（直接 object，避开 Service 编译问题）
                     MediaHttpServer.start(this@MainActivity)
                     val url = MediaHttpServer.publicUrlFor(anyUri)
                     Log.d("GreenRhino", "📺 content:// → proxy: $url")
