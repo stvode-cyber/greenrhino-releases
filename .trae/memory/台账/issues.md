@@ -14,7 +14,7 @@
 > 同类坑 2 条。根因：WebView file:// / PWA 子路径部署时，绝对路径 `/` 解析基准不一致。
 > 预防：构建脚本自动重写。
 
-### ⚠️ ISS-20260914-001 index.html 绝对路径 WebView 解析失败（待 build-web 自动重写）
+### ✅ ISS-20260914-001 index.html 绝对路径 WebView（已关单：build-web 自动重写 + preflight 第 4 项自动验）
 
 - **严重度**：P0
 - **现象**：Android WebView 加载 `file:///android_asset/pwa/index.html` 时，`<link href="/src/style.css">` 被解析成 `file:///src/style.css`（文件系统根）→ CSS 全 404 → 裸 HTML
@@ -64,17 +64,16 @@
 
 ---
 
-## 🔶 问题群：#android-webview（✅ 1/2 已关单，活跃 1 条）
+## 🔶 问题群：#android-webview（✅ 2/2 已关单 🎉）
 
-### ⚠️ ISS-20260914-002 webkitdirectory 在 WebView 不支持
+### ✅ ISS-20260914-002 webkitdirectory 在 WebView 不支持（已关单：feature detection + 自动降级多文件）
 
 - **严重度**：P1
 - **现象**：侧边栏「📁 导入文件夹」按钮，点击无反应
-- **根因**：WebView 不实现 `HTMLInputElement.webkitdirectory`；但因没 C# 壳注入 `winRole='music'`，main.js 默认 `isHub=true`，hub 模式会显示该按钮
-- **解决**：`index.html` `<body>` 开头 inline script 检测 `'webkitdirectory' in HTMLInputElement.prototype`，不支持则 `display:none`
-- **关联文件**：`clients/android-music/app/src/main/assets/pwa/index.html`
-- **预防**：✅ 加 feature detection 注释到 `index.html` 源文件（待做）
-- **归类标签**：`#android-webview` `#feature-detection`
+- **根因**：WebView 不实现 `HTMLInputElement.webkitdirectory`
+- **解决**：2026-10-17 importFolderDialog() 加 feature detection（`'webkitdirectory' in probe`），不支持时自动降级为多文件选择 + toast 提示（"当前环境不支持文件夹选择，已切换为多文件模式"）
+- **关联文件**：`src/main.js` importFolderDialog()
+- **预防**：✅ 所有 HTML5 新 API 先 feature detection 再使用
 
 ### ✅ ISS-20261017-002 Moto 真机 adb logcat -c 屏蔽 App 日志（已关单：写进铁律 #8）
 
@@ -245,16 +244,13 @@
 - **归类标签**：`#indexeddb` `#defensive-programming` `#async-boundary`
 - **归类问题群**：#indexeddb（新增）
 
-### ⚠️ ISS-20261017-010 player APK library.js refresh 密集被调用 7 次（与 013 同根因，013 已补 debounce，可关单）
+### ✅ ISS-20261017-010 player APK library.js refresh 密集（已关单：同根因 013 补了 debounce）
 
 - **严重度**：P3
 - **机型**：Moto XT2401
-- **现象**：player APK 启动 ~3 秒内 `[gr-lib] refresh: all=15 typeCounts={"video":15}` 连续打印 7 次，而非正常 1 次
-- **根因**：待查 — library.js 有多个 refresh() 调用点（line 183/207/213/282/299/313），可能有事件循环循环触发（mutation observer/事件监听）
-- **影响**：轻微。15 个视频去重后正常显示。但可能导致性能浪费
-- **关联文件**：`src/ui/library.js` refresh() 函数 + 调用点
-- **预防**：⏳ 给 refresh() 加 debounce（已有 refreshGen 并发守卫，可能还不够）
-- **归类标签**：`#android-webview` `#event-loop` `#performance`
+- **现象**：player APK 启动 ~3 秒内 refresh 连续打印 7 次
+- **根因**：与 ISS-20261017-013 同根因
+- **解决**：013 已补 debounce 150ms，010 同步关单
 
 ### ✅ ISS-20261017-011 实测：610 2251 是 Moto ResolverActivity 第一项 center（已关单：固化铁律 #8）
 

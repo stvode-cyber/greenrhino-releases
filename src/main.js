@@ -658,12 +658,22 @@ function importFilesDialog() {
   input.click()
 }
 function importFolderDialog() {
+  // ISS-20260914-002：WebView / iOS 不支持 webkitdirectory → 自动降级为多文件选择
+  // feature detection 走 input.webkitdirectory 属性是否可赋值（部分浏览器静默失败）
+  const probe = document.createElement('input')
+  probe.type = 'file'
+  const supportsDir = 'webkitdirectory' in probe || 'directory' in probe
   const input = makeFileInput()
   input.multiple = true
-  input.webkitdirectory = true
+  if (supportsDir) {
+    input.webkitdirectory = true
+  } else {
+    toast('当前环境不支持文件夹选择，已切换为多文件模式', 'warn')
+  }
   input.onchange = () => {
     const files = [...input.files]
-    const folder = files[0]?.webkitRelativePath?.split('/')[0] || '文件夹'
+    const folder = supportsDir ? (files[0]?.webkitRelativePath?.split('/')[0] || '文件夹') : '多文件'
+    if (files.length === 0) { toast('未选择任何文件', 'warn'); return }
     doImport(files, folder)
   }
   input.click()
