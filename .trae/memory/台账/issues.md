@@ -155,6 +155,39 @@
 - **归类标签**：`#documentation` `#path-drift`
 - **修复 commit**：`efcb31e`
 
+### ISS-20261017-006 Android 构建路径含非 ASCII 字符 → ClassNotFoundException
+
+- **严重度**：P0
+- **现象**：在项目根 `d:\1号\项目部\🛠️工具\音乐影视播放器\clients\android-player` 跑 `gradlew.bat assembleDebug` → `java.lang.ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain`
+- **根因**：JDK 17 无法处理含 emoji（🛠️）或中文（1号、项目部、音乐影视播放器）的路径 → `Illegal char <?>` → gradle-wrapper.jar 加载失败
+- **解决**：把 `clients/android-{music,player}` 复制到纯 ASCII 路径 `C:\greenrhino-build\{android-music,android-player}` 再构建
+- **关联文件**：AGENTS.md（不可变约束 #9）、clients/android-*/
+- **预防**：✅ 已升为 AGENTS.md 铁律 #9；preflight 未来可检测路径含非 ASCII
+- **归类标签**：`#path-charset` `#gradle-directory` `#android-build`
+- **复现概率**：100%（只要路径含 emoji 或中文）
+- **修复 commit**：`357b2d4`
+
+### ISS-20261017-007 Android SDK 路径漂移
+
+- **严重度**：P2
+- **现象**：HANDOVER.md 写 SDK 在 `C:\Users\Administrator\.android-sdk`，实际在 `C:\Users\Administrator\Android\Sdk`
+- **根因**：项目搬家后 SDK 被重新安装到默认位置
+- **解决**：修复两个 `local.properties` 的 `sdk.dir`；preflight 未来可检测
+- **关联文件**：`clients/android-{music,player}/local.properties`
+- **预防**：preflight 未来可加 SDK 路径验证
+- **归类标签**：`#path-drift` `#android-build`
+- **修复 commit**：`357b2d4`
+
+### ISS-20261017-008 Gradle 8.11.1 下载超时 → 手动 curl
+
+- **严重度**：P3
+- **现象**：gradlew 自动下载 gradle-8.11.1-bin.zip 卡死（仅下了 130MB 中的 100MB）
+- **根因**：services.gradle.org 从本环境下载慢
+- **解决**：手动 `curl.exe -L -o gradle-8.11.1-bin.zip` 放对位置 `~/.gradle/wrapper/dists/gradle-8.11.1-bin/<hash>/`
+- **关联文件**：gradle-wrapper.properties
+- **预防**：⏳ 可把 gradle zip 作为项目资产预打包
+- **归类标签**：`#network` `#gradle-directory`
+
 ---
 
 ## 模板（新坑复制此块）

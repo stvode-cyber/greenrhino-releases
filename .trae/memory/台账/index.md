@@ -66,9 +66,13 @@
   - ISS-20260914-001（index.html 绝对路径）
   - ISS-20260914-002（webkitdirectory 不支持）
   - ISS-20261017-002（Moto adb logcat -c）
+  - ISS-20261017-006（✅ Android 构建 ASCII 路径铁律）
+  - ISS-20261017-007（SDK 路径漂移）
+  - ISS-20261017-008（Gradle 下载超时）
 - **关键文件**：
   - `app/src/main/java/com/greenrhino/{music,player}/MainActivity.kt`
   - `app/src/main/assets/pwa/index.html`（从 release 拷来后必须重改绝对路径）
+- **构建铁律**：必须复制到 `C:\greenrhino-build\`（ASCII 路径）再跑 gradlew
 
 ### clients/windows/（.NET 8 WebView2）
 - **决策**：DEC-20260904-001（GPU 软件渲染）、DEC-20260903-001（ffmpeg 转码）
