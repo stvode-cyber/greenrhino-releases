@@ -25,12 +25,20 @@ for f in release/pwa-site-*/.well-known/assetlinks.json; do echo "=== $f ==="; c
 ```
 **判断标准**：music 版的 `package_name` 必须是 `com.greenrhino.music` 且 `siteUrl` 是 `greenrhino-music.pages.dev`，player 反之。
 
-### 3. LocalServer 路径遍历
+### 3. LocalServer / cloud_api.py 路径遍历
+
+绿角犀有三个后端，都要审：
+
 ```bash
-# 手工审 server/index.js 里的文件读取
-rg -n "fs\.(readFile|createReadStream|readdir|stat|access)" server/ -B2 -A2
+# Python cloud_api.py（8787）
+rg -n "open|path\.join|os\.path" server/cloud_api.py -B2 -A2
+# .NET LocalServer.cs（8800）
+rg -n "Path\.Combine|File\.Read|Directory" clients/windows/GreenRhino/LocalServer.cs -B2 -A2
+# Android MediaHttpServer.kt（40363）
+rg -n "File|openFile|contentResolver" clients/android-*/app/src/main/java/com/greenrhino/*/MediaHttpServer.kt -B2 -A2
 ```
-**判断标准**：所有路径拼接必须有 `path.resolve(root, userInput)` + `result.startsWith(root + path.sep)` 防护。
+
+**判断标准**：所有路径拼接必须有 root 前缀校验（Python `startswith` / .NET `StartsWith` / Kotlin `startsWith`），绝对不能让用户输入直接拼到根目录路径后返回。
 
 ### 4. CSP 缺失
 ```bash

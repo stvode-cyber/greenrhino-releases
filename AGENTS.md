@@ -51,7 +51,7 @@ test/                    # 单元 + E2E
 .trae/memory/台账/      # 项目驾驶舱（context.md / issues.md / decisions.md / index.md / daily.md）
 ```
 
-## 不可变约束（10 条铁律）
+## 不可变约束（11 条铁律）
 
 ### 1. 版本五落点一致（ISS-20260910-001 已关单）
 `scripts/build-web.mjs` 的 `APP_VERSION = 'v16'` 是所有产物的版本基线。五落点必须同步：
@@ -179,20 +179,26 @@ Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -E
 - `assetlinks.json` SHA256 指纹必须从真实 keystore 生成，**不要手写**
 - `ffmpeg.exe`（98MB）必须被 gitignore
 
-## 🧑‍💼 用户行为偏好（写死的规则）
+## 🧑‍💼 用户行为偏好（v16 精简版）
 
-> 1号的行为偏好，换 AI 自动遵守。**核心：我只做决定权，不做细操作。**
+> 1号的行为偏好，换 AI 自动遵守。**三句话总结**：
 
-1. **大白话回复**：不用术语，一句话就一句话，别啰嗦
-2. **全权委托**：所有事情 AI 自己干，别让我跑命令、改配置、选路径。干完了汇报，我只确认
-3. **不要给我输出运行指令**（`npm run dev`、`adb install -r`），AI 自己执行
-4. **需要动手的事直接说**（插 USB、登录、点 UI），别绕弯。除了这些，其他全自动
-5. **不越界**：跟绿角犀无关的项目别瞎搞，发现不对直接问我
-6. **先报理解再开工**：大任务先把理解和计划说清楚（脑图格式），我确认了再动手
-7. **质量优先不计成本**：不惜工时只要最强最稳方案
-8. **件件记到查**：每次任务都有台账记录，可追溯
-9. **自动闭环**：任务完成 → 自动推送 → 自动归档台账 → 自动汇报，不用我催
-10. **上下文减负**：AGENTS/台账/代码里的冗余要持续瘦身，别让新 AI 进门读半天才开工
+**① 我只说「同意/否决/改这里」，其他全自动** — 别让我跑命令、改配置、选路径，AI 自己干自己验证，干完汇报。
+
+**② 需要我动手的直接说大白话** — 「插 USB」「点 UI 第3个按钮」「登录」，别绕弯解释为什么，直接说要做啥。
+
+**③ 质量优先不计成本** — 最强最稳方案，不惜工时；代码/台账持续瘦身，新 AI 进门 30 秒能开工。
+
+### 执行细则（3 句话的展开）
+
+| 细则 | 说明 |
+|---|---|
+| 大白话回复 | 不用术语，一句话就一句话 |
+| 不输出运行指令 | `npm run dev`、`adb install -r` 这种 AI 自己执行，别让我跑 |
+| 大任务先报理解 | 说清楚我要做啥（脑图格式），我点头了再动手 |
+| 不越界 | 跟绿角犀无关的别瞎搞，发现不对直接问 |
+| 件件记到查 | 每次任务自动写台账，可追溯 |
+| 自动闭环 | 做完 → 归档台账 → 汇报，不用我催 |
 
 ---
 
@@ -204,7 +210,7 @@ Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -E
 |---|---|
 | `npm run build` | 构建双 PWA 站点 |
 | `npm run build:android` | 构建 + 同步到 Android assets |
-| `npm run preflight` | 发布前 18 项自动检查 |
+| `npm run preflight` | 发布前 **18 项** 自动检查 |
 | `npm run bump` | 一键版本升级 |
 | `npm run test` / `test:all` | 单元 / 单元+E2E |
 | `git push origin main` | 推远程 |
@@ -226,5 +232,3 @@ cd C:\greenrhino-build\android-player; .\gradlew.bat assembleDebug --no-daemon
 ### SKILL 核心 5 个
 
 `.trae/skills/` → frontend-component-spec / code-review-checklist / unit-test-spec / docker-deploy-guide / security-audit-guide
-
-## 安全基线

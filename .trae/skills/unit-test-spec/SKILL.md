@@ -5,24 +5,23 @@ AI 员工写单元测试时加载，规定测试风格、覆盖矩阵、fixture 
 
 ---
 
-## 测试框架选择
+## 测试框架选择（v16 实际情况）
 
 | 场景 | 框架 | 理由 |
 |---|---|---|
-| 前端纯逻辑（metadata / lrc / cover） | **Vitest** | devDependencies 已有 `vite`，Vitest 同生态 |
-| 后端 API | **Node 原生 `node:test`** | 零依赖 |
-| 构建脚本 | **Node 原生** | 纯 I/O，不需要复杂 mock |
+| **所有单元测试** | **Node 原生 `node:test`** | 项目已跑的是 `node --test test/build-sw-cache.test.js`，零依赖 |
+| 后端 API | Node 原生 | `server/cloud_api.py` 是 Python，用 pytest（有 `server/test_cloud.py`） |
+| 构建脚本 | Node 原生 | 纯 I/O，不需要复杂 mock |
+| E2E | Playwright | `test/e2e/sw-cache.spec.js`（当前只有 1 条 SW cache 验证） |
 
-## 覆盖矩阵
+## 覆盖矩阵（v16 实际文件）
 
 | 模块 | 路径 | 重点 | fixture |
 |---|---|---|---|
 | **SW cache 占位符** | `sw.js` + `scripts/build-web.mjs` | 源码有占位符 + build 替换正确 + 双 App 隔离 | 跑 build-web.mjs 后断言 release/sw.js 文本 |
-| metadata | `src/metadata.js` | ID3v2 / FLAC / Vorbis / 非法文件 | `test-assets/valid.mp3`, `test-assets/broken.mp3` |
-| lrc | `src/lrc.js` | 时间排序 / 偏移量 / 重叠行 | `test-assets/sample.lrc` |
-| cover | `src/cover.js` | 内嵌 vs 外挂优先级 | `test-assets/embedded-cover.mp3` |
-| store | `src/store.js` | IndexedDB CRUD / 迁移 | mock idb |
-| LocalServer | `server/index.js` | range request / 错误码 | 起真实 server，用 `node:http` 测 |
+| cloud_api.py | `server/cloud_api.py` (8787) | /api/sync + /api/lyric 路由 | `server/test_cloud.py` pytest |
+| Windows LocalServer | `clients/windows/GreenRhino/LocalServer.cs` (8800) | Range request / HEVC 转码触发 | 起真实 .NET server 测 |
+| Android MediaHttpServer | `clients/android-player/.../MediaHttpServer.kt` (40363) | /list /tv /screen.mjpg | 起真实 server + curl |
 | build-web | `scripts/build-web.mjs` | ROLES 输出结构 | 临时目录跑，断言 JSON |
 
 ## SW cache 测试矩阵（2026-09-13 修复后固化）

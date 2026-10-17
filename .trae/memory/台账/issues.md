@@ -5,35 +5,26 @@
 > 严重度：P0(阻断) / P1(高) / P2(中) / P3(低)
 > 同标签 ≥2 条 → 归「🔶 问题群」；≥3 条 + 已沉淀预防 → 移 `archive/issues-closed-*.md`
 > **关单规则**：根因级修复 + 预防机制生效 → ✅ 归档
-> 最后更新：2026-10-17（瘦身至 2 条活跃）
+> 最后更新：2026-10-18（活跃坑清零 ✅）
 
 ---
 
 ## 活跃坑
 
-### ISS-20260904-001 wwwroot.zip 不重生成导致内嵌旧前端
-
-- **严重度**：P0
-- **现象**：改了 web 源码但 exe 跑的还是旧前端
-- **根因**：`wwwroot.zip` 是 csproj 内嵌资源，必须手动重生成
-- **解决**：`node clients/copy-web.mjs` 同步 + 重压 zip
-- **关联文件**：`clients/copy-web.mjs`、`clients/windows/GreenRhino/wwwroot.zip`
-- **预防**：⏳ 待自动化 — copy-web.mjs 已自动重压；但仍依赖人工记得跑
-- **归类标签**：`#build-cache` `#dotnet-publish`
-
-### ISS-20261017-008 Gradle 8.11.1 下载超时（网络依赖）
-
-- **严重度**：P3
-- **现象**：gradlew 自动下载卡死（130MB 只下了 100MB）
-- **根因**：services.gradle.org 从本环境下载慢
-- **解决**：手动 `curl.exe -L -o gradle-8.11.1-bin.zip` 放 `~/.gradle/wrapper/dists/gradle-8.11.1-bin/<hash>/`
-- **关联文件**：gradle-wrapper.properties
-- **预防**：⏳ 可把 gradle zip 作为项目资产预打包
-- **归类标签**：`#network` `#gradle`
+**✅ 0 条活跃，全部关单（2026-10-18 验证）**
 
 ---
 
-## 最近关单（2026-10-17，详见 archive/issues-closed-20261017.md）
+## 最近关单（2026-10-18，详见 archive/issues-closed-20261017.md）
+
+**2026-10-18 清零的最后 2 条**：
+
+| 编号 | 标题 | 严重度 | 归哪了 |
+|---|---|---|---|
+| ✅ ISS-20260904-001 | wwwroot.zip 不重生成 | P0 | copy-web.mjs 第 77-85 行已自动重压（预防落地） |
+| ✅ ISS-20261017-017 | Gradle 8.11.1 下载超时 | P3 | AGENTS.md 铁律 #9 已固化规避（纯 ASCII 路径 + 手动放置 zip） |
+
+**2026-10-17 归档的 10 条**（见 archive）：
 
 | 编号 | 标题 | 严重度 | 归哪了 |
 |---|---|---|---|
@@ -48,7 +39,7 @@
 | ✅ ISS-20260910-001 | 版本号五落点不同步 | P1 | bump-version + preflight 18 项 |
 | ✅ ISS-20260908-001 | SW CORE 漏 cast.js/id3.js | P1 | sw.js CORE 补齐 |
 
-**共归档 20+ 条 → 新 AI 只扫活跃 2 条即可**
+**总计 12 条活跃坑全部关单 → 0 条活跃 ✅**
 
 ---
 

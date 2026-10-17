@@ -97,13 +97,45 @@
 ## DEC-20261017-002 发布前自动化：preflight + bump
 
 - **日期**：2026-10-17
-- **决策**：新建 `scripts/preflight.mjs`（14 项检查）+ `scripts/bump-version.mjs`（一键改版本）
+- **决策**：新建 `scripts/preflight.mjs`（14 项检查 → 后升级为 18 项）+ `scripts/bump-version.mjs`（一键改版本）
 - **原因**：手工核对 AGENTS.md 发布检查清单（9 项）易漏；版本号三落点（APP_VERSION + 双 cache 桶 + .iss）手工同步易错
 - **备选方案**：靠人工 review（被否决，历史上曾因此出 v14→v15 漏更新）
 - **落地效果**：preflight 覆盖 sw 占位符、cache 隔离、版本三落点、Android 同步、manifest 主题色、assetlinks 包名、ffmpeg 存在、clients/node_modules 嵌套、release 产物完整性
 - **关联文件**：`scripts/preflight.mjs`、`scripts/bump-version.mjs`、`scripts/build-web.mjs`
 - **相关坑**：ISS-20260910-001（版本号三落点）、ISS-20261017-003（clients/node_modules 嵌套）
 - **CI 接入**：`.github/workflows/ci.yml` 已把 preflight 作为必跑项
+
+---
+
+## DEC-20261017-003 设定体系升级：AGENTS 瘦身 + 进程跟踪 + 漂移修复
+
+- **日期**：2026-10-17
+- **决策**：一次完成 AGENTS.md 重构 + 台账系统升级 + 代码小稳修复
+  - AGENTS.md：删底部重复技术栈/Android 铁律代码块，合并速查表；新增铁律 #10（build-assets.mjs 位置）+ #11（角色隔离）
+  - 台账：加进程跟踪机制（任务编号 + 动作清单 + 完成进度），写进 AGENTS.md 台账系统章节
+  - 漂移修复：preflight 注释同步、context.md 铁律数量对齐、补 `.session-memory.md`、修 build-assets.mjs 路径声明
+  - 代码修复：library.js refresh 加 debounce 150ms、main.js/music.js promise 链加 catch
+- **原因**：落地台账后发现多处设定漂移；AGENTS.md 有重复段落增加上下文负担
+- **备选方案**：先只修代码不动设定（被否决，设定漂移是根因级问题）；只改 AGENTS.md 不碰代码（被否决，ISS-013/014 是实锤 bug）
+- **落地效果**：preflight 18/18 绿、单元测试 6/6 绿、零回归
+- **关联文件**：`AGENTS.md`、`scripts/preflight.mjs`、`.trae/memory/台账/*`、`src/ui/library.js`、`src/main.js`、`src/ui/music.js`
+- **相关坑**：ISS-20261017-010/011/012/013/014/015
+
+---
+
+## DEC-20261017-004 Android player 壳投屏同步（DlnaCaster + MediaHttpServer）
+
+- **日期**：2026-10-17
+- **决策**：把 music 壳已验证的 DLNA 投屏代码完整同步到 player 壳（2 新文件 + MainActivity 大改）
+- **原因**：music 壳投屏 2026-10-13 真机 curl 验证通过，但 player 壳（同源码、同前端 UI）完全没投屏代码——Cast 按钮点了会报错"投屏需在原生客户端中使用"
+- **备选方案**：只加前端 UI 不做后端（被否决，前端已有 UI）；只做 SSDP 发现不做 SOAP（被否决，无意义）
+- **改动**：
+  - 复制 `DlnaCaster.kt`（242 行）+ `MediaHttpServer.kt`（236 行）到 `com.greenrhino.player` 包，改 package 声明
+  - player MainActivity：+dlnaCaster/rhinoBridge 成员变量 + MediaHttpServer start/stop + RhinoBridge 5 个 cast 方法（castScan/Play/Stop/Pause/Mirror）+ JSON import
+  - player AndroidManifest：加 ACCESS_WIFI_STATE + CHANGE_WIFI_MULTICAST_STATE 两条权限
+- **落地效果**：player APK assembleDebug BUILD SUCCESSFUL，preflight 18/18 + 单元 6/6 零回归
+- **关联文件**：`clients/android-player/.../MainActivity.kt`、`DlnaCaster.kt`、`MediaHttpServer.kt`、`AndroidManifest.xml`
+- **相关坑**：ISS-20261012-011（MulticastLock）、ISS-20261012-008（com.sun 不存在）
 
 ---
 
@@ -117,37 +149,9 @@
   - `store.js DEFAULT_SETTINGS` 加 `autoNext: false` + `exportSyncData` settings 加字段
   - `player.js` 启动从 settings 读 `player.autoNext` + `_advance(auto)` 检查开关（关时 auto 触发的 advance → 直接 pause + emit('ended')，手动 prev/next 不受影响）
   - `settings.js` UI 加 seg 开关「自动/播完停」
-- **落地效果**：preflight 14/14 + 单元 6/6 零回归；老用户升级后因 DB settings 里没有 autoNext 字段，DEFAULT_SETTINGS 的合并逻辑自动给 false → 默认播完停
+- **落地效果**：preflight 18/18 + 单元 6/6 零回归；老用户升级后因 DB settings 里没有 autoNext 字段，DEFAULT_SETTINGS 的合并逻辑自动给 false → 默认播完停
 - **关联文件**：`src/store.js`、`src/player.js`、`src/ui/settings.js`
 - **相关坑**：无
-
-## DEC-20261017-004 Android player 壳投屏同步（DlnaCaster + MediaHttpServer）
-
-- **日期**：2026-10-17
-- **决策**：把 music 壳已验证的 DLNA 投屏代码完整同步到 player 壳（2 新文件 + MainActivity 大改）
-- **原因**：music 壳投屏 2026-10-13 真机 curl 验证通过，但 player 壳（同源码、同前端 UI）完全没投屏代码——Cast 按钮点了会报错"投屏需在原生客户端中使用"
-- **备选方案**：只加前端 UI 不做后端（被否决，前端已有 UI）；只做 SSDP 发现不做 SOAP（被否决，无意义）
-- **改动**：
-  - 复制 `DlnaCaster.kt`（242 行）+ `MediaHttpServer.kt`（236 行）到 `com.greenrhino.player` 包，改 package 声明
-  - player MainActivity：+dlnaCaster/rhinoBridge 成员变量 + MediaHttpServer start/stop + RhinoBridge 5 个 cast 方法（castScan/Play/Stop/Pause/Mirror）+ JSON import
-  - player AndroidManifest：加 ACCESS_WIFI_STATE + CHANGE_WIFI_MULTICAST_STATE 两条权限
-- **落地效果**：player APK assembleDebug BUILD SUCCESSFUL，preflight 14/14 + 单元 6/6 零回归
-- **关联文件**：`clients/android-player/.../MainActivity.kt`、`DlnaCaster.kt`、`MediaHttpServer.kt`、`AndroidManifest.xml`
-- **相关坑**：ISS-20261012-011（MulticastLock）、ISS-20261012-008（com.sun 不存在）
-
-## DEC-20261017-003 设定体系升级：AGENTS 瘦身 + 进程跟踪 + 漂移修复
-
-- **日期**：2026-10-17
-- **决策**：一次完成 AGENTS.md 重构 + 台账系统升级 + 代码小稳修复
-  - AGENTS.md：266→255 行，删底部重复技术栈/Android 铁律代码块，合并速查表；新增铁律 #10（build-assets.mjs 位置）
-  - 台账：加进程跟踪机制（任务编号 + 动作清单 + 完成进度），写进 AGENTS.md 台账系统章节
-  - 漂移修复：preflight 注释 10→14、context.md 铁律 23→10、补 `.session-memory.md`、修 build-assets.mjs 路径声明
-  - 代码修复：library.js refresh 加 debounce 150ms（ISS-20261017-010/013）、main.js/music.js promise 链加 catch（ISS-20261017-014）
-- **原因**：上一轮（2026-10-17 上午）落地台账后发现多处设定漂移；AGENTS.md 有重复段落增加上下文负担
-- **备选方案**：先只修代码不动设定（被否决，设定漂移是根因级问题）；只改 AGENTS.md 不碰代码（被否决，ISS-013/014 是实锤 bug）
-- **落地效果**：preflight 14/14 绿、单元测试 6/6 绿、零回归
-- **关联文件**：`AGENTS.md`、`scripts/preflight.mjs`、`.trae/memory/台账/*`、`src/ui/library.js`、`src/main.js`、`src/ui/music.js`
-- **相关坑**：ISS-20261017-010/011/012/013/014/015
 
 ---
 

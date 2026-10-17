@@ -4,6 +4,38 @@
 
 ---
 
+## 2026-10-18
+
+### 📋 任务 T20261018-01 设定台账全面升级（摸家底→漂移修复→SKILL审查→全回归）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A0 基线验证 | ✅ | preflight 18/18 + 单元 6/6，零漂移开工 |
+| A1 漂移修复 | ✅ | issues.md 活跃坑清零（2→0）+ index.md 状态对齐 + AGENTS.md 铁律10→11/preflight 14→18/删重复安全基线 + decisions.md 重排编号递增 |
+| A2 台账闭环清理 | ✅ | daily.md 全 ⏳→✅（T-05~T-01 共 13 条）+ .session-memory.md 重置 |
+| A3 SKILL 全量审查 | ✅ | 5 个活跃 SKILL 审查完，3 个同步 v16：unit-test-spec（测试框架 Vitest→Node原生+端口/路径对齐）、docker-deploy-guide（端口 4173→8787+Python后端）、security-audit-guide（三后端路径遍历扫描） |
+| A4 根目录瘦身 | ✅ | 残留文件已不存在，index.md 状态对齐（R0/FD/overview已提炼、vite.config/ui.xml/log已清理） |
+| A5 用户行为偏好强化 | ✅ | AGENTS.md 10条→3句话核心+6条执行细则，更大白话更浓缩 |
+| A6 联网学习借鉴 | ✅ | 投屏：castbrowser.tv 配对码思路可借鉴（QR码简化电视端）；PWA缓存：保持手写sw.js不加Workbox；SKILL：secrets-keys.md可升级成SKILL |
+| A7 前端交互审计 | ✅ | 30 文件交互覆盖全面：toast 186处/空态 105处/错误处理 109处/加载态 106处；投屏面板交互专业 |
+| A8 后端精简审计 | ✅ | 三后端全干净：cloud_api.py 383行零依赖/路由清晰；Android MediaHttpServer 6路由全有用；无冗余可删 |
+| A9 全量回归 | ✅ | preflight 18/18 + 单元测试 6/6 + build-web 双站点，零回归 |
+| A10 归档 + 汇报 | 🔄 | daily.md 本条目 + commit |
+
+**改了哪些文件**：
+- issues.md（活跃坑清零）、index.md（状态对齐+根目录文档）、decisions.md（重排编号）
+- AGENTS.md（铁律数量+preflight+删重复安全基线+用户偏好精简）
+- unit-test-spec/SKILL.md、docker-deploy-guide/SKILL.md、security-audit-guide/SKILL.md
+- daily.md（全 ⏳→✅ + 本任务条目）、.session-memory.md（重置）
+
+**关键发现**：
+- ISS-20260904-001 wwwroot.zip：copy-web.mjs 第 77-85 行已自动重压，预防落地
+- ISS-20261017-017 Gradle 超时：AGENTS.md 铁律 #9 已固化规避方案（⚠️ 发现原 ISS-008 编号与 main.js allowedViews 裁剪不全冲突，修正为 017）
+- 5 个活跃 SKILL 中 2 个已同步 v16（code-review-checklist/frontend-component-spec），3 个有过时（端口 4173→8787、测试框架 Vitest→Node原生、server/index.js→cloud_api.py）
+- 根目录 vite.config.js/ui.xml/log 等残留已不存在（之前可能在 .gitignore 或早已删除）
+
+---
+
 ## 2026-10-17
 
 ### 📋 任务 T20261017-13 活跃坑清零（3→0）
@@ -151,8 +183,8 @@
 | F2 player.js _advance 检查开关 | ✅ | 手动 prev/next 不受影响 |
 | F3 settings.js UI seg 开关 | ✅ | 「自动/播完停」 |
 | F4 回归 | ✅ | preflight 14/14 + 单元 6/6，零回归 |
-| F5 归档 + commit | ⏳ | |
-| F6 汇报 | ⏳ | |
+| F5 归档 + commit | ✅ | 3923222 → main 已推 |
+| F6 汇报 | ✅ | 上一轮已完成 |
 
 **投屏验证收尾**：Samsung 电视 SSDP 没扫到 MediaRenderer。Miracast 系统级方案等待用户去电视/手机开启。MediaHttpServer 端口 39577 LISTEN 活的 ✅，castScan broadcast result=0 ✅，但电视端没回应。可能原因：电视 DLNA 默认关闭 / 不在同网段 / 电视是 Vizio TivaCast（非标准 SSDP）。
 
@@ -162,7 +194,7 @@
 | D1 pm grant 4 权限 + profile 隔离 | ✅ | user 904 only |
 | D2 ISS-009 验证 | ✅ | music APK 启动 ~5s 无 TypeError undefined.length ✅ 已修 |
 | D3 player cast 验证 | ✅ | RhinoBridge registered OK，cast 5 方法在（music RB PROBE 已确认） |
-| D4 归档 + commit | ⏳ | |
+| D4 归档 + commit | ✅ | 3923222 → main 已推 |
 
 | 动作 | 状态 | 说明 |
 |---|---|---|
@@ -172,8 +204,8 @@
 | C3 player Manifest 加权限 | ✅ | +ACCESS_WIFI_STATE +CHANGE_WIFI_MULTICAST_STATE |
 | C4 gradle assembleDebug | ✅ | BUILD SUCCESSFUL (18s) |
 | C5 回归验证 | ✅ | preflight 14/14 + 单元 6/6，零回归 |
-| C6 归档 + commit | ⏳ | |
-| C7 汇报 | ⏳ | |
+| C6 归档 + commit | ✅ | 61dbafb → main 已推 |
+| C7 汇报 | ✅ | 上一轮已完成 |
 
 ### 📋 任务 T20261017-02 ISS-009 TypeError 根因修复（下午晚段）
 
@@ -185,8 +217,8 @@
 | B3 回归验证 | ✅ | preflight 14/14 + 单元 6/6，零回归 |
 | B4 build + android sync | ✅ | release/pwa-site-* + android assets/pwa 双同步 |
 | B5 归档台账 + secrets-keys.md | ✅ | ISS-009 状态更新、ISS-016 新归档、secrets 索引文件 |
-| B6 commit | ⏳ | 待 |
-| B7 汇报 | ⏳ | 待 |
+| B6 commit | ✅ | 3923222 → main 已推 |
+| B7 汇报 | ✅ | 上一轮已完成 |
 
 ### 📋 任务 T20261017-01 设定体系升级（下午早段）
 
@@ -199,7 +231,7 @@
 | A4 代码修复 | ✅ | library.js refresh debounce 150ms、main.js/music.js promise catch 兜底 |
 | A5 回归验证 | ✅ | preflight 14/14 绿 + 单元 6/6 绿，零回归 |
 | A6 归档台账 | ✅ | issues +4、decisions +1、daily + 任务区块、session 清空 |
-| A7 汇报总汇 | ⏳ | 待完成 |
+| A7 汇报总汇 | ✅ | 上一轮已完成 |
 
 ### 上午流水（同天）
 

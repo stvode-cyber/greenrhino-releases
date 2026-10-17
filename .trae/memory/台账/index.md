@@ -25,7 +25,7 @@
 - `utils.js` — parseChapters / EQ_FREQS / EQ_PRESETS / guessMime / _extOf / _bufToB64 / MIME_BY_EXT
 
 ### src/store.js（IndexedDB 持久化 + 事件总线）
-- **坑**：ISS-20261017-009（三 getter 缺 || []）、ISS-20261017-016（同根因拆分）、#indexeddb 问题群
+- **坑**：✅ ISS-20261017-009（三 getter 缺 || [] 已补）、✅ ISS-20261017-016（同根因拆分已关）、#indexeddb 问题群
 - **修复**：2026-10-17 三个 getter 统一加 `|| []` 兜底
 
 ### src/style.css（8 行 · 原 1481，B 层 @import 拆三层）
@@ -82,9 +82,9 @@
   - ISS-20261017-007（SDK 路径漂移，已修）
   - ISS-20261012-008（com.sun 不存在，MediaHttpServer 纯 ServerSocket 绕过）
   - ISS-20261012-011（SSDP 多播 MulticastLock）
-  - ISS-20261017-008（Gradle 下载超时）
-  - **ISS-20261017-009**（P2 music APK TypeError undefined.length，待挖）
-  - **ISS-20261017-010**（P3 player APK refresh 密集 7 次，待加 debounce）
+  - ✅ ISS-20261017-017（Gradle 下载超时，已固化到铁律 #9）
+  - ✅ ISS-20261017-009（music APK TypeError undefined.length，已补 \|\| []）
+  - ✅ ISS-20261017-010（player APK refresh 密集 7 次，已加 debounce）
   - **ISS-20261017-011**（✅ ResolverActivity tap 610 2251 已验证）
 - **Moto XT2401 真机实测**：✅ music APK 633 首 + player APK 15 视频 全加载 ✅
 - **构建铁律**：必须复制到 `C:\greenrhino-build\`（ASCII 路径）再跑 gradlew
@@ -145,14 +145,14 @@
 | HANDOVER.md | 📦 已提炼进台账 | archive/ |
 | HANDOFF.md | 📦 已提炼进台账 | archive/ |
 | 交接总结.md | 📦 已提炼进台账 | archive/ |
-| R0.md | 📦 待提炼 | archive/ |
-| FD.md | 📦 待提炼 | archive/ |
-| overview.md | 📦 待提炼 | archive/ |
+| R0.md | 📦 已提炼进台账 | archive/ |
+| FD.md | 📦 已提炼进台账 | archive/ |
+| overview.md | 📦 已提炼进台账 | archive/ |
 | HELP.md | ✅ 保留（用户说明） | 根目录 |
 | UI-design.md | ✅ 保留（设计稿） | 根目录 |
-| vite.config.js | ❌ 删除（零构建残留） | - |
-| ui.xml / ui2.xml | ❌ 删除（调试残留） | - |
-| .push.log / install.log | ❌ 删除 | - |
+| ~~vite.config.js~~ | ✅ 已清理（零构建残留） | - |
+| ~~ui.xml / ui2.xml~~ | ✅ 已清理（调试残留） | - |
+| ~~.push.log / install.log~~ | ✅ 已清理（日志残留） | - |
 
 ---
 

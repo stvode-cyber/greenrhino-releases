@@ -5,31 +5,30 @@ AI 员工需要容器化部署 LocalServer 或 PWA 静态站点时加载。提�
 
 ---
 
-## 场景一：LocalServer 容器化
+## 场景一：cloud_api.py 容器化（8787 端口）
 
 ### Dockerfile
 ```dockerfile
-FROM node:22-alpine
+FROM python:3.12-alpine
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
 COPY server/ ./server/
-COPY scripts ./scripts/
-EXPOSE 4173
-USER node
-CMD ["node", "server/index.js"]
+COPY requirements.txt ./ || true  # 如果有 requirements.txt
+EXPOSE 8787
+USER python
+CMD ["python", "server/cloud_api.py"]
 ```
 
 ### 运行
 ```bash
-docker build -t greenrhino-server .
-docker run --rm -p 4173:4173 -v ~/Music:/media greenrhino-server
+docker build -t greenrhino-cloud .
+docker run --rm -p 8787:8787 greenrhino-cloud
 ```
 
 ### 关键注意事项
-- **不要 COPY src/**：LocalServer 只需要 server/ + scripts/，前端由 Cloudflare Pages 或 Windows WebView2 提供
-- **媒体目录 volume mount**：不要 COPY 媒体文件进镜像，用 `-v ~/Music:/media`
-- **非 root 用户**：`USER node`，LocalServer 不需要特权端口
+- **不要 COPY src/**：cloud_api.py 只需要 server/，前端由 Cloudflare Pages 提供
+- **Python 依赖**：cloud_api.py 用了 Flask/requests，`pip install -r server/requirements.txt`（如果有）
+- **非 root 用户**：`USER python`，Flask 不需要特权端口
+- **这是 Python 后端，不是 LocalServer**：.NET LocalServer 在 Windows 壳里，不独立部署
 
 ---
 
@@ -98,13 +97,14 @@ services:
 
 ---
 
-## 避坑清单
+## 避坑清单（v16 同步）
 
 1. **不要把 release/ 里的旧产物 COPY 进镜像**：build 是 Dockerfile 中间阶段
 2. **不要 COPY .env / .secrets.env**：用 docker secrets 或 env 文件 mount
-3. **nginx 版本号**：PWA 需要 `try_files $uri $uri/ /index.html`（SPA 回退）
-4. **LocalServer 端口**：默认 4173，改了需要同步 Cloudflare Tunnel 和 assetlinks.json
-5. **ARM 兼容**：Apple Silicon Mac 上跑 `node:22-alpine` 原生；如果部署到树莓派用 `node:22-alpine3.20`
+3. **nginx SPA 回退**：PWA 需要 `try_files $uri $uri/ /index.html`
+4. **cloud_api.py 端口**：默认 8787，改了需要同步 Cloudflare Tunnel 和 AGENTS.md
+5. **三种服务端口别混**：Python cloud_api=8787 / .NET LocalServer=8800 / Android MediaHttpServer=40363
+6. **ARM 兼容**：Apple Silicon Mac 上跑 `python:3.12-alpine` 原生
 
 ## 不需要 Docker 的场景
 - Cloudflare Pages 部署 PWA

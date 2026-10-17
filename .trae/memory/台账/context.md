@@ -1,7 +1,7 @@
 # 项目驾驶舱 · 绿角犀（GreenRhino）
 
 > **TL;DR**：新 AI 进门 30 秒上手。每次任务前必读。
-> 最后更新：2026-10-17
+> 最后更新：2026-10-18（T20261018-01 设定台账全面升级完成）
 
 ---
 
@@ -77,17 +77,17 @@ cd C:\greenrhino-build\android-player
 
 | Commit | 内容 |
 |---|---|
+| （待提交） | `chore: T20261018-01 设定台账全面升级——漂移修复+SKILL同步v16+台账闭环` |
 | 3923222 | `feat: 前端 UI 加 MJPEG 屏幕镜像按钮（投屏面板三选项全齐）` |
 | 2b9cb77 | `feat: 屏幕镜像 MJPEG /screen.mjpg — MediaProjection 抓屏` |
 | 61dbafb | `feat: MediaHttpServer TV browser + BootReceiver + 双壳全量 sync` |
 | 1124423 | `feat: autoNext 设置 — 播放完默认停（DEC-005）` |
-| 94401b5 | `docs(ledger): 修 DEC-003/004 header + context 更新` |
 
 ---
 
 ## 🚨 活跃坑清单（新 AI 必看）
 
-> 全部 21 条历史 ISS 已关单 ✅！详见 [issues.md](./issues.md)
+> ✅ **0 条活跃**，全部关单。详见 [issues.md](./issues.md)
 
 ---
 
