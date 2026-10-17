@@ -6,12 +6,19 @@
 
 ## 2026-10-17
 
-- 09:38 启动台账落地任务：诊断 AGENTS.md 声明 vs 实际差距（发现 P0：台账目录不存在 + CI 不存在）
-- 09:39 创建 `.trae/memory/台账/` 目录结构 + `docs/screenshots/`
-- 09:40 摸家底：64 张 PNG、3 份 HANDOVER/HANDOFF/交接总结、vite.config.js 残留、clients/node_modules 嵌套
-- 09:45 建立台账 6 文件骨架：context.md / decisions.md / issues.md / index.md / daily.md
-- 09:50 提炼 HANDOVER + HANDOFF + 交接总结 + CHANGELOG 关键知识进台账
-- 待做：归档 64 张 PNG / 删 vite.config.js / 删 clients/node_modules / 建 CI
+- 上午 build-web.mjs + preflight.mjs + bump-version.mjs 三脚本落地 + CI.yml 建立 + AGENTS.md 同步
+- 上午 Android 构建：ASCII 路径 workaround（ISS-20261017-006）+ SDK 路径修复（ISS-20261017-007）+ Gradle 手动 curl（ISS-20261017-008）→ 双 APK BUILD SUCCESSFUL
+- 上午 21 commits 全部推 origin/main `stvode-cyber/greenrhino-releases`
+- 下午 AGENTS.md 瘦身 208→266 行 + 新增用户行为偏好 5 条 + 常用命令表 + Android/Moto 铁律速查块
+- **10:20 Moto XT2401 USB 连接 真机回归启动**
+- 10:21 music APK `adb install -r` Success + pm grant 4 权限
+- 10:22 ResolverActivity tap 610 2251 ✅ 绕过，PID 28596 进
+- 10:23 music logcat 全量：633 首歌 ✅ UI 就绪 ✅，发现 TypeError undefined.length（ISS-20261017-009 非致命）
+- 10:29 player APK `adb install -r` 重启 ResolverActivity tap
+- 10:30 player logcat 全量：15 视频 ✅ UI 就绪 ✅，零 TypeError，refresh 密集 7 次（ISS-20261017-010）
+- 10:30 **真机回归全绿** ✅ ISS-20261017-011 ResolverActivity 坐标固化（1220×2712 屏 center=610,2251）
+- 新增 3 坑 ISS-20261017-009/010/011 → issues.md + index.md
+- **阻塞**：Q5 fuse tab — 本仓库全 0 命中，需用户指路路径
 
 ---
 

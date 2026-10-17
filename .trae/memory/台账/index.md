@@ -65,14 +65,16 @@
 - **坑**：
   - ISS-20260914-001（index.html 绝对路径）
   - ISS-20260914-002（webkitdirectory 不支持）
-  - ISS-20261017-002（Moto adb logcat -c）
+  - ISS-20261017-002（Moto adb logcat -c，已验证）
   - ISS-20261017-006（✅ Android 构建 ASCII 路径铁律）
-  - ISS-20261017-007（SDK 路径漂移）
+  - ISS-20261017-007（SDK 路径漂移，已修）
   - ISS-20261017-008（Gradle 下载超时）
-- **关键文件**：
-  - `app/src/main/java/com/greenrhino/{music,player}/MainActivity.kt`
-  - `app/src/main/assets/pwa/index.html`（从 release 拷来后必须重改绝对路径）
+  - **ISS-20261017-009**（P2 music APK TypeError undefined.length，待挖）
+  - **ISS-20261017-010**（P3 player APK refresh 密集 7 次，待加 debounce）
+  - **ISS-20261017-011**（✅ ResolverActivity tap 610 2251 已验证）
+- **Moto XT2401 真机实测**：✅ music APK 633 首 + player APK 15 视频 全加载 ✅
 - **构建铁律**：必须复制到 `C:\greenrhino-build\`（ASCII 路径）再跑 gradlew
+- **tap 铁律**：Moto 1220×2712 屏 ResolverActivity 第一项 center = (610, 2251)，已双 APK 验证有效
 
 ### clients/windows/（.NET 8 WebView2）
 - **决策**：DEC-20260904-001（GPU 软件渲染）、DEC-20260903-001（ffmpeg 转码）

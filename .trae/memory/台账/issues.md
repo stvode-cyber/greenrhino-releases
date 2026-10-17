@@ -188,6 +188,39 @@
 - **预防**：⏳ 可把 gradle zip 作为项目资产预打包
 - **归类标签**：`#network` `#gradle-directory`
 
+### ISS-20261017-009 music APK 启动时 TypeError: undefined.length（非致命）
+
+- **严重度**：P2
+- **机型**：Moto XT2401 (ZY22KJLPHK) · Android 14
+- **现象**：music APK 启动 ~1.5s 后，logcat 出现 `E GreenRhino/JS: [105] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'length')`
+- **根因**：待挖 — WebView 行号映射 `[105]` 不是源码行号，是编译后的 bundle 行号。player APK（同源码）没有这个错，说明是 music 角色独有的代码分支
+- **影响**：**非致命**。633 首歌正常加载、RhinoBridge 正常注册、UI 显示「已就绪」正常。是某个异步回调里没 catch 到
+- **关联文件**：`src/main.js`（music 独有分支）、build-web.mjs 重写绝对路径
+- **预防**：⏳ 需要 `adb logcat --pid=$pid *:E` 抓完整 JS 堆栈，看具体哪个 async 函数
+- **归类标签**：`#android-webview` `#js-runtime` `#role-specific`
+
+### ISS-20261017-010 player APK library.js refresh 密集被调用 7 次
+
+- **严重度**：P3
+- **机型**：Moto XT2401
+- **现象**：player APK 启动 ~3 秒内 `[gr-lib] refresh: all=15 typeCounts={"video":15}` 连续打印 7 次，而非正常 1 次
+- **根因**：待查 — library.js 有多个 refresh() 调用点（line 183/207/213/282/299/313），可能有事件循环循环触发（mutation observer/事件监听）
+- **影响**：轻微。15 个视频去重后正常显示。但可能导致性能浪费
+- **关联文件**：`src/ui/library.js` refresh() 函数 + 调用点
+- **预防**：⏳ 给 refresh() 加 debounce（已有 refreshGen 并发守卫，可能还不够）
+- **归类标签**：`#android-webview` `#event-loop` `#performance`
+
+### ISS-20261017-011 实测：610 2251 是 Moto ResolverActivity 第一项 center ✅
+
+- **严重度**：P0（**规则固化**）
+- **机型**：Moto XT2401 1220×2712 分辨率
+- **现象**：`adb shell input tap 610 2251` 能成功点中 ResolverActivity 第一项
+- **根因**：Moto 主屏分辨率 1220×2712（竖屏），ResolverActivity 弹窗居中显示，第一项 center 约在 (610, 2251)
+- **解决**：已验证有效，固化为 AGENTS.md 铁律 #8
+- **预防**：⚠️ 如果 Moto 后续升级 ResolverActivity UI 布局可能变。但当前可靠
+- **归类标签**：`#android-webview` `#adb` `#device-specific`
+- **验证结果**：✅ music APK + player APK 均成功通过 tap 绕过 ResolverActivity
+
 ---
 
 ## 模板（新坑复制此块）
