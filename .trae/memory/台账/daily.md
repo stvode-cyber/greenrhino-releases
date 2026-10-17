@@ -6,6 +6,19 @@
 
 ## 2026-10-17
 
+### 📋 任务 T20261017-03 投屏功能推动 · player 壳同步（傍晚）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| C0 基线 | ✅ | preflight 14/14 + 单元 6/6 |
+| C1 复制 DlnaCaster + MediaHttpServer 改 package | ✅ | music→player 2 文件 |
+| C2 player MainActivity 加 cast | ✅ | dlnaCaster/rhinoBridge 成员 + start/stop + 5 cast 方法 |
+| C3 player Manifest 加权限 | ✅ | +ACCESS_WIFI_STATE +CHANGE_WIFI_MULTICAST_STATE |
+| C4 gradle assembleDebug | ✅ | BUILD SUCCESSFUL (18s) |
+| C5 回归验证 | ✅ | preflight 14/14 + 单元 6/6，零回归 |
+| C6 归档 + commit | ⏳ | |
+| C7 汇报 | ⏳ | |
+
 ### 📋 任务 T20261017-02 ISS-009 TypeError 根因修复（下午晚段）
 
 | 动作 | 状态 | 说明 |

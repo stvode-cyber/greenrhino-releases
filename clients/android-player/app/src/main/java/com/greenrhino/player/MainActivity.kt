@@ -25,6 +25,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 绿角犀播放器 · Android WebView 壳（路线 A）
@@ -42,6 +43,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var container: FrameLayout
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var immersive = false  // 🔶 初始非沉浸式（toggle 切换：false→true=进入全屏）
+
+    // 🔶 DLNA 投屏：与 music 壳对齐
+    private val dlnaCaster = DlnaCaster()
+    private val rhinoBridge = RhinoBridge()
 
     // 🔶 ISS-20261009-009：现代 ActivityResultLauncher 处理 WebView 文件选择（支持多选）
     private val fileChooserLauncher = registerForActivityResult(
@@ -202,6 +207,9 @@ class MainActivity : ComponentActivity() {
         webView.clearHistory()
         android.util.Log.d("GreenRhino", "Loading index.html (cache cleared)")
         webView.loadUrl("file:///android_asset/pwa/index.html")
+
+        // 🔶 预启动 MediaHttpServer（content:// → HTTP 代理），让 DLNA 电视能拉到局域网流
+        MediaHttpServer.start(this)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -222,10 +230,10 @@ class MainActivity : ComponentActivity() {
             cacheMode = WebSettings.LOAD_NO_CACHE  // 🔶 调试期：禁缓存，每次从 assets 重读
         }
 
-        // 🔶 JS Bridge：让 JS 能调 Android 原生功能（全屏、日志）
-        // ⚠️ 必须用 inner class！匿名 object 上的 @JavascriptInterface 在 targetSdk 34+ 某些设备不生效
-        webView.addJavascriptInterface(RhinoBridge(), "RhinoBridge")
-        android.util.Log.d("GreenRhino", "RhinoBridge registered OK")
+        // 🔶 JS Bridge：让 JS 能调 Android 原生功能（全屏、投屏、日志）
+        // ⚠️ 必须用 inner class 实例变量！匿名 object 上的 @JavascriptInterface 在 targetSdk 34+ 某些设备不生效
+        webView.addJavascriptInterface(rhinoBridge, "RhinoBridge")
+        android.util.Log.d("GreenRhino", "RhinoBridge registered OK (player)")
 
         webView.webViewClient = object : WebViewClient() {
             // 🔶 拦截 content:// URI → ContentResolver.openInputStream → WebResourceResponse
@@ -440,6 +448,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        MediaHttpServer.stop()
         webView.stopLoading()
         webView.removeAllViews()
         webView.destroy()
@@ -484,6 +493,80 @@ class MainActivity : ComponentActivity() {
                     } else null
                 } ?: "null"
             } catch (e: Exception) { "null" }
+        }
+
+        // ========== 🆕 DLNA 投屏桥接（与 music 壳对齐） ==========
+
+        @JavascriptInterface
+        fun castScan() {
+            Log.d("GreenRhino", "📺 castScan() called")
+            dlnaCaster.discover(this@MainActivity) { devices ->
+                val arr = JSONArray()
+                for (d in devices) {
+                    arr.put(JSONObject().apply {
+                        put("id", d.id)
+                        put("name", d.name)
+                        put("controlUrl", d.controlUrl)
+                    })
+                }
+                val json = arr.toString()
+                runOnUiThread {
+                    webView.evaluateJavascript(
+                        "if(window.__castCb)window.__castCb({type:'cast:devices',devices:$json})", null
+                    )
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun castPlay(deviceId: String, anyUri: String) {
+            Log.d("GreenRhino", "📺 castPlay(device=$deviceId, uri=$anyUri)")
+            if (deviceId.isBlank() || anyUri.isBlank()) return
+            val httpUri = when {
+                anyUri.startsWith("http://") || anyUri.startsWith("https://") -> anyUri
+                anyUri.startsWith("content://") -> {
+                    MediaHttpServer.start(this@MainActivity)
+                    MediaHttpServer.publicUrlFor(anyUri).also {
+                        Log.d("GreenRhino", "📺 content:// → proxy: $it")
+                    }
+                }
+                else -> { Log.w("GreenRhino", "castPlay: unsupported uri scheme: $anyUri"); return }
+            }
+            dlnaCaster.statusCallback = { state, pos, dur ->
+                runOnUiThread {
+                    val js = "if(window.__castCb)window.__castCb({type:'cast:status',state:'$state',position:'$pos',duration:'$dur',deviceId:'$deviceId'})"
+                    webView.evaluateJavascript(js, null)
+                }
+            }
+            dlnaCaster.play(deviceId, httpUri)
+        }
+
+        @JavascriptInterface
+        fun castStop(deviceId: String) {
+            Log.d("GreenRhino", "📺 castStop(device=$deviceId)")
+            dlnaCaster.stop(deviceId)
+        }
+
+        @JavascriptInterface
+        fun castPause(deviceId: String) {
+            Log.d("GreenRhino", "📺 castPause(device=$deviceId)")
+            dlnaCaster.pause(deviceId)
+        }
+
+        @JavascriptInterface
+        fun castMirror() {
+            Log.d("GreenRhino", "📺 castMirror() called")
+            dlnaCaster.mirror(this@MainActivity) { ok, msg ->
+                runOnUiThread {
+                    val js = if (ok) {
+                        "if(window.__castCb)window.__castCb({type:'cast:mirror',ok:true})"
+                    } else {
+                        val safe = msg.replace("'", "\\'")
+                        "if(window.__castCb)window.__castCb({type:'cast:mirror',ok:false,msg:'$safe'})"
+                    }
+                    webView.evaluateJavascript(js, null)
+                }
+            }
         }
     }
 }

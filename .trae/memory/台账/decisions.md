@@ -107,7 +107,19 @@
 
 ---
 
-## DEC-20261017-003 设定体系升级：AGENTS.md 瘦身 + 进程跟踪 + 漂移修复
+## DEC-20261017-004 Android player 壳投屏同步（DlnaCaster + MediaHttpServer）
+
+- **日期**：2026-10-17
+- **决策**：把 music 壳已验证的 DLNA 投屏代码完整同步到 player 壳（2 新文件 + MainActivity 大改）
+- **原因**：music 壳投屏 2026-10-13 真机 curl 验证通过，但 player 壳（同源码、同前端 UI）完全没投屏代码——Cast 按钮点了会报错"投屏需在原生客户端中使用"
+- **备选方案**：只加前端 UI 不做后端（被否决，前端已有 UI）；只做 SSDP 发现不做 SOAP（被否决，无意义）
+- **改动**：
+  - 复制 `DlnaCaster.kt`（242 行）+ `MediaHttpServer.kt`（236 行）到 `com.greenrhino.player` 包，改 package 声明
+  - player MainActivity：+dlnaCaster/rhinoBridge 成员变量 + MediaHttpServer start/stop + RhinoBridge 5 个 cast 方法（castScan/Play/Stop/Pause/Mirror）+ JSON import
+  - player AndroidManifest：加 ACCESS_WIFI_STATE + CHANGE_WIFI_MULTICAST_STATE 两条权限
+- **落地效果**：player APK assembleDebug BUILD SUCCESSFUL，preflight 14/14 + 单元 6/6 零回归
+- **关联文件**：`clients/android-player/.../MainActivity.kt`、`DlnaCaster.kt`、`MediaHttpServer.kt`、`AndroidManifest.xml`
+- **相关坑**：ISS-20261012-011（MulticastLock）、ISS-20261012-008（com.sun 不存在）
 
 - **日期**：2026-10-17
 - **决策**：一次完成 AGENTS.md 重构 + 台账系统升级 + 代码小稳修复
