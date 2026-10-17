@@ -6,6 +6,35 @@
 
 ## 2026-10-18
 
+### 📋 任务 T20261018-03 生产代码 debug 清理 + secrets-keys 升 SKILL
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| C0 基线验证 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点 |
+| C1 后端 API 审计 | ✅ | cloud_api.py 状态码全统一（200/400/401/404/500），错误响应全 {"error":"..."}，零问题 |
+| C2 前端交互深度审查 | ✅ | 发现 production 代码 46 条 console.error，30+ 条是纯 debug 日志（[mine]、[pfp]、[gr-lib]、缩略图每步打一条） |
+| C3 清理 debug 日志 | ✅ | 46→18，全保留 catch 块真实错误；删了 5 个文件的纯 debug：main.js(11)、videoThumb.js(7)、store.js(3)、library.js(3)、player.js(1) |
+| C4 secrets-keys 升 SKILL | ✅ | `.trae/skills/security-secrets-index/SKILL.md` 新建，触发条件：审计/安全扫描/发版前 |
+| C5 全量回归 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点，零回归 |
+| C6 commit + push | ✅ | 6b92b8f → GitHub main ✅ |
+
+**改了哪些文件**：
+- src/main.js（-16：删 [mine] debug + [pfp] + [gr] debug）
+- src/videoThumb.js（-18→3：删 7 条缩略图进度，保留 3 条错误）
+- src/store.js（-3：删 addMediaFiles/FromAndroid 统计）
+- src/ui/library.js（-6：删 refresh debug + typeCounts 变量）
+- src/player.js（-1：删 _urlFor debug）
+- .trae/skills/security-secrets-index/SKILL.md（+77 新建）
+
+**关键决策**：
+- 纯 debug console.error 全部删掉（不是降级成 console.debug，因为 Android Moto 可能屏蔽 debug 级别，但纯 debug 本来就不该留）
+- catch 块里的 console.error 全部保留（这些是真实错误，即使 Moto 屏蔽了 debug 级别，error 级别能漏出来）
+- cloud.js 有一段注释「Moto 屏蔽非 Error 级别」，所以那里的 _log 函数保持原样
+
+**SKILL 核心 6 → 7**（加 security-secrets-index）
+
+---
+
 ### 📋 任务 T20261018-02 投屏 QR 码入口（联网学 castbrowser.tv）
 
 | 动作 | 状态 | 说明 |
