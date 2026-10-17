@@ -87,17 +87,7 @@ cd C:\greenrhino-build\android-player
 
 ## 🚨 活跃坑清单（新 AI 必看）
 
-> 已修 18 条（✅ 关单），活跃 3 条（⚠️ 待跟进）。详见 [issues.md](./issues.md)
-
-| 编号 | 标题 | 严重度 | 状态 |
-|---|---|---|---|
-| ⚠️ ISS-20260914-001 | index.html 绝对路径 WebView（待 build-web 自动重写） | P0 | 待 B 层实现 |
-| ⚠️ ISS-20260910-001 | 版本号三落点（待 bump-version 覆盖 .iss） | P1 | 待补 .iss 字段 |
-| ⚠️ ISS-20260908-001 | SW CORE 预缓存漏模块（待自动校验脚本） | P1 | 可加 preflight |
-| ⚠️ ISS-20260914-002 | webkitdirectory WebView 不支持 | P1 | feature detection 已注 TODO |
-| ⚠️ ISS-20261017-008 | Gradle 下载超时 | P3 | 网络依赖，可预打包 |
-
-**全部已关单 16 条**：0903-001 视频黑屏、0904-001 wwwroot.zip、0913-001 SW 占位符、20261017-001/002/003/004/005/006/007/009/011/012/013/014/015/016
+> 全部 21 条历史 ISS 已关单 ✅！详见 [issues.md](./issues.md)
 
 ---
 
@@ -106,7 +96,7 @@ cd C:\greenrhino-build\android-player
 详见 [AGENTS.md](../../../AGENTS.md) 「不可变约束」章节。
 
 核心速查：
-1. **版本三落点**：APP_VERSION + cache 桶 + .iss 文件名必须同步
+1. **版本五落点**：APP_VERSION + cache 桶 + .iss + .gradle versionName/versionCode 必须同步（`npm run bump` 一键覆盖 + `npm run preflight` 18 项自动验）
 2. **SW 占位符**：`'__SW_CACHE__'` 禁止硬编码版本号
 3. **双 App cache 隔离**：music ≠ player
 4. **主题色/包名/assetlinks**：严格绑定角色
