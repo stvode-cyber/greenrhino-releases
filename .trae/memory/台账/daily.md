@@ -20,7 +20,7 @@
 | A7 前端交互审计 | ✅ | 30 文件交互覆盖全面：toast 186处/空态 105处/错误处理 109处/加载态 106处；投屏面板交互专业 |
 | A8 后端精简审计 | ✅ | 三后端全干净：cloud_api.py 383行零依赖/路由清晰；Android MediaHttpServer 6路由全有用；无冗余可删 |
 | A9 全量回归 | ✅ | preflight 18/18 + 单元测试 6/6 + build-web 双站点，零回归 |
-| A10 归档 + 汇报 | 🔄 | daily.md 本条目 + commit |
+| A10 归档 + 汇报 | ✅ | daily.md 本条目 + 3 commits 已推 main |
 
 **改了哪些文件**：
 - issues.md（活跃坑清零）、index.md（状态对齐+根目录文档）、decisions.md（重排编号）
