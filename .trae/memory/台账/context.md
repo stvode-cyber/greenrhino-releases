@@ -1,7 +1,7 @@
 # 🛩️ 绿角犀项目驾驶舱（context.md）
 
 > **新 AI 接手 → 先读本文件头部 TL;DR（30 秒版），再看底部「最近 5 条动作」**
-> 最后更新：2026-10-16（云同步 Android 端全链路打通 + Advisor 审查清理 + /api/logout 安全端点；活跃坑 ISS-013~016 入库；cloud.js _log() 守卫）
+> 最后更新：2026-10-17（DLNA Step1 Miracast mirror + Step2 GetPositionInfo SOAP 轮询；3 commit 入库；Android 15 CAST_SETTINGS + 主线程坑；换电脑交接）
 
 ---
 
@@ -10,32 +10,38 @@
 | 项 | 值 |
 |---|---|
 | 当前版本 | **APP_VERSION = 'v16'**（scripts/build-web.mjs L10） |
-| Git 状态 | ⚠️ main 分支 ahead 9（GitHub 断网未 push，本地安全） |
+| Git 状态 | ⚠️ main 分支 ahead 12（GitHub 断网未 push，本地安全） |
 | 测试状态 | ✅ 单元 6/6 + E2E 4/4 = 10/10 全绿 |
-| Android 真机 | ✅ moto XT2401_2, profile 904 专属（`pm disable-user --user 0/900-903`） |
-| RhinoBridge | ✅ **9 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / castScan / castPlay / castStop / castPause |
-| 已定规则 | ~32 条（见 AGENTS.md + DEC-20261012-001/002 新增 MediaHttpServer + Debug Receiver） |
-| 云同步后端 | ✅ **Python** server/cloud_api.py（零依赖 stdlib，8787 端口），含 /api/register + /api/login + /api/sync GET/POST + **/api/lyric** LRCLIB 代理。**已修复**：login() 不再轮换 token（多端共用账号不会互踢） |
-| 🆕 云同步 Android 端 | ✅ **2026-10-16 真机打通**：MainActivity.kt cloudBase=`http://192.168.1.132:8787` → URL ?cloud= 参数注入 → register + login + quota 5GB + syncAll pull+push+last-writer-wins 全绿 ✅ |
-| 🆕 DLNA 投屏 | ✅ **全链路真机验证通过**：content:// → MediaHttpServer → HTTP 代理 → curl 200 + Range 206 ✅ |
+| Android 真机 | ⚠️ **当前电脑无投屏配件**（Moto XT2401_2 USB 断连），换电脑前最后一次装机时间 2026-10-16 18:21 |
+| RhinoBridge | ✅ **10 方法**：toggleFullscreen / setPlaying / requestAutoImport / lookupMediaUri / getLyric / castScan / castPlay / castStop / castPause / **castMirror** 🆕 |
+| 已定规则 | ~34 条（见 AGENTS.md + ISS-017 Moto 屏蔽全级别 App 日志 + ISS-018 Android 15 CAST_SETTINGS 改名） |
+| 云同步后端 | ✅ **Python** server/cloud_api.py（零依赖 stdlib，8787 端口），token=`DJi9uYNzaTHGgtStW9u2WPtVKV-7Kvks0VTpmD3yvW0` |
+| 🆕 DLNA Step1 Miracast | ✅ **三层打通**：cast.js mirror() → RhinoBridge.castMirror() → DlnaCaster.mirror()。Android 15 实测：CAST_SETTINGS→Settings$WifiDisplaySettingsActivity result=0 ✅（adb shell 验证）。但 mirror() 需主线程（Handler.post 已修）。**等真机重连后最终验证** |
+| 🆕 DLNA Step2 状态轮询 | ✅ **GetPositionInfo SOAP 轮询实现**：DlnaCaster.kt soapWithResponse() + parsePositionInfo() + startPolling() 2.5s 间隔 + statusCallback 推前端。Banner 显示 "正在投送 → XX 电视 00:12/03:45"。**无真实 DLNA TV 环境，需写 Python mock renderer 验证** |
+| 待做 | ① 真机重连后验证 mirror 主线程修复 ② 同局域网 DLNA TV 验证 SOAP 轮询 ③ Python mock DLNA MediaRenderer 脚本 |
 
 ### 📱 Android 真机快速验证命令
 
 ```powershell
-# 看 GreenRhino 所有日志（含所有 tag）
-adb logcat -d | Select-String "greenrhino|GreenRhino" | Select-Object -Last 30
+# ⚠️ Moto 铁律：绝对不要先 adb logcat -c！清 buffer 后完全屏蔽 App 所有日志（含 Log.e）
+# ⚠️ Log.d/Log.i/Log.e 全级别被屏蔽 —— 只能靠 ActivityTaskManager 日志和 console.error (WebView)
 
-# 专门找 getLyric 调用
-adb logcat -d -s GreenRhino:D GreenRhino:E 2>&1 | Select-String "getLyric|🎤|RhinoBridge"
+# 🆕 DLNA Miracast mirror（换电脑后第一条要跑！）
+adb install -r "clients\android-music\app\build\outputs\apk\debug\app-debug.apk"
+adb shell am force-stop com.greenrhino.music
+adb shell am start -n com.greenrhino.music/.MainActivity
+adb shell am broadcast -a greenrhino.CAST_MIRROR
+# 验证 mirror() 主线程修复 — 期望看到 Settings$WifiDisplaySettingsActivity result=0
+adb logcat -d | Select-String "ActivityTaskManager.*START" | Select-Object -Last 3
 
-# 看是否还有 /api/lyric fetch 报错（应该没有！）
-adb logcat -d -s GreenRhino/JS:F 2>&1 | Select-String "/api/lyric"
-
-# 🆕 云同步：Debug BroadcastReceiver（Android 13+ 必须 RECEIVER_EXPORTED）
-adb shell am broadcast -a greenrhino.CLOUD_SYNC
+# 🆕 DLNA castScan（扫描同局域网 DLNA TV）
 adb shell am broadcast -a greenrhino.CAST_SCAN
-# 看 CLOUD_BASE + session token 是否正确
-adb logcat -d -s GreenRhino/JS:F 2>&1 | Select-String "\[cloud\]"
+Start-Sleep -Seconds 5
+# 电视响应后前端 window.__castCb 推 cast:devices
+
+# 云同步
+adb shell am broadcast -a greenrhino.CLOUD_SYNC
+adb logcat -d | Select-String "\[cloud\]" | Select-Object -Last 5
 ```
 
 ### 构建链路（改前端后 Android APK 不会自动更新 assets！）
@@ -338,17 +344,24 @@ Android Kotlin bridge cloudBase: http://192.168.1.132:8787（MainActivity.kt L10
 
 | 时间 | 动作 | 状态 |
 |---|---|---|
-| 2026-10-16 下午 | 🎉 **ISS-010 三层修复 + 真机验证**：Kotlin scanMediaStore() + .NET LocalServer + store.js `_cleanArtist()` — `getLyric(title=Acoustic Installation, artist=TK from 凛として时雨)` ✅ artist 不再是 `<unknown>`！ | ✅ 真机验证 + npm test:all 6/6 + 4/4 |
-| 2026-10-16 上午 | ✅ **云同步后端全链路验证**：test_cloud.py 9/9 + sync push/pull/last-writer-wins 409 全通 | ✅ |
-| 2026-10-16 上午 | 🔧 **LRCLIB 歌词代理字段名修复**：4 处 API 字段名变更（track_name→trackName、lrclib_id→id、syncedLyric→syncedLyrics、plainLyric→plainLyrics） | ✅ npm test:all 全绿 |
-| 2026-10-14 下午 | 🔍 **全量刷新 context.md**：活跃坑全清 + 存活状态表 + 台账过期铁律 3 次命中记录 | ✅（但遗漏了 10-16 新坑，已补） |
-| 2026-10-14 下午 | 🪟 **Windows DLNA 代理台账核实**：发现已 100% 完成 | ✅ 台账更新 |
+| 2026-10-17 | 🪪 **换电脑交接**：Git 12 commit ahead + APK 最后装机 18:21 + context.md / issues.md / daily.md / index.md 全更新 + .session-memory 清空 | ✅ 台账完整 |
+| 2026-10-16 晚 | 🐛 **ISS-018 主线程 + CAST_SETTINGS 坑**：mirror() 第一次构建后 ActivityTaskManager result=3 → 根因 @JavascriptInterface 后台线程不能 startActivity → Handler.post 包一层；同时 Android 15 SDK 35 ACTION_WIFI_DISPLAY_SETTINGS 编译期不存在 → 纯字符串 CAST_SETTINGS 实测 result=0 ✅ | ✅ debf362 入库 |
+| 2026-10-16 晚 | 🧪 **Debug Receiver 补 CAST_MIRROR + Log.e**：之前 Debug Receiver 只有 SCAN/PLAY/STOP/MEDIA_HTTP/CLOUD_SYNC — mirror() 实现后漏了注册 CAST_MIRROR；同时 Moto 屏蔽 Log.d → 入口日志全改 Log.e | ✅ 2810ea3 入库 |
+| 2026-10-16 下午 | 🎬 **DLNA Step1+Step2 实现**：①Miracast mirror() 三层打通（DlnaCaster→RhinoBridge→cast.js）②GetPositionInfo SOAP 轮询（soapWithResponse + 2.5s + statusCallback + 前端 Banner 真实进度）；踩 Kotlin break in inline lambda 实验特性坑 → while 分帧 sleep 改写 | ✅ 608a601 入库 |
+| 2026-10-16 下午 | 📱 **云同步 Android 端真机全链路**：register→login→syncAll pull+push+last-writer-wins 全绿；新增 /api/logout + _log() 守卫（Android 壳 Error 级输出） | ✅ acd4eef 入库 |
 
-### 📌 待做清单（**只剩 1 个**）
+### 📌 待做清单（**3 项**）
 
 ```
-1. SSDP castScan 真机发现 TV（MulticastLock 已加，代码已齐）
-   → 需要：Android + 同一局域网 DLNA 电视
+1. [高] mirror() 主线程修复真机验证
+   → Moto XT2401 USB 断连，重连后：adb install -r → CAST_MIRROR → 看 ActivityTaskManager START 日志
+
+2. [高] DLNA castScan → SOAP → GetPositionInfo 轮询 完整链路验证
+   → 需要：Android + 同一局域网 DLNA TV（当前电脑无投屏配件）
+
+3. [中] Python mock DLNA MediaRenderer 脚本
+   → 本地电脑模拟 SSDP + SOAP GetPositionInfo 返回假数据
+   → 不依赖真 TV 就能验证 DlnaCaster.kt 轮询逻辑正确性
 ```
 
 ### ✅ 2026-10-15 本轮完成

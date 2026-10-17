@@ -6,6 +6,46 @@
 
 ---
 
+## 2026-10-17（周五 · 换电脑交接日）
+
+### DLNA Step1 Miracast mirror() + Step2 GetPositionInfo SOAP 轮询
+
+**Step 1 Miracast mirror() 三层打通 + 真机验证 3 个坑**：
+- DlnaCaster.kt 加 mirror()：Android 15 上 `ACTION_WIFI_DISPLAY_SETTINGS` 编译期不存在 → 纯字符串 CAST_SETTINGS；实测 adb shell am start -a CAST_SETTINGS → Settings$WifiDisplaySettingsActivity result=0 ✅
+- RhinoBridge.kt 加 @JavascriptInterface fun castMirror()
+- cast.js 替换 TODO error → window.RhinoBridge.castMirror()
+- Debug Receiver 补 CAST_MIRROR action + Log.d 全改 Log.e（Moto 屏蔽 Log.d）
+- 又踩主线程坑：@JavascriptInterface WebView 后台线程不能 startActivity → Handler(Looper.getMainLooper()).post {} 包一层
+
+**Step 2 GetPositionInfo SOAP 轮询 100% 实现**：
+- DlnaCaster.kt 加 soapWithResponse() 返回 XML body / parsePositionInfo() XML 解析 / startPolling() 2.5s 轮询 + statusCallback / play() 自动 startPolling / stop() 先 stopPolling / pause() 保留轮询
+- Kotlin break in inline lambda 实验特性坑 → while + 分帧 Thread.sleep 改写
+- MainActivity.kt castPlay() 注册 statusCallback → evaluateJavascript 推 window.__castCb({type:'cast:status', state, position, duration})
+- cast.js state 加 position/duration 字段 + handleMsg cast:status 兼容 TransportState 大写
+- videoPlayer.js banner 显示 "正在投送 → XX 电视 00:12/03:45" + 数组去重
+
+**Kotlin 编译错误**：
+- gradlew assembleDebug 报 "The feature break continue in inline lambdas is experimental" → repeat(10){ break } 改成 while 分帧 sleep
+- gradlew assembleDebug 报 "Unresolved reference: ACTION_WIFI_DISPLAY_SETTINGS" → Android 15 SDK 35 里这个常量编译期就不存在，直接用字符串
+
+**Git commit 3 个**：
+- `608a601` feat(DLNA): Android Miracast mirror + GetPositionInfo SOAP 轮询 (4 files, +190/-17)
+- `2810ea3` fix(debug): Debug BroadcastReceiver 加 CAST_MIRROR + Log.e (1 file)
+- `debf362` fix(DLNA): mirror() 主线程 + CAST_SETTINGS (1 file)
+
+**构建验证**：npm test:all 10/10 ✅ + gradlew assembleDebug BUILD SUCCESSFUL ✅
+
+**未完成**：真机换电脑断连，mirror 主线程修复 + SOAP 轮询链路需要下一台电脑验证
+
+### 换电脑交接
+- Git status clean, ahead 12 commits, GitHub 断网未 push
+- context.md / daily.md / issues.md / index.md 全更新
+- .session-memory.md 清空
+- cloud_api.py 8787 端口还活着
+- APK 最后装机 2026-10-16 18:21（debf362 + Handler.post 主线程修复）
+
+---
+
 ## 2026-10-16（周四）
 
 | 时间 | 任务 | 改了哪些文件 | 跑了啥命令 | 备注 |
