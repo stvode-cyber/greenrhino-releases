@@ -74,11 +74,6 @@ export function mediaLibrary(app, type) {
     const gen = ++refreshGen
     const all = await getAllMedia()
     if (gen !== refreshGen) return
-    // 🔶 诊断日志：MediaStore 数据到底对不对
-    const typeCounts = {}
-    for (const m of all) typeCounts[m.type] = (typeCounts[m.type] || 0) + 1
-    console.error(`[gr-lib] refresh: all=${all.length} typeCounts=`, JSON.stringify(typeCounts), `filtering for type="${type}"`)
-    if (all.length) console.error(`[gr-lib] sample item.type=${all[0].type} name=${all[0].name?.slice(0,30)} id=${all[0].id}`)
     el.replaceChildren()
     // 显示层去重（只隐藏、不动数据）：
     // 1) 同名同规格（name+size）判定为同一文件重复导入，只保留最新导入的一条；
@@ -96,7 +91,6 @@ export function mediaLibrary(app, type) {
       for (const m of latest.values()) keepIds.add(m.id)
     }
     const list = all.filter((m) => matches(m) && keepIds.has(m.id))
-    console.error(`[gr-lib] refresh: keepIds.size=${keepIds.size} list(after matches+dedup)=${list.length}`)
     // 视频缩略图：从 thumbnails store 合并到条目，随后把缺图的视频排进后台抽帧队列
     const thumbs = await getThumbsMap()
     for (const m of list) if (m.type === 'video') m.thumb = thumbs.get(m.id) || null

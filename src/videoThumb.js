@@ -15,16 +15,12 @@ export async function getThumbsMap() {
 
 // 把缺缩略图的视频加入后台队列，逐条抽帧，避免一次全量抽帧卡 UI
 export function queueVideoThumbs(items) {
-  let added = 0, skipped = 0
   for (const it of items || []) {
-    if (!it || it.type !== 'video') { skipped++; continue }
-    if (it.thumb || it.thumbFailed) { skipped++; continue }
-    // 🔶 ISS-20261008-006：有 uri（Android MediaStore）或有 blob（桌面导入）都能入队
+    if (!it || it.type !== 'video') continue
+    if (it.thumb || it.thumbFailed) continue
     const hasSource = it.uri || (it.blob && it.blob.size > 0)
-    if (hasSource && !_queue.some((q) => q.id === it.id)) { _queue.push(it); added++ }
-    else skipped++
+    if (hasSource && !_queue.some((q) => q.id === it.id)) _queue.push(it)
   }
-  console.error('[gr-thumb] queueVideoThumbs: added=' + added + ' skipped=' + skipped + ' queue.total=' + _queue.length)
   pump()
 }
 
@@ -32,17 +28,15 @@ async function pump() {
   if (_busy || !_queue.length) return
   _busy = true
   const it = _queue.shift()
-  console.error('[gr-thumb] pump: generating for id=' + it.id + ' uri=' + !!it.uri + ' blob=' + !!it.blob)
   try { await generate(it) } catch (e) { console.error('[gr-thumb] generate error: ' + e?.message) }
   _busy = false
   if (_queue.length) pump()
 }
 
 async function generate(item) {
-  console.error('[gr-thumb] generate START id=' + item.id + ' hasUri=' + !!item.uri + ' hasBlob=' + !!item.blob)
   const cached = await dbGet('thumbnails', item.id)
-  if (cached && cached.failed) { item.thumbFailed = true; console.error('[gr-thumb] SKIP id=' + item.id + ' (previously failed)'); return }
-  if (cached && cached.dataUrl) { item.thumb = cached.dataUrl; emit('thumb:updated', item.id); console.error('[gr-thumb] SKIP id=' + item.id + ' (cached)'); return }
+  if (cached && cached.failed) { item.thumbFailed = true; return }
+  if (cached && cached.dataUrl) { item.thumb = cached.dataUrl; emit('thumb:updated', item.id); return }
 
   const v = document.createElement('video')
   v.preload = 'metadata'
@@ -64,7 +58,6 @@ async function generate(item) {
     await new Promise((resolve, reject) => {
       const to = setTimeout(() => reject(new Error('timeout 3s')), 3000)
       v.onloadedmetadata = () => {
-        console.error('[gr-thumb] metadata OK id=' + item.id + ' w=' + v.videoWidth + ' h=' + v.videoHeight + ' dur=' + v.duration)
         const seekTo = Math.min(5, (v.duration || 5) * 0.1)
         try { v.currentTime = seekTo } catch (e) { clearTimeout(to); reject(e); return }
         v.onseeked = () => { clearTimeout(to); resolve() }
@@ -83,7 +76,6 @@ async function generate(item) {
     item.thumb = dataUrl
     await dbPut('thumbnails', { id: item.id, dataUrl, at: Date.now() }, item.id)
     emit('thumb:updated', item.id)
-    console.error('[gr-thumb] ✅ SUCCESS id=' + item.id + ' thumbLen=' + dataUrl.length + ' w=' + c.width + ' h=' + c.height)
   } catch(e) {
     console.error('[gr-thumb] ❌ FAIL id=' + item.id + ' reason=' + (e?.message || 'unknown'))
     await markFailed(item, e?.message || 'unknown')

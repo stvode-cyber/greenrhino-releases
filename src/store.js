@@ -134,7 +134,6 @@ export async function addMediaFiles(files, folder = '未分类', onProgress) {
     items.push(item)
     done++; onProgress?.(done, total, '正在导入')
   }
-  console.error('[gr] addMediaFiles: kept=' + items.length + ' skippedDup=' + skippedDup + ' skippedRole=' + skippedRole + ' (MIN_SIZE=N/A，手动导入允许小文件)')
   if (items.length) emit('library:changed', items)
   return items
 }
@@ -208,9 +207,7 @@ export async function addMediaFromAndroid(jsonItems, folder = '全盘扫描', pr
         prunedCount++
       }
     }
-    if (prunedCount) console.error('[gr] addMediaFromAndroid pruned (files deleted): ' + prunedCount)
   }
-  console.error('[gr] addMediaFromAndroid[' + role + ']: kept=' + items.length + ' skippedSmall=' + skippedSmall + ' skippedDup=' + skippedDup + ' skippedRole=' + skippedRole + ' skippedType=' + skippedType + ' (MIN_SIZE=' + Math.round(MIN_SIZE/1024/1024) + 'MB, pruned=' + prunedCount + ')')
   if (items.length || prunedCount) emit('library:changed', items)
   return items
 }

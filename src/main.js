@@ -104,9 +104,7 @@ for (const [k, p] of Object.entries({ home, music, video, favorites, playlists, 
 // buildMusicHome 内部 el.parentElement 为 null → insertBefore 会被跳过
 if (home?.mineEl && home.el?.parentElement) {
   home.el.parentElement.insertBefore(home.mineEl, home.el.nextSibling)
-  console.error('[mine] ✅ mineEl inserted after home.el, in DOM: ' + !!document.body.contains(home.mineEl))
 } else if (home?.mineEl) {
-  console.error('[mine] ⚠️ home.el.parentElement still null, appending mineEl directly to view')
   view.appendChild(home.mineEl)
 }
 
@@ -244,11 +242,9 @@ function buildMusicHome(app) {
   const mineEl = h('div', { class: 'mh-mine', hidden: true })
   async function showMine() {
     try {
-      console.error('[mine] showMine() CALLED! mineEl=' + !!mineEl + ' el.parentElement=' + !!el?.parentElement)
       mineEl.innerHTML = ''
       mineEl.hidden = false
       el.hidden = true
-      console.error('[mine] step1: hide el, show mineEl. mineEl.hidden=' + mineEl.hidden + ' el.hidden=' + el.hidden)
 
       // ① 顶部：头像 + 账号信息（读 localStorage.gr_cloud_session，未登录引导登录）
       const cloudSess = (() => { try { return JSON.parse(localStorage.getItem('gr_cloud_session') || 'null') } catch { return null } })()
@@ -276,7 +272,6 @@ function buildMusicHome(app) {
       }
 
       mineEl.appendChild(header)
-      console.error('[mine] ✅ header built + appended, mineEl.children=' + mineEl.children.length)
 
       // ② 微信风格列表行（先同步构好，等数据回来更新 count）
       function wmRow(icon, label, hint, onClick) {
@@ -315,22 +310,16 @@ function buildMusicHome(app) {
         wmRow('ℹ️', '关于', 'v16', () => toast('绿角犀音乐 v16 · 离线优先播放器', 'ok')))
 
       mineEl.appendChild(list)
-      console.error('[mine] ✅ list built + appended, mineEl.children=' + mineEl.children.length + ' innerHTML_len=' + mineEl.innerHTML.length)
 
       // ③ 异步拉数据更新副标题和 count
       try {
-        console.error('[mine] ⏳ about to await Promise.all for DB reads...')
         const [favs, pls, recent, all] = await Promise.all([getFavorites(), getPlaylists(), getRecent(30), getAllMedia()])
-        console.error('[mine] ✅ DB resolved: favs=' + favs?.length + ' pls=' + pls?.length + ' recent=' + recent?.length + ' all=' + all?.length)
         const songs = all.filter((m) => m.type === 'music')
         header.querySelector('.wm-sub').textContent = `${songs.length} 首本地音乐 · ${favs.length} 收藏 · ${pls.length} 歌单`
         hintFav.textContent = favs.length + ' 首'
         hintPls.textContent = pls.length + ' 个'
         hintRecent.textContent = recent.length + ' 首'
       } catch (e) {
-        // ISS-20261017-009: 打印完整 stack + 各 getter 类型，下次真机可定位根因
-        console.error('[mine] 拉数据失败:', e?.message, 'stack:', e?.stack)
-        console.error('[mine] debug favs type=', typeof favs, 'pls type=', typeof pls, 'recent type=', typeof recent, 'all type=', typeof all)
         header.querySelector('.wm-sub').textContent = '加载失败：' + (e?.message || e)
       }
     } catch (e) {
@@ -448,7 +437,6 @@ function openMusicFullpage() {
     }
     if (idx === lastIdx) return
     lastIdx = idx
-    console.error('[pfp] time=' + time.toFixed(2) + ' idx=' + idx + ' lyrics=' + lyrics.length + ' first=' + lyrics[0]?.time + ' line0class=' + linesWrap.children[0]?.className)
     const lines = linesWrap.querySelectorAll('.pfp-line')
     lines.forEach((l, i) => l.classList.toggle('active', i === idx))
     lines[idx]?.scrollIntoView({ block: 'center' })
@@ -525,18 +513,14 @@ initGestures(app)
 // 🔶 Android MediaStore 自动导入——分批累积再一次性落库
 let __mediaBatchBuf = []
 window.__mediaBatch = async (items, status) => {
-  console.error('[gr] __mediaBatch called items=' + (items?.length || 0) + ' status=' + status + ' __mediaBatchBuf.length=' + __mediaBatchBuf.length)
   if (items?.length) __mediaBatchBuf.push(...items)
   if (status === 'ok') {
     const all = __mediaBatchBuf
     __mediaBatchBuf = []
-    console.error('[gr] __mediaBatch final buf.length=' + all.length)
-    // 🔶 ISS-20261009-007：首次扫描成功后写标记，后续启动不再自动扫
     localStorage.setItem('__grFirstScanDone', '1')
     if (!all.length) { toast('扫描完成但没发现视频', 'info'); return }
     toast(`自动扫描到 ${all.length} 个视频/音频，导入中...`, 'ok')
     const added = await addMediaFromAndroid(all)
-    console.error('[gr] addMediaFromAndroid added.length=' + added.length)
     toast(`导入完成：新增 ${added.length} 个`, 'ok')
     // 🔶 ISS-20261010-026: Android MediaStore 导入后补解析内嵌 ID3 标签
     // addMediaFromAndroid 只存基础字段，跳过了 parseTags；
