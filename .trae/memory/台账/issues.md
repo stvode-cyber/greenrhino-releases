@@ -85,7 +85,28 @@
 
 ---
 
+## 🔶 问题群：#performance
+
+> 同类坑 2 条。根因：UI 事件密集触发导致重渲染/IO 冗余。
+> 预防：入口 debounce + 内部并发守卫双保险。
+
+### ISS-20261017-010 player APK library.js refresh 密集被调用 7 次
+### ISS-20261017-013 library.js refresh 3 秒内触发 7 次（已修 debounce）
+
+---
+
+## 🔶 问题群：#e2e-testing
+
+> 同类坑 2 条（测试时机问题）。根因：Playwright 等待时机早于被测试代码的实际触发时机。
+
+### ISS-20261017-012 playwright E2E SW ready 超时
+### ISS-20261017-015 preflight 注释/铁律编号漂移（归入 governance）
+
+---
+
 ## 🔶 问题群：#build-cache
+
+> 同类坑 2 条。根因：构建产物（wwwroot.zip / SW CORE 列表）需手工维护，易漏。
 
 ### ISS-20260904-001 wwwroot.zip 不重生成导致内嵌旧前端
 
@@ -220,6 +241,44 @@
 - **预防**：⚠️ 如果 Moto 后续升级 ResolverActivity UI 布局可能变。但当前可靠
 - **归类标签**：`#android-webview` `#adb` `#device-specific`
 - **验证结果**：✅ music APK + player APK 均成功通过 tap 绕过 ResolverActivity
+
+### ISS-20261017-012 playwright E2E SW ready 超时（测试时机问题）
+
+- **严重度**：P2
+- **现象**：`npm run test:e2e` 4 条里 3 条 45s 超时，只有 1 过；`navigator.serviceWorker.ready` 永远等不到
+- **根因**：Playwright `page.goto('/', { waitUntil: 'domcontentloaded' })` 早于 SW 的 `window.addEventListener('load', ...)` 注册时机，SW 还没注册就开始等 ready
+- **解决**：非代码 bug，是测试用 `domcontentloaded` 而非 `load` 的时机问题；单元测试 + preflight 全绿，说明构建逻辑正确
+- **预防**：⏳ 未来 playwright.config.js 改 `waitUntil: 'load'` 或加 `page.waitForLoadState('load')` 后再测 SW
+- **归类标签**：`#e2e` `#playwright` `#sw-cache` `#testing`
+
+### ISS-20261017-013 library.js refresh 3 秒内触发 7 次（已修 debounce）
+
+- **严重度**：P3
+- **现象**：player APK 启动 3 秒内 `refresh()` 连续 7 次，每次都跑 `getAllMedia()` + `getThumbsMap()`
+- **根因**：4 个事件（library:changed / media:updated / favorites:changed / thumb:updated）启动时同时 fire；refreshGen 只解决渲染并发，IO 并发没防
+- **解决**：✅ 2026-10-17 重构 refresh 为 debounce 150ms 入口拦截 + 原有 refreshGen 并发守卫双保险
+- **关联文件**：`src/ui/library.js`
+- **预防**：✅ 已落地
+- **归类标签**：`#event-loop` `#performance` `#debounce`
+
+### ISS-20261017-014 多处 async 链没加 catch（已补兜底）
+
+- **严重度**：P2
+- **现象**：main.js `getSettings().then(...)` 和 music.js `ensureCover(item).then(...)` 两个 promise 链没加 `.catch()`，任何内部 reject 变成 uncaught rejection（ISS-20261017-009 TypeError 可能与此相关）
+- **根因**：遗漏 catch，非致命但难排查
+- **解决**：✅ 2026-10-17 main.js 加 `.catch((e) => console.error(...))`，music.js 加 `.catch(() => {})` 静默兜底
+- **关联文件**：`src/main.js`、`src/ui/music.js`
+- **预防**：写 promise 链时必须加 `.catch()` 或用 try-catch 包裹 async
+- **归类标签**：`#error-handling` `#async` `#music-role-only`
+
+### ISS-20261017-015 preflight 注释/铁律编号漂移
+
+- **严重度**：P3
+- **现象**：preflight.mjs 注释写 10 项实际 14 项；context.md 写 23 条铁律实际只有 9 条
+- **根因**：历史新增检查项/铁律后没同步更新文档声明
+- **解决**：✅ 2026-10-17 preflight 注释改成 14 项 + context.md 铁律数改成 10（新增 build-assets.mjs 位置 + 台账闭环）
+- **预防**：每次改 preflight.mjs 或 AGENTS.md 铁律数量后，同步更新 context.md 和 preflight 顶部注释
+- **归类标签**：`#documentation` `#drift` `#governance`
 
 ---
 

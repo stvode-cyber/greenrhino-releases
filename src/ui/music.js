@@ -163,7 +163,7 @@ export function buildMusic(app) {
     setCover(item)
     // 无封面音乐联网时自动抓取在线封面并缓存（已抓过/离线则空操作）
     if (item.type === 'music' && !item.cover && navigator.onLine) {
-      ensureCover(item).then((url) => { if (url) setCover(item) })
+      ensureCover(item).then((url) => { if (url) setCover(item) }).catch(() => {})
     }
   })
   // ② 在线手动搜歌词：三级优先级（和 src/lyricFetch.js 完全一致）

@@ -1,266 +1,238 @@
 # AGENTS.md — 绿角犀项目全局规则
 
 > 本文件对所有 AI 员工注入，是跨角色的行为基线。修改代码前必须通读。
+> 最后更新：2026-10-17（v16 · 重构瘦身）
+
+---
 
 ## 项目定位
 
 绿角犀（GreenRhino）是一个 **离线优先的 PWA 媒体播放器**，拆成两个完全独立的应用：
 
-| App | 主题色 | 包名 | Cloudflare Pages URL | Android TWA |
+| App | 主题色 | 包名 | Cloudflare Pages URL | Android 壳 |
 |---|---|---|---|---|
-| 🎵 音乐（green） | `#00D8A6` | `com.greenrhino.music` | `greenrhino-music.pages.dev` | ✅ |
-| 🎬 播放器（amber） | `#FFB03A` | `com.greenrhino.player` | `greenrhino-player.pages.dev` | ✅ |
+| 🎵 音乐（green） | `#00D8A6` | `com.greenrhino.music` | `greenrhino-music.pages.dev` | Kotlin WebView ✅ |
+| 🎬 播放器（amber） | `#FFB03A` | `com.greenrhino.player` | `greenrhino-player.pages.dev` | Kotlin WebView ✅ |
 
 共享同一套源码，由 `scripts/build-web.mjs` 按角色裁剪输出到 `release/pwa-site-{music,player}/`。
+Android 已弃 TWA（GMS 依赖），改用 Kotlin 原生 WebView 壳（DEC-20260914-001）。
 
-## 技术栈
+## 技术栈（一页总览）
 
-- **前端**：原生 ES Module（零构建，无 framework），`src/` 直接浏览器加载
-- **后端**：**三端分立**（按宿主平台自动选择）：
-  - 🐍 **Python** `server/cloud_api.py`（8787 端口，云同步 + /api/lyric LRCLIB 代理）
-  - 🟣 **.NET** 内嵌 LocalServer（8800 端口，Windows WebView2 侧媒体流式 + /api/lyric）
-  - 🔧 **Kotlin** MediaHttpServer（40363 端口，Android content://→HTTP Range 代理）
-- **构建工具**：仅 `scripts/build-web.mjs` + `scripts/build-assets.mjs`（自定义 Node 脚本）
-- **PWA**：手写 `sw.js`，Manifest v3
-- **Windows EXE**：.NET 8 WebView2，clients/windows/GreenRhino{Music,Player}
-- **Android**：WebView 原生壳（Kotlin MainActivity），clients/android-{music,player}（已从 TWA 迁移，TWA 因 GMS 依赖放弃）
-- **部署**：Cloudflare Pages（wrangler） + GitHub Actions（三套 workflow）
+| 层 | 技术 | 端口 | 说明 |
+|---|---|---|---|
+| **前端** | 原生 ES Module + IndexedDB + Web Audio | - | 零构建，`src/` 直接浏览器加载 |
+| **云端** | 🐍 Python `server/cloud_api.py` | 8787 | 云同步 + LRCLIB 歌词代理 |
+| **Windows 侧** | 🟣 .NET 8 内嵌 LocalServer | 8800 | 媒体流式 + /api/lyric |
+| **Android 侧** | 🔧 Kotlin MediaHttpServer | 40363 | content:// → HTTP Range 代理 |
+| **构建** | `scripts/build-web.mjs` + `clients/build-assets.mjs` | - | 自定义 Node 脚本 |
+| **PWA** | 手写 `sw.js`，Manifest v3 | - | Service Worker 预缓存 + 离线 |
+| **Windows EXE** | .NET 8 WebView2 | - | `clients/windows/GreenRhino{Music,Player}/` |
+| **Android APK** | Kotlin WebView | - | `clients/android-{music,player}/` |
+| **部署** | Cloudflare Pages（wrangler）+ GitHub Actions | - | 双站独立 |
 
 ## 关键目录
 
 ```
-src/                     # 前端源码（两个 App 共享，运行时按 winRole 裁剪 UI）
-scripts/                 # build-web.mjs / build-assets.mjs / copy-web.mjs
-server/                  # 🐍 Python cloud_api.py（云同步 + LRCLIB 歌词代理，8787 端口）
-clients/                 # 各平台壳工程（android-music, windows, huawei-music 等）
+src/                     # 前端源码（零构建，运行时 __winRole 裁剪 UI）
+scripts/                 # build-web.mjs / preflight.mjs / bump-version.mjs
+clients/                 # 壳工程 + build-assets.mjs
+  ├── android-music/     # 🎵 Kotlin WebView 壳
+  ├── android-player/    # 🎬 Kotlin WebView 壳
+  ├── windows/           # .NET 8 WebView2（GreenRhinoMusic / GreenRhinoPlayer）
+  ├── huawei*/           # 华为 AppGallery 上架资产
+  ├── ios/               # iOS 原生壳（Music / Player）
+  └── build-assets.mjs   # 跨平台图标光栅化（⚠️ 在 clients/ 不是 scripts/）
+server/                  # 🐍 cloud_api.py + test_cloud.py
 release/pwa-site-*/      # build-web.mjs 输出（Cloudflare Pages 部署目录）
-.github/workflows/ci.yml # CI：build-web.mjs + 单元测试 + preflight + artifact
-.wrangler/               # Cloudflare Pages 部署缓存
-icons/                   icon-music.svg / icon-player.svg（角色专属图标）
+.github/workflows/       # ci.yml / build-android.yml / build-huawei.yml / build-windows.yml
+icons/                   # icon-music.svg / icon-player.svg（角色专属图标）
+test/                    # 单元 + E2E
+.trae/memory/台账/      # 项目驾驶舱（context.md / issues.md / decisions.md / index.md / daily.md）
 ```
 
-## 不可变约束（Breaking These = 高优先级 Bug）
+## 不可变约束（10 条铁律）
 
-1. **version 一致**：`scripts/build-web.mjs` 的 `APP_VERSION = 'v16'` 是所有产物的版本基线。改版本时必须同步更新 cache 名（`gr-music-v16`、`gr-player-v16`）
-2. **androidPackage 唯一**：两个 App 的 `package_name`（`com.greenrhino.music` / `com.greenrhino.player`）和 `assetlinks.json` 的包名/指纹必须严格对应
-3. **siteUrl 唯一**：`assetlinks.json` 的 `target` 域名必须与 Cloudflare Pages 域名匹配
-4. **manifest 主题色绑定**：`manifest.theme_color` 和 `<meta theme-color>` 必须与角色图标颜色一致（音乐绿 `#00D8A6` / 播放器琥珀 `#FFB03A`）
-5. **SW cache 桶隔离**：两个 App 用不同 cache 名（`gr-music-v16` vs `gr-player-v16`），避免跨应用缓存污染。
-   - **源码占位符**：`sw.js` 里 `const CACHE = '__SW_CACHE__'` 是显式占位符，**禁止改成硬编码版本号**（如 `'greenrhino-v14'`）
-   - **替换逻辑**：`scripts/build-web.mjs` 用精确正则 `replace(/'__SW_CACHE__'/, cfg.cache)` 替换，不再依赖隐式的 `greenrhino-v\d+` 格式
-   - **测试覆盖**：改 sw.js 或 build-web.mjs 后必须跑 `npm run test:all`（单元 6 条 + E2E 4 条，全绿才安全）
-6. **源码零构建**：`src/` 目录在运行时由浏览器原生 ES Module 加载。不要引入 bundler 除非明确批准
-7. **Android MediaStore `<unknown>` 字面量清洗**：`Cursor.getString()` 对无内嵌 TAG 的文件返回字面量 `<unknown>`（**不是 null！**），`?: ""` 兜底无效。**必须显式清洗**：
-   ```kotlin
-   if (artist.equals("<unknown>", ignoreCase=true) || artist.equals("Unknown Artist", ignoreCase=true)) artist = ""
-   ```
-   三层必须全做：Kotlin MainActivity.scanMediaStore() + .NET LocalServer.FetchLyricAggregate() + 前端 store.js addMediaFromAndroid() 兜底。
-   - MediaStore 实测分布（642 首）：50% `<unknown>` / 50% 有真实值
-   - LRCLIB 对空 artist 自动走 track-only 搜索（artist 为空时 URL 不拼 `artist_name` 参数），所以 artist 空 = 搜索更宽松，不是更严格
-   - **根因**：Android ROM 对 50% 无 TAG 文件写入面量 `<unknown>` 而非 null，Kotlin `cur.getString()` 返回的是 String `"unknown"`，Kotlin 的 Elvis operator `?: ""` 只对 null 生效
-8. **Moto XT2401 真机调试铁律**（本项目 Android 唯一真机）：
-   - **绝对不要先 `adb logcat -c`！** Moto 清 buffer 后完全屏蔽 App 日志（无论 Debug/Info/Error 级别）。冷启动后直接 `adb logcat -d --pid=<PID>` 抓 buffer 残留的 Fatal 级别 JS 日志
-   - **装机必须 `adb install -r`**（覆盖安装），绝对不要 `adb uninstall`——卸载会清 IndexedDB → 633 首歌全没 → scanMediaStore 不自动触发（设计如此）→ 空库死锁
-   - **ResolverActivity 绕过**：Moto 多 user profile 导致 `am start` 被拦截，必须 `adb shell input tap 610 2251` 点第一项 center
-   - **必须 `adb shell pm grant 4 权限`**：READ_MEDIA_AUDIO + READ_MEDIA_IMAGES + READ_MEDIA_VIDEO + READ_EXTERNAL_STORAGE，否则 requestAutoImport 卡在权限等待
-   - 触发新代码路径：用 `Debug BroadcastReceiver`（`adb shell am broadcast -a greenrhino.CAST_SCAN`）而非手动点 UI（WebView 触摸在 Moto 上不稳定）
-9. **Android 构建必须在纯 ASCII 目录**（`d:\1号\项目部\🛠️工具\音乐影视播放器` 含 emoji+中文 → JDK 17 `Illegal char <?>`）：
-   - gradle 报错 `ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain` 90% 是路径含非 ASCII 字符
-   - 构建前必须把 `clients/android-{music,player}` 复制到纯 ASCII 路径如 `C:\greenrhino-build\{android-music,android-player}` 再跑 `gradlew.bat assembleDebug`
-   - HANDOVER.md 早有记录但不是显式铁律（2026-10-17 再次验证）
+### 1. 版本三落点一致
+`scripts/build-web.mjs` 的 `APP_VERSION = 'v16'` 是所有产物的版本基线。必须同步：
+- `build-web.mjs` APP_VERSION
+- `gr-music-v16` / `gr-player-v16` cache 桶
+- `clients/windows/*/*.iss` 安装包文件名
 
-## 📚 台账系统（强制行为基线·成长型）
+### 2. Android 包名唯一
+两个 App 的 `package_name`（`com.greenrhino.music` / `com.greenrhino.player`）和 `assetlinks.json` 的包名/指纹必须严格对应，不可互换。
 
-> 本项目所有 AI Agent 必须遵守的台账操作规则。台账目录：`.trae/memory/台账/`
->
-> 核心思想：**随时换电脑、新 AI 接手 30 秒懂项目**。所有动作都落在台账里，不让知识只存在对话历史中。
+### 3. assetlinks.json siteUrl 匹配
+`assetlinks.json` 的 `target` 域名必须与 Cloudflare Pages 域名匹配（music → `greenrhino-music.pages.dev`）。
 
-### 台账文件清单
+### 4. Manifest 主题色绑定
+`manifest.theme_color` 和 `<meta theme-color>` 必须与角色图标颜色一致：
+- 🎵 音乐 `#00D8A6`
+- 🎬 播放器 `#FFB03A`
+
+### 5. SW cache 桶隔离 + 占位符约束
+两个 App 用不同 cache 名（`gr-music-v16` vs `gr-player-v16`），源码里 **必须** 用显式占位符：
+```javascript
+// sw.js — 禁止硬编码版本号
+const CACHE = '__SW_CACHE__'
+```
+替换逻辑：`build-web.mjs` 里 `replace(/'__SW_CACHE__'/, cfg.cache)`。
+改 sw.js 或 build-web.mjs 后必须跑 `npm run test:all`（单元 6 条 + E2E）。
+
+### 6. 源码零构建
+`src/` 目录在运行时由浏览器原生 ES Module 加载。**禁止** 引入 bundler 除非明确批准。
+
+### 7. Android MediaStore `<unknown>` 字面量三层清洗
+`Cursor.getString()` 对无 TAG 文件返回字面量 `<unknown>`（**不是 null**，`?: ""` 无效），必须显式清洗：
+```kotlin
+if (artist.equals("<unknown>", ignoreCase=true) || artist.equals("Unknown Artist", ignoreCase=true)) artist = ""
+```
+三层必须全做：Kotlin MainActivity.scanMediaStore() + .NET LocalServer.FetchLyricAggregate() + 前端 store.js addMediaFromAndroid()。
+（LRCLIB 对空 artist 自动走 track-only 搜索，所以 artist 空 = 搜索更宽松）
+
+### 8. Moto XT2401 真机调试铁律（本项目唯一真机）
+- **绝对不要 `adb logcat -c`！** Moto 清 buffer 后完全屏蔽 App 日志
+- 装机必须 `adb install -r`（覆盖，**不要** `adb uninstall` → 清 IndexedDB 633 首歌没了 → 空库死锁）
+- ResolverActivity 绕过：`adb shell input tap 610 2251`（1220×2712 屏 center，已验证）
+- 必须 `adb shell pm grant 4 权限`：READ_MEDIA_AUDIO + READ_MEDIA_IMAGES + READ_MEDIA_VIDEO + READ_EXTERNAL_STORAGE
+
+### 9. Android 构建必须在纯 ASCII 目录
+项目根含 emoji（🛠️）+ 中文 → JDK 17 `Illegal char <?>` → `ClassNotFoundException GradleWrapperMain`。
+构建前必须复制到纯 ASCII 路径：
+```powershell
+Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -Exclude build,.gradle
+```
+然后在 `C:\greenrhino-build\android-{player,music}` 下跑 `gradlew.bat assembleDebug`。
+
+### 10. build-assets.mjs 位置约束
+图标光栅化脚本 `build-assets.mjs` 在 `clients/` 下（不是 `scripts/`），CI 里引用路径要对。
+
+---
+
+## 📚 台账系统（成长型·五步闭环）
+
+> 台账目录：`.trae/memory/台账/`
+> 核心思想：**随时换电脑，新 AI 进门 30 秒开工**
+
+### 台账文件
 
 | 文件 | 管什么 | 编号规则 |
 |---|---|---|
-| `context.md` | 🆕 **项目驾驶舱**：当前版本、进度、阻塞、已定规则、最近 5 条动作 | 日期戳更新 |
-| `decisions.md` | 所有关键决策（选了啥/为啥/备选方案/关联文件/相关坑） | `DEC-YYYYMMDD-NNN` |
-| `issues.md` | 所有踩过的坑（问题/解决/根因/预防/严重度/归类标签/关联文件） | `ISS-YYYYMMDD-NNN` |
-| `index.md` | 按模块做索引（src/, scripts/, clients/ 等） | 指针条目 |
-| `daily.md` | 🆕 **每日工作流水**：当天干了啥、改了哪些文件、跑了啥命令 | 日期分行，每条一句话 |
-| `.session-memory.md` | **本次会话**的临时约定 / 临时代码片段（本目录的草稿区，会话结束前清空） | `.trae/memory/台账/.session-memory.md` |
-| `archive/` | 已沉淀归档（同标签 ≥3 条 + 预防规则已落地） | - |
+| `context.md` | 🆕 **驾驶舱**：版本/进度/阻塞/最近 5 条动作/常用命令 | 日期戳更新 |
+| `decisions.md` | 关键决策（选了啥/为啥/备选/关联/相关坑） | `DEC-YYYYMMDD-NNN` |
+| `issues.md` | 踩坑记录（现象/根因/解决/预防/严重度/标签） | `ISS-YYYYMMDD-NNN` |
+| `index.md` | 模块索引（改某模块前先查关联坑） | 指针条目 |
+| `daily.md` | 每日流水（当天干了啥、改了哪些文件、跑了啥命令） | 日期分行 |
+| `.session-memory.md` | **本次会话**临时区（草稿，结束前清空） | - |
+| `archive/` | 已沉淀归档（同标签 ≥3 条 + 预防规则落地） | - |
 
-用户级共享台账（自动加载，跨项目通用）：
-- `%userprofile%/.trae-cn/memory/shared-issues.md`
-- `%userprofile%/.trae-cn/memory/shared-decisions.md`
+### 五步闭环（每次工作必走）
 
----
+1. **启动先看**：读 context.md TL;DR → index.md → 扫关联坑 → 提醒用户
+2. **改前扫坑**：issues.md 关联文件匹配 → 命中时提醒确认
+3. **动作即记**：踩坑/决策立刻写 `.session-memory.md`（别等任务结束）
+4. **完成总汇**：口头大白话汇总 + 自动归档进正式台账 + `.session-memory.md` 清空
+5. **索引同步**：台账动了 → index.md 跟着更新
 
-### 🔄 台账五步闭环（每次工作都走完）
+### 📈 成长型归类加级
 
-> **铁律**：这 5 步是每个 AI Agent 的工作骨架，不得跳过。
+- 每条坑必须带 `#标签1 #标签2` 归类
+- 同标签 ≥2 条 → 自动归「🔶 问题群」
+- 同标签 ≥3 条 + 预防规则落地 → 移 `📦 archive/`
+- 活跃坑的 P0/P1 → 自动写成 `// TODO: [坑标签] 预防：xxx` 注释到关联文件
 
-#### ① 启动先看（新对话 → 先读台账再动手）
+### 🔬 进程跟踪（本轮新增）
 
-1. 读 `context.md` 头部 TL;DR（换电脑交接区）→ 30 秒内掌握版本/进度/阻塞
-2. 读 `context.md` 末尾「最近 5 条动作」→ 知道上一个 AI 干了啥
-3. 读 `index.md` → 定位到当前任务涉及的模块
-4. 读用户级 `shared-issues.md` + `shared-decisions.md` → 加载跨项目通用坑/决策
-5. 一句话主动提醒用户：
-   > 【台账提醒】当前 v16，Android 真机渲染待验证，已定规则 22 条。最近动作：上一轮做了 xxx。详见 `.trae/memory/台账/context.md`
+> 每个任务带唯一编号 + 动作清单 + 完成进度
 
-#### ② 改前扫坑（改文件 → 先扫关联坑）
-
-1. 扫 `issues.md` 的「关联文件」列 → 匹配到目标文件 → 列出所有相关坑
-2. 扫用户级 `shared-issues.md` → 匹配跨项目通用坑
-3. 命中时**必须提醒**用户并确认：
-   > 【⚠️ 台账预警】你要改的 `index.html` 关联 ISS-20260914-001（资源路径相对路径）和 ISS-20260916-003（PWA 打包 Android 绝对路径白屏）。确认后继续？
-4. 未命中也要在 `.session-memory.md` 临时区记一行"本次未触发台账预警"（方便后续追溯）
-
-#### ③ 动作即记（踩坑/决策 → 立刻写台账，不要等）
-
-- 踩了新坑 → **立刻**在 `.session-memory.md` 写临时记录（问题、怎么修的、根因猜测）
-- 做了关键决策 → **立刻**在 `.session-memory.md` 写临时记录（选了啥、为啥、备选方案）
-- 不要等任务结束才回忆——边干活边记
-
-#### ④ 完成总汇（一个任务做完 → 本轮做了啥 + 归档）
-
-> **触发点**：任务完成 / 用户说「记台账」/ 对话超过 20 条 / 准备结束会话
-
-1. **给用户口头汇总**（大白话，3-5 行）：
-   > 本轮工作总结：
-   > 1. 改了 `src/main.js` 的主题同步逻辑
-   > 2. 新增了 2 条 P0 预防规则的 TODO 注释
-   > 3. 更新了 AGENTS.md 台账系统为成长型
-   > 台账已同步更新。
-
-2. **自动归档进正式台账**：
-   - `.session-memory.md` 里的新决策 → `decisions.md` 新增一条
-   - `.session-memory.md` 里的新坑 → `issues.md` 新增一条（**必须带归类标签**，如 `relative-path`、`gradle-directory`）
-   - 任务中更新了的项目状态 → `context.md` 同步（版本/进度/阻塞/最近 5 条动作）
-   - 改了哪些文件、跑了啥命令 → `daily.md` 追加当天流水
-   - 所有新条目 → `index.md` 加模块索引
-   - **清理**：`.session-memory.md` 清空重置
-
-#### ⑤ 索引同步（台账动了 → index.md 跟着动）
-
-- 每条新决策/坑 → 立刻在 `index.md` 对应模块加一行指针
-- 归档区增加条目 → `index.md` 同步标「📦 已归档」
+- **格式**：任务编号 → 动作列表 → 每完成一个打 ✅ → 最后汇总
+- **触发**：每次用户下达大任务时，先在 daily.md 开任务区块
+- **示例**：
+  ```markdown
+  ## 任务 T20261017-01 设定体系升级
+  - [x] A0 基线建立（preflight/test:all）
+  - [x] A1 AGENTS.md 瘦身重构
+  - [ ] A2 漂移修复
+  - [ ] A3 台账优化
+  - [ ] A4 小稳修复
+  - [ ] A5 回归验证
+  - [ ] A6 归档
+  - [ ] A7 汇报
+  ```
 
 ---
-
-### 📈 成长型归类加级（自动合并同类问题，避免台账臃肿）
-
-> 核心机制：**同类问题自动归成问题群，频率高的自动升严重度，沉淀够的自动归档**
-
-1. **每条坑必须带归类标签**（新增坑时必填）：
-   - 格式：`#标签1 #标签2`（如 `#relative-path #android-webview`）
-   - 常见标签：`relative-path`、`gradle-directory`、`playwright-mirror`、`version-sync`、`path-charset`
-2. **自动归群**：`issues.md` 里同标签 ≥2 条 → 该标签下自动加一行「🔶 问题群：[标签名]」，把相关坑挂在一起
-3. **自动加级**：同标签坑累计修复次数 ≥3 → 问题群严重度自动升一级（P2→P1→P0），并在坑条目前加 `🔥` 标记
-4. **自动归档**：同标签坑 ≥3 条 且 预防规则已沉淀进 Skill → 整个问题群移 `📦 归档区`，同时检查是否应提升到用户级 `shared-issues.md`
-5. **自动注入 TODO**：活跃坑的 P0/P1 预防规则 → 自动写成 `// TODO: [坑标签] 预防：xxx` 注释到关联文件里（避免重构时遗忘）
-
----
-
-### 🎯 工作交接铁律（换电脑 / 新 AI 接手）
-
-> 目标：**新 AI 进门 30 秒开工，不用翻历史对话**
-
-1. `context.md` 头部 TL;DR 区必须保持最新（版本/进度/阻塞/未提交改动）
-2. `context.md` 末尾「最近 5 条动作」必须是**过去 3 天内的真实动作**（不是过期内容）
-3. `daily.md` 当天流水必须每轮任务更新（让新 AI 看到"今天已经干了啥"）
-4. 所有文件改动必须关联 `issues.md` 编号（commit message / PR 描述里提 ISS-NNN）
-5. 本机换 AI 模型 / 换电脑 → 新 AI 自动走五步闭环第①步（启动先看），不需要手动交接
-
----
-
-### 📊 周度巡检
-
-每周一 → 自动生成本周台账周报，贴在本周第一条对话开头：
-- 新增决策 N 条、新坑 N 条、归档 N 条、跨项目共享 N 条
-- 高频问题群 TOP 3（加级了哪些标签）
-- 台账健康度（活跃坑数/归档坑数/空预防规则坑数）
-
----
-
-### 台账写入格式（严格遵守）
-
-每条决策/坑必须满足：
-- ✅ 日期精确到日 + 唯一编号
-- ✅ 关联文件写相对路径（如 `src/index.html`，不要绝对路径）
-- ✅ 决策必须有「备选方案」列（哪怕写「无」）+ 「相关坑/决策」列
-- ✅ 坑必须有「预防规则」列（空 = 这条坑没价值，要补）+ **「归类标签」列**
-- ❌ 禁止删除已有条目，只能移至归档区
-- ❌ 禁止临时对话内容跳过 `.session-memory.md` 直接进正式台账
 
 ## 安全基线
 
-- Android keystore / 证书密码存 GitHub Secrets，**绝不要**出现在源码或日志里
-- `.secrets.env` 在 `.gitignore` 中，本地临时用，禁止提交
-- `assetlinks.json` 的 SHA256 指纹必须从真实 keystore 生成，**不要手写**
+- Android keystore / 证书密码存 GitHub Secrets，**绝不**出现在源码或日志里
+- `.secrets.env` 在 `.gitignore` 中，本地临时用
+- `assetlinks.json` SHA256 指纹必须从真实 keystore 生成，**不要手写**
+- `ffmpeg.exe`（98MB）必须被 gitignore
 
-## 🧑‍💼 用户行为偏好（必须遵守）
+## 🧑‍💼 用户行为偏好（写死的规则）
 
-> 1号的行为偏好，写死在规则里，下次换 AI 自动遵守。
+> 1号的行为偏好，换 AI 自动遵守
 
-1. **大白话回复**：不用术语、不用 markdown 标题层级嵌套、不写长段落。一句话就一句话，别啰嗦。
-2. **我只确认，不手动操作**：所有事情你自己想办法干。别让我跑命令、别让我改配置、别让我选路径。干完了给我汇报，我只需要说"行"或者指出哪里不对。
-3. **不要给我输出运行指令**（如 `npm run dev`、`adb install -r`）。你自己执行就行，汇报结果即可。
-4. **发现我需要动手才能做的事**（如插 USB、登录账号、点 UI），直接告诉我"这事需要你干：XXX"，别绕弯。
-5. **不要越界**：跟绿角犀无关的仓库/项目，别瞎搞。发现不在本仓库的需求，先告诉我"这仓库里没有 XXX，是不是另一个项目？"
+1. **大白话回复**：不用术语，一句话就一句话，别啰嗦
+2. **全权委托**：所有事情你自己想办法干。别让我跑命令、改配置、选路径。干完了汇报，我只确认
+3. **不要给我输出运行指令**（`npm run dev`、`adb install -r`），你自己执行就行
+4. **我需要动手的事直接说**（插 USB、登录、点 UI），别绕弯
+5. **不越界**：跟绿角犀无关的项目别瞎搞，发现不对直接问我
+6. **先报理解再开工**：大任务先把你的理解和计划说清楚，我确认了再动手
+7. **质量优先不计成本**：不惜工时只要最强最稳方案
+8. **件件记到查**：每次任务都有台账记录，可追溯
 
-## 📦 常用命令（我替你跑的）
+---
+
+## 🚀 快速参考（速查表）
+
+### 常用命令
 
 | 命令 | 作用 |
 |---|---|
 | `npm run build` | 构建双 PWA 站点 |
 | `npm run build:android` | 构建 + 同步到 Android assets |
-| `npm run preflight` | 发布前 14 项自动检查（必须全绿） |
+| `npm run preflight` | 发布前 14 项自动检查 |
 | `npm run bump` | 一键版本升级 |
-| `npm run test` | 单元测试 |
+| `npm run test` / `test:all` | 单元 / 单元+E2E |
 | `git push origin main` | 推远程 |
 
-## 📦 Android 构建铁律（**必须**）
+### Android 构建速查
 
 ```powershell
-# 路径必须 ASCII，不能有中文/emoji
-Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force
+# 1. 复制到 ASCII 路径（必须！）
+Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -Exclude build,.gradle
+# 2. 同步 release 产物
+Copy-Item release\pwa-site-music\* C:\greenrhino-build\android-music\app\src\main\assets\pwa\ -Recurse -Force
+Copy-Item release\pwa-site-player\* C:\greenrhino-build\android-player\app\src\main\assets\pwa\ -Recurse -Force
+# 3. 设环境 + 构建
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
 $env:ANDROID_HOME = "C:\Users\Administrator\Android\Sdk"
 cd C:\greenrhino-build\android-player
 .\gradlew.bat assembleDebug --no-daemon
 ```
-根因：JDK 17 路径含非 ASCII 字符会 `ClassNotFoundException GradleWrapperMain`
 
-## 📦 Moto 真机铁律
+### Moto 真机速查
 
-- 别先 `adb logcat -c`！Moto 清了就屏蔽日志
-- 装机 `adb install -r`（覆盖，别卸载 — 卸载清 IndexedDB 633 首歌没了）
+- 别先 `adb logcat -c`！清了就屏蔽日志
+- 装机 `adb install -r`（覆盖，别卸载）
 - 必须 `adb shell pm grant 4 权限`
 
-## 📦 发布检查清单
+### 发布检查清单（推主版本 tag 前）
 
-每次推主版本 tag 前：
+- [x] `npm run preflight` 全绿（14 项）
+- [x] `npm run test:all` 全绿（单元 6/6 + E2E）
+- [x] 版本号已递增（`npm run bump`）
+- [x] Windows dotnet publish 本地跑过
+- [x] Cloudflare Pages 双站已部署
+- [x] CI `.github/workflows/ci.yml` 已触发 SUCCESS
 
-- [ ] `npm run preflight` 全绿（14 项自动化检查）
-- [ ] `npm run test:all` 全绿（单元 6/6 + E2E 4/4）
-- [ ] 版本号已递增（`npm run bump`）
-- [ ] Windows dotnet publish 本地跑过
-- [ ] Cloudflare Pages 双站已部署
-- [ ] CI `.github/workflows/ci.yml` 已手动触发 SUCCESS
-
-## 📚 台账导航（新 AI 进门先读这 1 页）
+### 台账导航
 
 | 文件 | 什么时候读 |
 |---|---|
 | `.trae/memory/台账/context.md` | **第一读**：版本/阻塞/最近动作/常用命令 |
 | `.trae/memory/台账/index.md` | 改某模块前先查关联坑 |
-| `.trae/memory/台账/issues.md` | 改文件后追坑的根因和预防 |
-| `.trae/memory/台账/decisions.md` | 做关键决策前看历史取舍 |
-
----
-
-## 🔧 技术栈（瘦身版）
-
-- **前端**：原生 ES Module + IndexedDB + Web Audio（零构建）
-- **后端**：🐍 Python cloud_api.py（8787 云同步/歌词）/ 🟣 .NET LocalServer（8800 媒体流式）/ 🔧 Kotlin MediaHttpServer（40363 content://）
-- **壳**：Windows .NET 8 WebView2 + Android Kotlin WebView
-- **部署**：Cloudflare Pages + wrangler + GitHub Actions
+| `.trae/memory/台账/issues.md` | 追坑的根因和预防 |
+| `.trae/memory/台账/decisions.md` | 做决策前看历史取舍 |
+| `.trae/memory/台账/daily.md` | 当天流水 |

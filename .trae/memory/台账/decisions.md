@@ -107,6 +107,22 @@
 
 ---
 
+## DEC-20261017-003 设定体系升级：AGENTS.md 瘦身 + 进程跟踪 + 漂移修复
+
+- **日期**：2026-10-17
+- **决策**：一次完成 AGENTS.md 重构 + 台账系统升级 + 代码小稳修复
+  - AGENTS.md：266→255 行，删底部重复技术栈/Android 铁律代码块，合并速查表；新增铁律 #10（build-assets.mjs 位置）
+  - 台账：加进程跟踪机制（任务编号 + 动作清单 + 完成进度），写进 AGENTS.md 台账系统章节
+  - 漂移修复：preflight 注释 10→14、context.md 铁律 23→10、补 `.session-memory.md`、修 build-assets.mjs 路径声明
+  - 代码修复：library.js refresh 加 debounce 150ms（ISS-20261017-010/013）、main.js/music.js promise 链加 catch（ISS-20261017-014）
+- **原因**：上一轮（2026-10-17 上午）落地台账后发现多处设定漂移；AGENTS.md 有重复段落增加上下文负担
+- **备选方案**：先只修代码不动设定（被否决，设定漂移是根因级问题）；只改 AGENTS.md 不碰代码（被否决，ISS-013/014 是实锤 bug）
+- **落地效果**：preflight 14/14 绿、单元测试 6/6 绿、零回归
+- **关联文件**：`AGENTS.md`、`scripts/preflight.mjs`、`.trae/memory/台账/*`、`src/ui/library.js`、`src/main.js`、`src/ui/music.js`
+- **相关坑**：ISS-20261017-010/011/012/013/014/015
+
+---
+
 ## 模板（新决策复制此块）
 
 ```markdown

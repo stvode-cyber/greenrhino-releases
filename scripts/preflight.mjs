@@ -1,17 +1,22 @@
 // preflight.mjs — 发布前检查（AGENTS.md 发布检查清单自动化）
 // 用法：node scripts/preflight.mjs
 //
-// 检查项：
+// 检查项（共 14 项）：
 //   1. sw.js 源码必须含 '__SW_CACHE__' 占位符
 //   2. sw.js 源码不含 greenrhino-v\d+ 硬编码
 //   3. build-web.mjs APP_VERSION 与 ROLES.cache 版本一致
 //   4. index.html 无 (href|src)="/" 绝对路径（已修复 ISS-20260914-001）
-//   5. release/pwa-site-{music,player}/ 存在且最新
-//   6. clients/android-*/app/src/main/assets/pwa/ 与 release/ 一致（如果存在）
-//   7. manifest.webmanifest 双站主题色正确
-//   8. assetlinks.json 包名与站点匹配
-//   9. clients/node_modules 不存在（防嵌套）
-//  10. ffmpeg.exe 在 clients/windows/GreenRhino/ 且未被 git 追踪
+//   5. release/pwa-site-music/sw.js cache 名正确
+//   6. release/pwa-site-player/sw.js cache 名正确
+//   7. clients/android-music assets/pwa 已同步
+//   8. clients/android-player assets/pwa 已同步
+//   9. music manifest 主题色 #00D8A6
+//  10. player manifest 主题色 #FFB03A
+//  11. music assetlinks 包名 com.greenrhino.music
+//  12. player assetlinks 包名 com.greenrhino.player
+//  13. clients/node_modules 不存在（防嵌套）
+//  14. ffmpeg.exe 在 clients/windows/GreenRhino/ 且未被 git 追踪
+//  （AGENTS.md 声明为 14 项，与实际一致）
 
 import fs from 'node:fs'
 import path from 'node:path'

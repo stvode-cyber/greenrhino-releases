@@ -8,9 +8,9 @@
 ## 📁 src/（前端源码，零构建 ES Module）
 
 ### src/main.js（48KB 应用装配）
-- **决策**：DEC-20260909-001（拆双 App，__winRole 运行时裁剪）
-- **坑**：无专属
-- **TODO**：⚠️ 文件过大，未来需拆分（见 F 任务）
+- **决策**：DEC-20260909-001（拆双 App，__winRole 运行时裁剪）、DEC-20261017-003（设定体系升级）
+- **坑**：ISS-20261017-014（promise 链缺 catch，已补）
+- **TODO**：⚠️ 文件过大，未来需拆分
 
 ### src/player.js（41KB 播放引擎）
 - **决策**：DEC-20260908-001（播放模式分离）、DEC-20260903-001（HEVC 转码）
@@ -28,7 +28,7 @@
 ### src/ui/（15 个组件）
 - bottombar.js / library.js / music.js / videoPlayer.js / queue.js / settings.js / favorites.js / playlists.js / recent.js / cloud.js / spectrum.js / gestures.js / dom.js / stats.js / onlinesearch.js
 - **决策**：DEC-20260909-001（按角色裁剪显隐）
-- **坑**：ISS-20260908-001（SW CORE 漏模块）
+- **坑**：ISS-20260908-001（SW CORE 漏模块）、ISS-20261017-010（library.js refresh 密集）、ISS-20261017-013（已修 debounce）、ISS-20261017-014（music.js catch 兜底）
 
 ### src/videoThumb.js（视频缩略图抽帧）
 - **决策**：DEC-20260905-001
@@ -45,8 +45,9 @@
   - ⏳ 一键同步到 android assets/pwa/
   - ⏳ 版本号 bump 子命令
 
-### scripts/import-secrets.ps1
-- 无关联条目
+### scripts/preflight.mjs（14 项发布前检查）
+- **决策**：DEC-20261017-002（发布前自动化）、DEC-20261017-003（设定体系升级）
+- **坑**：ISS-20261017-015（注释 10→14 漂移，已修）
 
 ---
 

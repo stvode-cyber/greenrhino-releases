@@ -6,6 +6,21 @@
 
 ## 2026-10-17
 
+### 📋 任务 T20261017-01 设定体系升级（下午）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A0 基线建立 | ✅ | preflight 14/14 绿、单元 6/6 绿、E2E 1/4 挂（SW ready timeout） |
+| A1 AGENTS.md 瘦身 | ✅ | 266→255 行，合并重复，新增铁律 #10 + 进程跟踪机制 + 用户偏好升级（8 条） |
+| A2 漂移修复 | ✅ | preflight 注释 10→14、context 铁律 23→10、补 .session-memory.md、修 build-assets.mjs 路径 |
+| A3 台账优化 | ✅ | ISS-012~015 新归档、DEC-003 新决策、进程跟踪机制落地 |
+| A4 代码修复 | ✅ | library.js refresh debounce 150ms、main.js/music.js promise catch 兜底 |
+| A5 回归验证 | ✅ | preflight 14/14 绿 + 单元 6/6 绿，零回归 |
+| A6 归档台账 | ✅ | issues +4、decisions +1、daily + 任务区块、session 清空 |
+| A7 汇报总汇 | ⏳ | 待完成 |
+
+### 上午流水（同天）
+
 - 上午 build-web.mjs + preflight.mjs + bump-version.mjs 三脚本落地 + CI.yml 建立 + AGENTS.md 同步
 - 上午 Android 构建：ASCII 路径 workaround（ISS-20261017-006）+ SDK 路径修复（ISS-20261017-007）+ Gradle 手动 curl（ISS-20261017-008）→ 双 APK BUILD SUCCESSFUL
 - 上午 21 commits 全部推 origin/main `stvode-cyber/greenrhino-releases`

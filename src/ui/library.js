@@ -59,9 +59,18 @@ export function mediaLibrary(app, type) {
     return h('div', { class: 'lib-toolbar' }, scanBtn, pickBtn, selBtn, dupBtn)
   }
 
-  let refreshGen = 0 // 并发守卫：refresh 内有多个 await（getAllMedia / getThumbsMap），
-  // 叠加库变更事件可能并发触发；只让最后一次真正渲染，避免重复追加内容。
-  async function refresh() {
+  // ISS-20261017-010: refresh 入口 debounce — 150ms 内多次触发（多事件同时 fire）
+  // 只跑最后一次；配合下面的 refreshGen 并发守卫（防 await 后过期渲染）
+  let refreshTimer = null
+  let refreshGen = 0
+  function refresh() {
+    if (refreshTimer) clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null
+      _refresh()
+    }, 150)
+  }
+  async function _refresh() {
     const gen = ++refreshGen
     const all = await getAllMedia()
     if (gen !== refreshGen) return

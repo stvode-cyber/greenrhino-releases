@@ -77,29 +77,31 @@ cd C:\greenrhino-build\android-player
 
 | Commit | 内容 |
 |---|---|
+| (未提交) | `T20261017-01 设定体系升级：AGENTS.md 266→255 瘦身 + 新增铁律 #10 + 进程跟踪 + 漂移修复 + library.js debounce + promise catch 兜底` |
 | 357b2d4 | `fix(android): 加 ASCII 路径铁律 + local.properties SDK 路径 + gitignore` |
 | 753bfcb | `docs(ledger): 台账同步 — DEC-20261017-002 + ISS-20261017-003/004/005` |
 | 352f958 | `chore: player.js 补模块级 TODO 分拆计划` |
 | 2df9bf9 | `feat(ci): 建立 GitHub Actions CI + clients 废弃工程标注` |
-| f6a18e1 | `feat(build): build-web.mjs 自动重写绝对路径 + Android 同步 + preflight + bump` |
 
-**最新动态**（2026-10-17 10:15）：双 APK 今天新构建（music 3.49MB + player 3.47MB），推远程 main ✅。下一轮接 Moto USB → 真机回归。
+**最新动态**（2026-10-17 下午）：设定体系升级完成。preflight 14/14 绿 + 单元 6/6 绿 + 零回归。台账 ISS-012~015 + DEC-003 归档。下一轮接 Moto USB → 真机回归（ISS-009 TypeError 根因待挖）。
 
 ---
 
-## 📏 已定规则（23 条铁律）
+## 📏 已定规则（10 条铁律）
 
-详见 [AGENTS.md](../../../AGENTS.md)。核心：
+详见 [AGENTS.md](../../../AGENTS.md) 「不可变约束」章节。
 
-1. 版本三落点一致：`build-web.mjs APP_VERSION` + `sw.js cache` + `.iss`
-2. SW 占位符 `'__SW_CACHE__'` 禁止硬编码版本号
-3. 双 App cache 桶严格隔离
-4. 主题色、包名、assetlinks.json 严格对应
-5. `src/` 零构建，禁 bundler
-6. Android MediaStore `<unknown>` 字面量三层清洗
-7. Moto 真机：不要 `adb logcat -c`、装机必须 `install -r`、必须 `pm grant 4 权限`
-8. 改 web 必须重跑 `copy-web.mjs` 重压 `wwwroot.zip`
-9. **Android 构建必须在纯 ASCII 路径**（2026-10-17 新增铁律 #9）
+核心速查：
+1. **版本三落点**：APP_VERSION + cache 桶 + .iss 文件名必须同步
+2. **SW 占位符**：`'__SW_CACHE__'` 禁止硬编码版本号
+3. **双 App cache 隔离**：music ≠ player
+4. **主题色/包名/assetlinks**：严格绑定角色
+5. **src/ 零构建**：禁 bundler
+6. **Android MediaStore `<unknown>` 三层清洗**：不是 null，必须显式匹配字面量
+7. **Moto 真机**：别 `logcat -c`、装机 `install -r`、pm grant 4 权限、tap 610 2251
+8. **Android 构建必须纯 ASCII 路径**：复制到 C:\greenrhino-build\
+9. **build-assets.mjs 在 clients/**：不是 scripts/
+10. **台账闭环**：五步必走
 
 ---
 

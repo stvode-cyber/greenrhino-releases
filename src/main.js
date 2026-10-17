@@ -608,7 +608,7 @@ getSettings().then(async (s) => {
   }
   // 首次启动引导（仅 Hub 一次）
   if (s.firstRun && isHub) openWelcome()
-})
+}).catch((e) => console.error('[init] getSettings 恢复失败（非致命）:', e?.message))
 // 记住最后播放的曲目
 player.on('trackchanged', (item) => { if (item) saveSettings({ lastPlayedId: item.id }) })
 // 播放模式变更后持久化（音乐/视频各自独立保存）
