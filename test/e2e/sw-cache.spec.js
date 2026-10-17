@@ -18,7 +18,7 @@ test.describe('🎵 Music PWA SW', () => {
   test.use({ baseURL: MUSIC_URL })
 
   test('SW 注册成功，cache 名 = gr-music-<APP_VERSION>', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.goto('/', { waitUntil: 'load' })
 
     // 从页面注入的 window 变量取版本号（双保险，不硬编码 v16）
     const appInfo = await page.evaluate(() => ({
@@ -62,7 +62,7 @@ test.describe('🎵 Music PWA SW', () => {
   })
 
   test('SW 预缓存 CORE 资源包含 index.html 和 manifest', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.goto('/', { waitUntil: 'load' })
     await page.evaluate(async () => { await navigator.serviceWorker.ready })
 
     const precachedUrls = await page.evaluate(async () => {
@@ -91,7 +91,7 @@ test.describe('🎬 Player PWA SW', () => {
   test.use({ baseURL: PLAYER_URL })
 
   test('SW 注册成功，cache 名 = gr-player-<APP_VERSION>', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.goto('/', { waitUntil: 'load' })
 
     const appInfo = await page.evaluate(() => ({
       role: window.__winRole,
@@ -133,8 +133,8 @@ test.describe('🔵 双 App cache 隔离', () => {
     try {
       // 并行打开 + 等 SW ready
       await Promise.all([
-        musicPage.goto(MUSIC_URL, { waitUntil: 'domcontentloaded' }),
-        playerPage.goto(PLAYER_URL, { waitUntil: 'domcontentloaded' }),
+        musicPage.goto(MUSIC_URL, { waitUntil: 'load' }),
+        playerPage.goto(PLAYER_URL, { waitUntil: 'load' }),
       ])
       await Promise.all([
         musicPage.evaluate(async () => { await navigator.serviceWorker.ready }),

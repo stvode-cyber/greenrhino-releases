@@ -77,13 +77,13 @@ cd C:\greenrhino-build\android-player
 
 | Commit | 内容 |
 |---|---|
-| (未提交) | `T20261017-01 设定体系升级：AGENTS.md 266→255 瘦身 + 新增铁律 #10 + 进程跟踪 + 漂移修复 + library.js debounce + promise catch 兜底` |
+| 7c7ad24 | `fix(iss009): store.js 三 getter \|\| [] 兜底 + showMine stack 诊断 + secrets-keys.md` |
+| 05b6969 | `feat(setup): T20261017-01 AGENTS瘦身+漂移修复+进程跟踪+debounce+catch兜底` |
 | 357b2d4 | `fix(android): 加 ASCII 路径铁律 + local.properties SDK 路径 + gitignore` |
 | 753bfcb | `docs(ledger): 台账同步 — DEC-20261017-002 + ISS-20261017-003/004/005` |
 | 352f958 | `chore: player.js 补模块级 TODO 分拆计划` |
-| 2df9bf9 | `feat(ci): 建立 GitHub Actions CI + clients 废弃工程标注` |
 
-**最新动态**（2026-10-17 下午）：设定体系升级完成。preflight 14/14 绿 + 单元 6/6 绿 + 零回归。台账 ISS-012~015 + DEC-003 归档。下一轮接 Moto USB → 真机回归（ISS-009 TypeError 根因待挖）。
+**最新动态**（2026-10-17 傍晚）：T20261017-02 ISS-009 根因修复完成。store.js 三 getter 加 `|| []` 兜底 + showMine catch 补完整 stack + 各 getter typeof 打印。preflight 14/14 绿 + 单元 6/6 绿 + 零回归。**待真机验证**：下次插 Moto USB → music APK 启动不崩 + logcat 能看到完整 stack（如果还有其他崩点）。
 
 ---
 
@@ -108,8 +108,9 @@ cd C:\greenrhino-build\android-player
 ## 📚 台账导航
 
 - [context.md](./context.md) — 你在这里
-- [decisions.md](./decisions.md) — 8 个决策
-- [issues.md](./issues.md) — 16 个坑 + 5 个问题群
+- [decisions.md](./decisions.md) — 9 个决策
+- [issues.md](./issues.md) — 19 个坑 + 5 个问题群
 - [index.md](./index.md) — 模块索引
 - [daily.md](./daily.md) — 每日流水
+- [secrets-keys.md](./secrets-keys.md) — 🔐 敏感信息索引（只存引用不存密码）
 - [archive/](./archive/) — 7 份旧文档已归档
