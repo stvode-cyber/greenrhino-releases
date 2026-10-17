@@ -6,6 +6,25 @@
 
 ## 2026-10-18
 
+### 📋 任务 T20261018-02 投屏 QR 码入口（联网学 castbrowser.tv）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| B0 基线验证 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点，零漂移 |
+| B1 联网搜 QR API | ✅ | api.qrserver.com 免费稳定无 auth，URL encode 后直接 `<img>` |
+| B2 castCenter.js 加 QR | ✅ | updateScreenUrl() 加 cc-screen-qr-wrap/qr/qr-tip 三元素 |
+| B3 style.css 加样式 | ✅ | 120x120 白底圆角+阴影，与现有 cc-* 前缀隔离 |
+| B4 全量回归 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点，零回归 |
+| B5 commit + push | ✅ | b25e573 → GitHub main ✅ |
+
+**改了哪些文件**：
+- src/ui/castCenter.js（+11/-1：updateScreenUrl 加 QR img）
+- src/style.css（+11：cc-screen-qr-wrap/qr/qr-tip 三样式）
+
+**零依赖决策**：api.qrserver.com 公共 API 直接生成 → 不 npm install QR 库（符合零构建铁律），比 vendor 单文件还干净
+
+---
+
 ### 📋 任务 T20261018-01 设定台账全面升级（摸家底→漂移修复→SKILL审查→全回归）
 
 | 动作 | 状态 | 说明 |
