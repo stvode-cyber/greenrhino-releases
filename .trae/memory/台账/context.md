@@ -87,7 +87,7 @@ cd C:\greenrhino-build\android-player
 
 ## 🚨 活跃坑清单（新 AI 必看）
 
-> 已修 16 条（✅ 关单），活跃 5 条（⚠️ 待跟进）。详见 [issues.md](./issues.md)
+> 已修 18 条（✅ 关单），活跃 3 条（⚠️ 待跟进）。详见 [issues.md](./issues.md)
 
 | 编号 | 标题 | 严重度 | 状态 |
 |---|---|---|---|
