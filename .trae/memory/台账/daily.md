@@ -6,6 +6,22 @@
 
 ## 2026-10-17
 
+### 📋 任务 T20261017-11 C 层 SKILL 维护
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| C0 基线 | ✅ | preflight 14/14 + 单元 6/6 |
+| C1 SKILL 盘点 | ✅ | 9 个 SKILL 文件全在，grep 出 2 处过时 |
+| C2 code-review-checklist 修复 | ✅ | SW cache 占位符旧正则 `greenrhino-v\d+` → 新精确占位符 `__SW_CACHE__` |
+| C3 frontend-component-spec 修复 | ✅ | v16 目录结构同步：加 src/app/ + src/player/ + src/css/ 三个新子目录，标注 style.css @import 入口 |
+| C4 unit-test-spec 验证 | ✅ | SW cache 测试矩阵已是新方案（`__SW_CACHE__`），反模式章节的 v14 是历史记录，无需改 |
+| C5 崩溃排查 | ✅ | build-web.mjs 返回 3221226505（Windows 栈溢出）→ 根因：python http server 锁 release 目录 → `fs.rmSync` 失败崩 Node → Kill python + 清 release 解决 |
+| C6 全量回归 | ✅ | preflight 14/14 + 单元 6/6 + Android sync 47 项 |
+| C7 commit + push | ✅ | b67655b → main |
+
+**改了哪些文件**：code-review-checklist/SKILL.md（1 处过时正则） + frontend-component-spec/SKILL.md（目录结构 v16 同步）
+**崩溃教训**：开本地 server 跑验证后要关，不然 release 被锁 → build-web.mjs 的 rmSync 崩 → 单元测试 child_process 也跟着崩。下次先 `Get-Process python | Stop-Process`
+
 ### 📋 任务 T20261017-10 B 层代码质量升级（保守拆分零回归）
 
 | 动作 | 状态 | 说明 |
