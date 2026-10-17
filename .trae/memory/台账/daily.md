@@ -6,7 +6,15 @@
 
 ## 2026-10-17
 
-### 📋 任务 T20261017-03 投屏功能推动 · player 壳同步（傍晚）
+### 📋 任务 T20261017-04 Moto 真机验证（傍晚）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| D0 ADB + 装机 | ✅ | music + player APK install -r |
+| D1 pm grant 4 权限 + profile 隔离 | ✅ | user 904 only |
+| D2 ISS-009 验证 | ✅ | music APK 启动 ~5s 无 TypeError undefined.length ✅ 已修 |
+| D3 player cast 验证 | ✅ | RhinoBridge registered OK，cast 5 方法在（music RB PROBE 已确认） |
+| D4 归档 + commit | ⏳ | |
 
 | 动作 | 状态 | 说明 |
 |---|---|---|

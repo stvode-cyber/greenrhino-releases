@@ -219,17 +219,17 @@
 - **预防**：⏳ 可把 gradle zip 作为项目资产预打包
 - **归类标签**：`#network` `#gradle-directory`
 
-### ISS-20261017-009 music APK 启动时 TypeError: undefined.length（**根因修复 + 诊断增强**）
+### ISS-20261017-009 music APK 启动时 TypeError: undefined.length（**根因已修复 + 真机验证**）
 
-- **严重度**：P2
+- **严重度**：P2 → ✅ 已修复
 - **机型**：Moto XT2401 (ZY22KJLPHK) · Android 14
-- **现象**：music APK 启动 ~1.5s 后 `E GreenRhino/JS: [105] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'length')`
-- **根因（推断）**：store.js 的 `getAllMedia()` / `getRecent()` / `getFavorites()` 三个 IndexedDB getter 在 `dbGetAll()` 极罕见返回 undefined 时，`.sort()` / `.length` 崩。player APK 同源码没这错——因为 player role 不走 mineEl 的 Promise.all 密集调用链
-- **解决**：✅ 2026-10-17 给三个 getter 加 `|| []` 兜底（`getPlaylists` 本来就有）+ showMine catch 补完整 stack 打印 + 打印各 getter typeof 类型
+- **现象**：music APK 启动 ~1.5s 后 `TypeError: Cannot read properties of undefined (reading 'length')`
+- **根因**：store.js 的 `getAllMedia()` / `getRecent()` / `getFavorites()` 三个 IndexedDB getter 缺 `|| []` 兜底。极罕见情况下 `dbGetAll()` 返回 undefined → `.sort()` 或 `.length` 崩。player APK 同源码没这错——因为 player role 不走 mineEl 的 `Promise.all(...)` 密集调用链
+- **解决**：✅ 2026-10-17 给三个 getter 加 `|| []` 兜底 + showMine catch 补完整 stack + 各 getter typeof 打印
+- **真机验证**：✅ 2026-10-17 Moto 插 USB → music APK 启动 ~5s 无 TypeError（之前 1.5s 就崩）
 - **关联文件**：`src/store.js`（三 getter 兜底）、`src/main.js`（showMine stack）
-- **预防**：✅ 已落地；下次真机回归跑 `adb logcat -d --pid=$pid *:E` 应能看到完整 stack + 各 getter 类型
 - **归类标签**：`#android-webview` `#js-runtime` `#role-specific` `#indexeddb` `#defensive-programming`
-- **状态**：已修复 + 诊断增强，待真机验证
+- **状态**：✅ 已修复 + 真机验证通过
 
 ### ISS-20261017-016 IndexedDB getter 缺兜底（已修）
 

@@ -62,13 +62,16 @@
 ## 📁 clients/（平台壳工程）
 
 ### clients/android-music/ + clients/android-player/
-- **决策**：DEC-20260914-001（TWA → 原生 WebView）
+- **决策**：DEC-20260914-001（TWA → 原生 WebView）、DEC-20261017-004（player 壳投屏同步）
+- **🆕 player 壳 2026-10-17 投屏补齐**：+DlnaCaster.kt +MediaHttpServer.kt +MainActivity 5 cast 方法 + Manifest 2 条权限
 - **坑**：
   - ISS-20260914-001（index.html 绝对路径）
   - ISS-20260914-002（webkitdirectory 不支持）
   - ISS-20261017-002（Moto adb logcat -c，已验证）
   - ISS-20261017-006（✅ Android 构建 ASCII 路径铁律）
   - ISS-20261017-007（SDK 路径漂移，已修）
+  - ISS-20261012-008（com.sun 不存在，MediaHttpServer 纯 ServerSocket 绕过）
+  - ISS-20261012-011（SSDP 多播 MulticastLock）
   - ISS-20261017-008（Gradle 下载超时）
   - **ISS-20261017-009**（P2 music APK TypeError undefined.length，待挖）
   - **ISS-20261017-010**（P3 player APK refresh 密集 7 次，待加 debounce）
