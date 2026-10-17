@@ -1,4 +1,4 @@
-﻿// Service Worker：预缓存应用壳 + 全部模块，实现真正的离线可安装
+// Service Worker：预缓存应用壳 + 全部模块，实现真正的离线可安装
 // 注意：每次发布改版必须递增版本号（v3→v4→…），否则 cache-first 会一直用旧缓存，
 // 导致 exe 里已是新代码、页面却仍在跑旧前端（曾因此出现「转码完成却没画面」）。
 //
@@ -10,8 +10,12 @@ const CACHE = '__SW_CACHE__'
 const CORE = [
   '/', '/index.html', '/favicon.svg', '/icons/icon.svg', '/manifest.webmanifest',
   '/src/style.css',
+  '/src/css/base.css', '/src/css/components.css', '/src/css/role.css',
   '/src/main.js', '/src/player.js', '/src/store.js', '/src/lrc.js', '/src/metadata.js',
-  '/src/cover.js', '/src/help.js', '/src/videoThumb.js',
+  '/src/cover.js', '/src/help.js', '/src/videoThumb.js', '/src/cast.js', '/src/id3.js',
+  '/src/lyricFetch.js',
+  '/src/app/format.js',
+  '/src/player/utils.js',
   '/src/ui/dom.js', '/src/ui/bottombar.js', '/src/ui/library.js', '/src/ui/music.js',
   '/src/ui/videoPlayer.js', '/src/ui/queue.js', '/src/ui/settings.js', '/src/ui/spectrum.js',
   '/src/ui/gestures.js', '/src/ui/favorites.js', '/src/ui/playlists.js', '/src/ui/recent.js',

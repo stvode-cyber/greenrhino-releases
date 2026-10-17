@@ -1,0 +1,49 @@
+:root {
+  --bg: #0E1116;
+  --card: #181C22;
+  --card-2: #1F242C;
+  --line: #2A313B;
+  --text: #E6EAF0;
+  --text-2: #9AA4B2;
+  --text-3: #6B7686;
+  --accent: #2D6CDF;
+  --accent-soft: #d6e4fb;
+  --danger: #E5484D;
+  --r-card: 12px;
+  --r-btn: 8px;
+  --shadow: 0 8px 30px rgba(0,0,0,.35);
+}
+[data-theme="light"] {
+  --bg: #F4F6FA;
+  --card: #FFFFFF;
+  --card-2: #EEF2F7;
+  --line: #DCE3EC;
+  --text: #1B2230;
+  --text-2: #5A6676;
+  --text-3: #8A94A4;
+  --accent: #2D6CDF;
+  --accent-soft: #d6e4fb;
+  --shadow: 0 8px 30px rgba(20,40,80,.12);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 13px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+button { font-family: inherit; cursor: pointer; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+#app {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "side main" "bottom bottom";
+  height: 100vh;
+  overflow-x: hidden;  /* 🔶 防止 vp-page 撑宽 body！ */
+}

@@ -7,78 +7,14 @@
 //   相关决策：DEC-20260903-001（ffmpeg 转码）、DEC-20260908-001（播放模式分离）
 //   相关坑：ISS-20260903-001（视频黑屏 E4 关单）
 
-// player.js — 统一播放引擎（音频 Web Audio 图 + 视频原生）
+// player.js — 统一播放引擎（入口，纯工具函数已抽 src/player/utils.js）
 import { getProgress, saveProgress, getSettings, recordPlayback } from './store.js'
 import { srtToVtt } from './lrc.js'
+import { parseChapters, EQ_FREQS, EQ_PRESETS, guessMime, _extOf, _bufToB64 } from './player/utils.js'
 
-// 解析章节文件（§10 章节跳转）：支持 mm:ss / hh:mm:ss / mm:ss.ss / [mm:ss] 等格式
-// 每行：`时间 标题`，例如 `00:30 开场`、`1:23.5 高潮`、`[00:01:30] 片尾`
-function parseChapters(text) {
-  const out = []
-  for (const raw of (text || '').split(/\r?\n/)) {
-    const line = raw.trim()
-    if (!line) continue
-    const m = line.match(/^\[?(\d{1,2})(?::(\d{1,2}))(?::(\d{1,2}))?\.?(\d{1,3})?\]?\s*(.*)$/)
-    if (!m) continue
-    const a = +m[1], b = m[2] ? +m[2] : 0, c = m[3] ? +m[3] : 0, ms = m[4] ? +m[4].padEnd(3, '0') : 0
-    const tsPart = line.split(/\s+/)[0].replace(/^\[?/, '').replace(/\]?$/, '').replace(/\.\d+$/, '')
-    const colons = (tsPart.match(/:/g) || []).length
-    const time = colons >= 2 ? a * 3600 + b * 60 + c + ms / 1000 : a * 60 + b + c + ms / 1000
-    const title = m[5].trim()
-    if (title) out.push({ time, title })
-  }
-  out.sort((x, y) => x.time - y.time)
-  return out
-}
-
-export const EQ_FREQS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-
-export const EQ_PRESETS = {
-  flat:     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  pop:      [-1, 0, 1, 2, 3, 2, 0, -1, -1, -2],
-  rock:     [3, 2, 1, 0, -1, -1, 0, 2, 3, 3],
-  classical: [0, 0, 0, 0, 0, 0, -1, -1, 0, 1],
-  bass:     [6, 5, 4, 2, 0, 0, 0, 0, 0, 0],
-  vocal:    [-2, -1, 0, 2, 3, 3, 2, 0, -1, -2],
-  electronic: [4, 3, 0, 0, -2, 1, 0, 2, 3, 4],
-  jazz:     [2, 1, 0, 1, 1, 1, 0, 1, 2, 2],
-  acoustic:  [2, 1, 0, 1, 2, 2, 1, 0, -1, -1],
-  hiphop:   [4, 3, 2, 0, 1, 2, 1, 0, -1, -1],
-  treble:   [-2, -1, 0, 0, 1, 2, 3, 4, 5, 5],
-  loudness: [3, 2, 2, 2, 2, 2, 2, 2, 3, 3]
-}
-
-// 编解码能力预检：浏览器原生不支持的格式（如 APE）提前给出明确提示，而非静默无反应
+// DOM probe：编解码能力预检（浏览器原生不支持的格式提前提示）
 const PROBE_A = document.createElement('audio')
 const PROBE_V = document.createElement('video')
-const MIME_BY_EXT = {
-  mp3: 'audio/mpeg', flac: 'audio/flac', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac',
-  ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wma: 'audio/x-ms-wma',
-  mp2: 'audio/mpeg', mp1: 'audio/mpeg', aiff: 'audio/aiff', mka: 'audio/x-matroska',
-  ape: 'audio/x-ape', tak: 'audio/x-tak', dsf: 'audio/x-dsf',
-  mp4: 'video/mp4', mkv: 'video/x-matroska', webm: 'video/webm', mov: 'video/quicktime',
-  avi: 'video/x-msvideo', m4v: 'video/mp4', ogv: 'video/ogg', ts: 'video/mp2t',
-  flv: 'video/x-flv', wmv: 'video/x-ms-wmv'
-}
-function guessMime(name, type) {
-  const m = /\.([a-z0-9]+)$/i.exec(name || '')
-  const ext = m ? m[1].toLowerCase() : ''
-  if (MIME_BY_EXT[ext]) return MIME_BY_EXT[ext]
-  return type === 'video' ? 'video/mp4' : 'audio/mpeg'
-}
-
-// 通用原生兜底工具：把库内/拖入的 Blob 视频交给 C# 原生播放器时用到
-function _extOf(item) {
-  const m = /\.([a-z0-9]+)$/i.exec((item && item.name) || '')
-  return m ? m[1].toLowerCase() : 'mp4'
-}
-function _bufToB64(buf) {
-  let binary = ''
-  const bytes = new Uint8Array(buf)
-  const CH = 0x8000
-  for (let i = 0; i < bytes.length; i += CH) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CH))
-  return btoa(binary)
-}
 
 class AudioEngine {
   constructor() {

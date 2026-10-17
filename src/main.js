@@ -25,6 +25,7 @@ setTimeout(() => {
 }, 300)
 import { h, toast, openModal, formatTime } from './ui/dom.js'
 import { player } from './player.js'
+import { fmtQuota } from './app/format.js'
 import {
   addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile,
   getFavorites, getPlaylists, getRecent, toggleFavorite, deletePlaylist
@@ -47,15 +48,6 @@ import { openSettings } from './ui/settings.js'
 import { openHelp } from './help.js'
 import { initGestures } from './ui/gestures.js'
 import { queueVideoThumbs } from './videoThumb.js'
-
-// 字节数友好显示：B/KB/MB/GB
-function fmtQuota(n) {
-  if (n == null || !n) return '0 B'
-  if (n < 1024) return n + ' B'
-  if (n < 1024 ** 2) return (n / 1024).toFixed(1) + ' KB'
-  if (n < 1024 ** 3) return (n / 1024 ** 2).toFixed(1) + ' MB'
-  return (n / 1024 ** 3).toFixed(2) + ' GB'
-}
 
 // store.js 事件总线
 const app = {
