@@ -303,6 +303,43 @@
 
 ---
 
+## 🔶 问题群：#role-isolation（✅ 3/3 已关单）
+
+> 同类坑 3 条。根因：B 层代码拆分时漏了角色隔离和 re-export。
+> 预防：AGENTS 铁律 #11 固化 + 拆分后必须 WebView 真机回归。
+
+### ✅ ISS-20261017-008 main.js allowedViews 按角色裁剪不完整（已关单）
+
+- **严重度**：P0
+- **现象**：player 壳侧边栏只剩一个「🎞️视频」按钮（连 home/settings 都没）；music 壳缺 settings
+- **根因**：`allowedViews` 写死了 `['video']`，没考虑 player 也需要首页和设置
+- **解决**：player 补 `['home','video','settings']`；music 补 `['settings']`；player 角色 home 改为 `buildHome(app)` 之前是 `null`
+- **关联文件**：`src/main.js`
+- **预防**：✅ AGENTS 铁律 #11 固化
+- **归类标签**：`#role-isolation` `#ui-sidebar` `#allowedViews`
+
+### ✅ ISS-20261017-009 B 层拆分后 EQ_FREQS 未 re-export（已关单）
+
+- **严重度**：P0
+- **现象**：player APK 启动即白屏，logcat `SyntaxError: '../player.js' does not provide an export named 'EQ_FREQS'`
+- **根因**：B 层拆分把 EQ_FREQS 搬到 `player/utils.js`，player.js import 了但没显式 `export { EQ_FREQS, EQ_PRESETS }` 透传给 `settings.js`
+- **解决**：player.js 加 `export { EQ_FREQS, EQ_PRESETS }`
+- **关联文件**：`src/player.js`、`src/player/utils.js`、`src/ui/settings.js`
+- **预防**：✅ AGENTS 铁律 #11 固化 + 拆分后 WebView 真机回归必须过
+- **归类标签**：`#role-isolation` `#esm-export` `#refactor-regression`
+
+### ✅ ISS-20261017-010 CSS @import 在 file:// WebView 下风险（已关单）
+
+- **严重度**：P1
+- **现象**：B 层拆分把 style.css 拆成 `@import './css/base.css'` 等三份，Android WebView 加载 `file:///android_asset/pwa/style.css` 时 @import 可能被拒（CORS 或相对路径解析问题）→ 裸 HTML
+- **根因**：原生 CSS `@import` 在 `file://` 协议下兼容性不如 bundler 产物
+- **解决**：回退单文件 style.css（base + components + role 全部内联，约 1480 行）
+- **关联文件**：`src/style.css`、`src/css/base.css`、`src/css/components.css`、`src/css/role.css`
+- **预防**：✅ AGENTS 铁律 #11 固化（CSS 禁止原生 @import，要么单文件要么 bundler 需批准）
+- **归类标签**：`#role-isolation` `#css-webview` `#android-webview`
+
+---
+
 ## 模板（新坑复制此块）
 
 ```markdown

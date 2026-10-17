@@ -110,6 +110,13 @@ Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -E
 ### 10. build-assets.mjs 位置约束
 图标光栅化脚本 `build-assets.mjs` 在 `clients/` 下（不是 `scripts/`），CI 里引用路径要对。
 
+### 11. 角色隔离铁律（ISS-20261017-008 / ISS-20261017-009）
+音乐（music）和播放器（player）是**两个完全独立的 App**，绝不能混。
+- `main.js` 侧栏导航项必须按 `ROLE` 裁剪：player 只留 `home/video/settings`，music 只留 `home/music/playlists/favorites/cloud/settings`
+- 拆分代码后，`player.js` 如果从子模块 re-export（如 `EQ_FREQS`），**必须显式 `export { ... }` 透传**，否则 `settings.js` 等下游文件会 SyntaxError
+- CSS 禁止用原生 `@import`（`file://` 协议的 Android WebView 下存在兼容性风险），必须**单文件内联**或改 bundler（需批准）
+- build-web.mjs 注入 `window.__winRole='video'/'music'` 后，运行时仍需 JS 层二次裁剪（`allowedViews` + `body.win-video/music` class）
+
 ---
 
 ## 📚 台账系统（成长型·五步闭环）

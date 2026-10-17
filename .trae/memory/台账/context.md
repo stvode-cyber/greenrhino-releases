@@ -14,7 +14,7 @@
 | **双站** | https://greenrhino-music.pages.dev / https://greenrhino-player.pages.dev |
 | **包名** | `com.greenrhino.music` / `com.greenrhino.player` |
 | **主题色** | 音乐绿 `#00D8A6` / 播放器琥珀 `#FFB03A` |
-| **Preflight** | ✅ 14/14 绿 |
+| **Preflight** | ✅ 18/18 绿 |
 | **单元测试** | ✅ 6/6 绿 |
 | **CI** | ✅ `.github/workflows/ci.yml` |
 | **远程** | ✅ main 分支已推 `3923222`（2026-10-17 傍晚） |

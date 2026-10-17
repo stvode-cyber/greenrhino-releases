@@ -91,7 +91,7 @@ const stats = isHub ? buildStats(app) : null
 const cloud = (isHub || isMusic) ? buildCloud(app) : null
 let home = null
 try {
-  home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : null)
+  home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : buildHome(app))
 } catch (e) {
   console.error('[init] buildHome/buildMusicHome 崩了:', e?.message, e?.stack)
 }
@@ -110,9 +110,11 @@ if (home?.mineEl && home.el?.parentElement) {
 }
 
 // 按角色精简侧栏：隐藏本窗不需要的导航项
+// player 壳：首页(视频网格) + 视频库 + 设置
+// music 壳：首页(音乐问候) + 音乐库 + 歌单 + 收藏 + 云盘 + 设置
 const allowedViews = isHub ? new Set(['home', 'music', 'video', 'recent', 'stats', 'playlists', 'favorites', 'cloud', 'settings'])
-  : ROLE === 'music' ? new Set(['home', 'music', 'playlists', 'favorites', 'cloud'])
-  : new Set(['video'])
+  : ROLE === 'music' ? new Set(['home', 'music', 'playlists', 'favorites', 'cloud', 'settings'])
+  : new Set(['home', 'video', 'settings'])
 document.querySelectorAll('.nav-item').forEach((b) => {
   if (b.dataset.view && !allowedViews.has(b.dataset.view)) b.style.display = 'none'
 })

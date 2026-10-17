@@ -11,6 +11,8 @@
 import { getProgress, saveProgress, getSettings, recordPlayback } from './store.js'
 import { srtToVtt } from './lrc.js'
 import { parseChapters, EQ_FREQS, EQ_PRESETS, guessMime, _extOf, _bufToB64 } from './player/utils.js'
+// 🔶 B 层拆分后 re-export，settings.js 从 '../player.js' 导入需要透传
+export { EQ_FREQS, EQ_PRESETS }
 
 // DOM probe：编解码能力预检（浏览器原生不支持的格式提前提示）
 const PROBE_A = document.createElement('audio')
