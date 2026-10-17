@@ -5,32 +5,42 @@ AI 员工写/改前端 UI 组件时加载。规定命名、状态管理、角色
 
 ---
 
-## 目录结构约定
+## 目录结构约定（v16 版，B 层已拆分子目录）
 ```
 src/
-├── main.js            ← 应用入口，按 winRole 裁剪
-├── player.js          ← Audio / Video 核心播放器
+├── main.js            ← 应用入口，按 winRole 裁剪（921 行，保守拆分留着闭包耦合）
+├── player.js          ← Audio / Video 核心播放器（796 行，纯工具已抽 player/utils.js）
 ├── store.js           ← IndexedDB 持久化
 ├── lrc.js             ← 歌词解析（music 用）
-├── cover.js           ← 封面提取
 ├── metadata.js        ← ID3/FLAC 标签解析
+├── cover.js           ← 封面提取
 ├── help.js            ← 帮助/快捷键
 ├── videoThumb.js      ← 视频缩略图生成（player 用）
-├── cast.js            ← Cast 协议桥接（可选）
-├── style.css          ← 全局样式 + CSS 变量
-└── ui/
-    ├── dom.js              ← DOM 操作工具
-    ├── bottombar.js        ← 底部播放条（双角色共用）
-    ├── library.js          ← 曲库（music 主体）
-    ├── music.js            ← 音乐专属 UI
-    ├── videoPlayer.js      ← 视频专属 UI（player 主体）
-    ├── queue.js            ← 播放队列
-    ├── settings.js         ← 设置面板
-    ├── spectrum.js         ← 频谱可视化（music 专属）
-    ├── gestures.js         ← 触摸手势
-    ├── favorites.js        ← 收藏
-    ├── playlists.js        ← 歌单
-    ├── recent.js           ← 最近播放
+├── cast.js            ← Cast 协议桥接
+├── id3.js             ← ID3 标签解析
+├── lyricFetch.js      ← LRCLIB 歌词代理
+├── style.css          ← @import 入口（8 行），全量样式拆进 src/css/
+├── app/               🆕 B 层新增
+│   └── format.js          纯格式化工具（fmtQuota）
+├── player/            🆕 B 层新增
+│   └── utils.js           纯工具 + 常量（parseChapters/EQ/guessMime 等）
+├── css/               🆕 B 层新增 @import 三层
+│   ├── base.css           :root 变量 + reset（48 行）
+│   ├── components.css     通用组件（455 行）
+│   └── role.css           🎵 音乐绿 + 🎬 琥珀主题（885 行）
+└── ui/                UI 组件（双角色共用或单角色）
+    ├── dom.js              DOM 操作工具
+    ├── bottombar.js        底部播放条（双角色共用）
+    ├── library.js          曲库（music 主体）
+    ├── music.js            音乐专属 UI
+    ├── videoPlayer.js      视频专属 UI（player 主体）
+    ├── queue.js            播放队列
+    ├── settings.js         设置面板
+    ├── spectrum.js         频谱可视化（music 专属）
+    ├── gestures.js         触摸手势
+    ├── favorites.js        收藏
+    ├── playlists.js        歌单
+    ├── recent.js           最近播放
     ├── cloud.js            ← WebDAV 同步
     ├── stats.js            ← 播放统计
     └── onlinesearch.js     ← 在线歌词/封面搜索

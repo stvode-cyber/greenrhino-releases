@@ -13,7 +13,7 @@ AI 员工执行代码审查时加载，提供可操作的 P0/P1/P2 检查条目�
 - [ ] **assetlinks.json 匹配**：`package_name`（`com.greenrhino.{music,player}`）、Cloudflare Pages 域名、SHA256 指纹三者严格对应
 - [ ] **原生 ESM 兼容**：新增/修改的 import 路径都是浏览器可直接解析的绝对路径 `/src/xxx.js`，没有 `.ts`、bundle 产物、相对路径 `../` 嵌套超过 2 层
 - [ ] **密钥泄露**：`git diff` 里没有 keystore base64、密码、`-----BEGIN` 证书块、`.secrets.env` 内容
-- [ ] **sw.js 源码 cache 占位符**：`sw.js` 里的 `const CACHE = 'greenrhino-v\d+'` 必须是可被 `build-web.mjs` 的正则 `replace(/'greenrhino-v\d+'/, cfg.cache)` 匹配的合法版本号。不要出现更老的遗留版本号（如 v14），也不要出现非数字占位符（会导致正则失效 → release 产物里 cache 名错误）。验证命令：`Select-String sw.js -Pattern "CACHE" | Select-Object -First 1`
+- [ ] **sw.js 源码 cache 占位符**：`sw.js` 源码必须是精确占位符 `const CACHE = '__SW_CACHE__'`，不能有硬编码版本号（如 v14/v15），不能有通配正则。`build-web.mjs` 的替换逻辑是精确匹配 `replace(/'__SW_CACHE__'/, cfg.cache)`，所以占位符必须一字不差。验证命令：`Select-String sw.js -Pattern "CACHE" | Select-Object -First 1`
 - [ ] **.gitattributes LF 强制**：`.github/workflows/*.yml text eol=lf` 规则不能丢。GitHub Actions runner 在 Windows 上会把 YAML 解析成 CRLF，导致"workflow 未找到"或 matrix 静默展开为空。验证命令：`Get-Content .gitattributes | Select-String "yml.*lf"`
 
 ## 🟠 P1 — 严重（建议修）
