@@ -140,7 +140,26 @@ function buildRole(key) {
   fs.mkdirSync(path.join(out, '.well-known'), { recursive: true })
   fs.writeFileSync(path.join(out, '.well-known', 'assetlinks.json'), JSON.stringify(assetlinks, null, 2))
 
+  // 5) 产物大小自动报告（方便监控瘦身效果）
+  const allFiles = walkSync(out).filter((f) => fs.statSync(f).isFile())
+  const totalBytes = allFiles.reduce((s, f) => s + fs.statSync(f).size, 0)
+  const top10 = allFiles
+    .map((f) => ({ bytes: fs.statSync(f).size, rel: path.relative(out, f) }))
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, 6)
   console.log(`✅ 已生成 ${key} 站点 → ${path.relative(ROOT, out)}  (winRole=${cfg.winRole}, cache=${cfg.cache}, pkg=${cfg.androidPackage})`)
+  console.log(`   📦 产物：${(totalBytes/1024).toFixed(1)} KB / ${allFiles.length} 文件`)
+  for (const f of top10) console.log(`      ${((f.bytes/1024).toFixed(1)).padStart(6)} KB  ${f.rel}`)
+}
+
+function walkSync(dir, list = []) {
+  if (!fs.existsSync(dir)) return list
+  for (const e of fs.readdirSync(dir)) {
+    const full = path.join(dir, e)
+    list.push(full)
+    if (fs.statSync(full).isDirectory()) walkSync(full, list)
+  }
+  return list
 }
 
 const argRole = process.argv.find((a) => a.startsWith('--role='))
