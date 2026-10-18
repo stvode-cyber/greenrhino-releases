@@ -6,6 +6,22 @@
 
 ## 2026-10-18
 
+### 📋 任务 T20261018-05 console.log 纯 debug 清理（19→7）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| E0 基线验证 | ✅ | preflight 18/18 + 单元 6/6 |
+| E1 分类 console.log | ✅ | 19 条里 16 条纯 debug，7 条真实错误保留 |
+| E2 批量清理 | ✅ | 7 文件 18 行删，16→7（player.js/watchdog + main.js/RhinoBridge + lyricFetch/3 + cast/1 + music/1 + videoPlayer/3） |
+| E3 全量回归 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点，零回归 |
+| E4 commit + push | ✅ | dd6e17e → GitHub main ✅ |
+
+**关键数据**：
+- 全天两轮 debug 清理合计：console.error 46→18 + console.log/warn 19→7 = **65→25**
+- 剩余 25 条日志全是 catch 块里的真实错误追踪
+
+---
+
 ### 📋 任务 T20261018-04 QR码本地生成 + moto debug开关 + SKILL互相引用
 
 | 动作 | 状态 | 说明 |
