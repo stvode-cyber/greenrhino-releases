@@ -18,6 +18,9 @@
 | D5 SKILL互相引用 | ✅ | ledger-health-check A3 5→7 + security-secrets-index↔security-audit-guide 交叉 |
 | D6 全量回归 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点，零回归 |
 | D7 commit + push | ✅ | 9bf3da0 → GitHub main ✅ |
+| D8 sw.js CORE 补 qrcodejs | ✅ | advisor 抓到离线漏洞，已加 + build-web 双站点验证 |
+| D9 台账收尾 | ✅ | secrets/context/session 全更新 |
+| D10 commit + push | ⏳ | bd23022 本地好，push 网络断（github.com:443），下次开工先补推 |
 
 **改了哪些文件**：
 - src/lib/qrcodejs.js（+622 新建，vendor MIT）

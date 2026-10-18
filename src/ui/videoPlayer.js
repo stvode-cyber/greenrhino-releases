@@ -303,11 +303,10 @@ export function buildVideoPlayer(app) {
   video.addEventListener('click', () => player.toggle())
   video.addEventListener('dblclick', toggleFullscreen)   // 双击画面：全屏/退出全屏
   function toggleFullscreen() {
-  console.log('[gr] toggleFullscreen called, RhinoBridge=', !!window.RhinoBridge, 'immersive=', document.body.classList.contains('video-immersive'))
+    const bridge = window.RhinoBridge
     try {
-      const bridge = window.RhinoBridge
       if (bridge?.toggleFullscreen) {
-        try { console.log('[gr] calling RhinoBridge.toggleFullscreen'); bridge.toggleFullscreen(); console.log('[gr] RhinoBridge.toggleFullscreen returned') } catch(e) { console.error('[gr] bridge error:', e) }                        // → Android 原生：切横屏 + 沉浸式
+        try { bridge.toggleFullscreen() } catch(e) { console.error('[gr] bridge error:', e) }
         const alreadyImmersive = document.body.classList.contains('video-immersive')
         const willEnter = !alreadyImmersive
         // 🔶 显式 add/remove（不用 toggle！避免状态漂移）

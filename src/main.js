@@ -14,14 +14,8 @@ window.__grModuleRan = true  // 🔶 终极诊断：如果 module 执行到这�
 setTimeout(() => {
   try {
     const rb = window.RhinoBridge
-    if (rb) {
-      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(rb)).filter(m => m !== 'constructor')
-      console.log('🔧 RhinoBridge methods:', methods)
-      console.log('🔧 RhinoBridge.getLyric exists?', typeof rb.getLyric)
-    } else {
-      console.log('🔧 RhinoBridge NOT FOUND on window!')
-    }
-  } catch (e) { console.log('🔧 RhinoBridge debug error:', e) }
+    if (rb) { /* RhinoBridge 已就绪，后续方法调用会自然验证 */ }
+  } catch (e) { /* 忽略 */ }
 }, 300)
 import { h, toast, openModal, formatTime } from './ui/dom.js'
 import { player } from './player.js'
@@ -945,7 +939,7 @@ installBtn?.addEventListener('click', async () => {
   installBtn.hidden = true
 })
 
-console.log('绿角犀播放器 · 离线媒体播放器已就绪')
+  console.log('绿角犀播放器 · 离线媒体播放器已就绪')
 
 // ---------- 外部打开（双击文件 / 系统默认关联） ----------
 // C# 壳把双击传入的本地文件登记进 LocalServer 白名单，页面加载完成后通过

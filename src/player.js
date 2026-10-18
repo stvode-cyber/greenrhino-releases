@@ -563,7 +563,6 @@ class PlayerEngine {
     this._watchItemId = id
     clearTimeout(this._blackTimer)
     this._blackTimer = setTimeout(() => {
-      console.log('[gr] watchdog check: t=' + (v ? v.currentTime : '?') + ' vw=' + (v ? v.videoWidth : '?') + ' vh=' + (v ? v.videoHeight : '?') + ' paused=' + (v ? v.paused : '?') + ' err=' + (v && v.error ? v.error.code : '0'))
       try {
         if (!v || v.paused) return
         if ((v.currentTime || 0) < 0.5) return   // 还没真正开始播放，不判定

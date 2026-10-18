@@ -47,7 +47,6 @@ function initHost() {
   const host = isHost()
   if (!host) return
   state.host = host
-  console.log('📺 cast.js initHost:', host)
 
   if (host === 'windows') {
     // Windows WebView2：监听 chrome.webview.message

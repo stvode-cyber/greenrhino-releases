@@ -182,7 +182,6 @@ export function buildMusic(app) {
     try {
       if (window.RhinoBridge && typeof window.RhinoBridge.getLyric === 'function') {
         lrc = window.RhinoBridge.getLyric(title, artist) || ''
-        if (lrc) console.log('[music.js] ✅ RhinoBridge hit:', title)
       }
     } catch (e) {}
 

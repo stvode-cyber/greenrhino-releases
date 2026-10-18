@@ -20,7 +20,6 @@ export async function fetchOnlineLyric(item, query) {
   try {
     if (window.RhinoBridge && typeof window.RhinoBridge.getLyric === 'function') {
       lrc = window.RhinoBridge.getLyric(title, artist) || ''
-      if (lrc) console.log('[lyricFetch] ✅ RhinoBridge hit:', title)
     }
   } catch (e) { /* 桥不可用：忽略，走下一级 */ }
 
@@ -31,7 +30,7 @@ export async function fetchOnlineLyric(item, query) {
       const res = await fetch(`/api/lyric?${u.toString()}`)
       if (res.ok) {
         const j = await res.json().catch(() => null)
-        if (j && j.lyric && j.lyric.trim()) { lrc = j.lyric.trim(); console.log('[lyricFetch] ✅ /api/lyric hit') }
+        if (j && j.lyric && j.lyric.trim()) { lrc = j.lyric.trim() }
       }
     } catch (e) { /* 本地服务不存在：忽略 */ }
   }
@@ -39,7 +38,6 @@ export async function fetchOnlineLyric(item, query) {
   // ③ 直连 LRCLIB 兜底
   if (!lrc) {
     try { lrc = await fetchLrclib(title, artist, album) } catch (e) {}
-    if (lrc) console.log('[lyricFetch] ✅ LRCLIB direct hit')
   }
 
   if (!lrc) return null
