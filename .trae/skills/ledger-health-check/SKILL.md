@@ -34,7 +34,9 @@ node scripts/build-web.mjs        # 双站点必须 BUILD SUCCESSFUL
 - `.session-memory.md`：重置为空白模板
 - **检查 daily.md 有没有悬空动作**：T-01/T-02 等老任务的 ⏳ 不能留
 
-### A3 SKILL 全量审查（5 个活跃 SKILL 必扫）
+### A3 SKILL 全量审查（7 个活跃 SKILL 必扫）
+
+> 🔗 **交叉引用**：查 security-secrets-index（审计敏感索引）时要同步跑 security-audit-guide，反之亦然
 
 | SKILL | v16 必查项 | 实际过时案例 |
 |---|---|---|
@@ -141,14 +143,16 @@ node scripts/build-web.mjs          # 双站点必须 BUILD SUCCESSFUL
   archive/        ← 已沉淀归档
 ```
 
-### 活跃 SKILL 5 个
+### 活跃 SKILL 7 个
 ```
 .trae/skills/
-  code-review-checklist/     ← P0/P1/P2 审查清单
+  ledger-health-check/       ← 本 SKILL
+  security-secrets-index/    ← 敏感信息索引（触发审计时要同步跑 security-audit-guide）
   frontend-component-spec/   ← 目录结构+角色隔离+主题色
+  code-review-checklist/     ← P0/P1/P2 审查
   unit-test-spec/            ← 测试框架+覆盖矩阵+SW cache
   docker-deploy-guide/       ← cloud_api.py 容器化
-  security-audit-guide/      ← 三后端路径遍历+密钥泄露
+  security-audit-guide/      ← 三后端安全扫描（触发时要同步跑 security-secrets-index）
 ```
 
 ### 活跃坑理想状态：0 条

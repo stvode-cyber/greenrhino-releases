@@ -4,6 +4,7 @@
 import { h, toast } from './dom.js'
 import { cast } from '../cast.js'
 import { player } from '../player.js'
+import QRCode from '../lib/qrcodejs.js'
 
 let ccModal = null     // 模态框根节点（全局单例）
 
@@ -140,21 +141,23 @@ export function showCastCenter(app) {
     if (!url) { row.hidden = true; row.innerHTML = ''; screenBtn.textContent = '📱 开始屏幕镜像'; return }
     row.hidden = false
     row.innerHTML = ''
-    const qrImg = h('img', {
-      class: 'cc-screen-qr',
-      src: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url),
-      alt: '电视浏览器扫码',
-      loading: 'lazy'
-    })
+    const qrWrap = h('div', { class: 'cc-screen-qr-wrap' })
+    try {
+      // 零依赖：本地 QRCode 库生成 canvas（离线可用，不受网络/CSP 限制）
+      new QRCode(qrWrap, { text: url, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L })
+      // canvas 自动生成，给它加背景+圆角
+      const c = qrWrap.querySelector('canvas')
+      if (c) { c.className = 'cc-screen-qr'; c.style.background = '#fff' }
+    } catch (e) {
+      qrWrap.textContent = 'QR 生成失败：' + e?.message
+    }
     row.append(
       h('div', { class: 'cc-screen-label' }, '🌐 电视浏览器打开这个地址：'),
       h('div', { class: 'cc-screen-row' },
         h('input', { class: 'cc-screen-input', readonly: true, value: url }),
         h('button', { class: 'cc-btn-tiny', onclick: () => navigator.clipboard?.writeText(url).then(() => app.toast('已复制')) }, '📋 复制')),
-      h('div', { class: 'cc-screen-qr-wrap' },
-        qrImg,
-        h('div', { class: 'cc-screen-qr-tip' }, '📱 电视扫码直接访问'))
-    )
+      qrWrap,
+      h('div', { class: 'cc-screen-qr-tip' }, '📱 电视扫码直接访问'))
     screenBtn.textContent = '■ 停止屏幕镜像'
   }
 

@@ -19,10 +19,12 @@ const CLOUD_BASE = ((() => {
 // 是否运行在原生壳（WebView2）：内嵌云盘同源可用，纯网页需另起 Python 后端
 const IS_HOST = !!window.GR_HOST
 
-// Android 壳里 Moto 屏蔽 Debug/Info 级别，Error 级别能漏出来 → 用 console.error 当唯一调试通道
-// 纯网页（Chrome DevTools 正常）不需要这些日志
+// Android 壳里 Moto 屏蔽 Debug/Info 级别，Error 级别能漏出来
+// 纯网页/桌面壳不需要这些日志 → 默认不打
+// 调试时在 Moto DevTools Console 里 localStorage.setItem('__GR_DEBUG__', '1') 然后刷新
 const _IS_ANDROID_SHELL = /android/i.test(navigator.userAgent || '')
-const _log = (...args) => { if (_IS_ANDROID_SHELL) console.error('[cloud]', ...args) }
+const _DEBUG = localStorage.getItem('__GR_DEBUG__') === '1'
+const _log = (...args) => { if (_IS_ANDROID_SHELL && _DEBUG) console.error('[cloud]', ...args) }
 
 const SKEY = 'gr_cloud_session'
 
