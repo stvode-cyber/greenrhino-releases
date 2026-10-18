@@ -77,11 +77,11 @@ cd C:\greenrhino-build\android-player
 
 | Commit | 内容 |
 |---|---|
-| （待提交） | `chore: T20261018-01 设定台账全面升级——漂移修复+SKILL同步v16+台账闭环` |
-| 3923222 | `feat: 前端 UI 加 MJPEG 屏幕镜像按钮（投屏面板三选项全齐）` |
-| 2b9cb77 | `feat: 屏幕镜像 MJPEG /screen.mjpg — MediaProjection 抓屏` |
-| 61dbafb | `feat: MediaHttpServer TV browser + BootReceiver + 双壳全量 sync` |
-| 1124423 | `feat: autoNext 设置 — 播放完默认停（DEC-005）` |
+| `199b5ea` | `chore(ledger): T20261018-04 QR码本地生成台账归档` |
+| `9bf3da0` | `feat: QR码本地生成(qrcodejs MIT)+cloud debug开关+SKILL互相引用` |
+| `80fca8d` | `chore(ledger): secrets-keys 版本追踪补全 + session 清空` |
+| `ad834da` | `chore(ledger): T20261018-03 debug清理台账归档 + AGENTS SKILL 7` |
+| `6b92b8f` | `chore: 46→18 console.error + security-secrets-index SKILL 新建` |
 
 ---
 

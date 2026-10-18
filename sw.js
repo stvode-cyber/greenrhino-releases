@@ -21,7 +21,8 @@ const CORE = [
   '/src/ui/gestures.js', '/src/ui/favorites.js', '/src/ui/playlists.js', '/src/ui/recent.js',
   '/src/ui/cloud.js', '/src/ui/stats.js', '/src/ui/onlinesearch.js',
   '/src/ui/castCenter.js',
-  '/src/ui/castStatusBar.js'
+  '/src/ui/castStatusBar.js',
+  '/src/lib/qrcodejs.js'
 ]
 
 self.addEventListener('install', (e) => {

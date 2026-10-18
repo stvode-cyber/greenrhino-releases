@@ -79,7 +79,10 @@
 
 | 日期 | 版本 | Commit | 推送目标 | 备注 |
 |---|---|---|---|---|
-| 2026-10-18 | v16 | `ad834da` | GitHub main ✅ | debug清理+secrets SKILL+AGENTS SKILL 7 |
+| 2026-10-18 | v16 | `199b5ea` | GitHub main ✅ | T20261018-04 台账归档 |
+| 2026-10-18 | v16 | `9bf3da0` | GitHub main ✅ | QR码本地生成+cloud debug开关+SKILL互相引用 |
+| 2026-10-18 | v16 | `80fca8d` | GitHub main ✅ | secrets-keys 版本追踪补全 |
+| 2026-10-18 | v16 | `ad834da` | GitHub main ✅ | debug清理台账归档 + AGENTS SKILL 6→7 |
 | 2026-10-18 | v16 | `6b92b8f` | GitHub main ✅ | 46→18 console.error + security-secrets-index SKILL 新建 |
 | 2026-10-18 | v16 | `dc6d732` | GitHub main ✅ | T20261018-02 台账归档 |
 | 2026-10-18 | v16 | `b25e573` | GitHub main ✅ | 投屏 QR 码入口（castCenter.js + style.css） |
