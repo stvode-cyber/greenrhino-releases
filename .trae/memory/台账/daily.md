@@ -6,6 +6,32 @@
 
 ## 2026-10-18
 
+### 📋 任务 T20261018-04 QR码本地生成 + moto debug开关 + SKILL互相引用
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| D0 基线验证 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点 |
+| D1 联网选QR方案 | ✅ | davidshimjs/qrcodejs（MIT，589行，纯JS零依赖） |
+| D2 vendor qrcodejs | ✅ | src/lib/qrcodejs.js + var→let + export default QRCode + vendor注释头 |
+| D3 castCenter QR换本地 | ✅ | updateScreenUrl() QR img→本地 canvas，离线可用不受网络限 |
+| D4 cloud.js moto开关 | ✅ | 加 _DEBUG = localStorage.__GR_DEBUG__==='1'，默认全关 |
+| D5 SKILL互相引用 | ✅ | ledger-health-check A3 5→7 + security-secrets-index↔security-audit-guide 交叉 |
+| D6 全量回归 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点，零回归 |
+| D7 commit + push | ✅ | 9bf3da0 → GitHub main ✅ |
+
+**改了哪些文件**：
+- src/lib/qrcodejs.js（+622 新建，vendor MIT）
+- src/ui/castCenter.js（+23/-17：外部API→本地QRCode canvas）
+- src/ui/cloud.js（+8：_DEBUG 开关）
+- .trae/skills/ledger-health-check/SKILL.md（+12：A3 标题+交叉引用+活跃SKILL数）
+
+**关键决策**：
+- QR码不用 npm install 也不用外部API → vendor 纯JS文件到 src/lib/（零构建铁律合规，不是 bundler 依赖）
+- moto debug 默认关 → localStorage flag 手动开，桌面壳永远不输出
+- qrcodejs 加 vendor 头 → 审计时一眼知道是第三方，MIT许可安全
+
+---
+
 ### 📋 任务 T20261018-03 生产代码 debug 清理 + secrets-keys 升 SKILL
 
 | 动作 | 状态 | 说明 |
