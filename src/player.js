@@ -82,6 +82,17 @@ class PlayerEngine {
     }
     const Ctx = window.AudioContext || window.webkitAudioContext
     this.ctx = new Ctx()
+    // iOS Safari sampleRate 检测：部分 iOS 路由切换后 sampleRate 变 8000Hz，播放无声
+    if (this.ctx.sampleRate !== 44100) {
+      try {
+        const dummy = this.ctx.createBuffer(1, 1, this.ctx.sampleRate)
+        const src = this.ctx.createBufferSource()
+        src.buffer = dummy
+        src.connect(this.ctx.destination)
+        src.start()
+        src.stop(0)
+      } catch {}
+    }
     this.master = this.ctx.createGain()
     this.master.gain.value = this.muted ? 0 : this.volume
     this.master.connect(this.ctx.destination)

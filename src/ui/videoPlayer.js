@@ -4,9 +4,10 @@
 //   倍速 / 音轨 / 字幕轨 / 载入字幕 / 章节 / 画中画 / 旋转 / 比例 / 截图 / AB 循环 / 生成片段。
 import { h, toast } from './dom.js'
 import { player } from '../player.js'
+import { ctx } from '../app/context.js'
 import { getSettings, saveTrackPref, deleteMedia } from '../store.js'
 import { mediaLibrary } from './library.js'
-import { cast } from '../cast.js'
+import { showCastCenter } from './castCenter.js'
 
 export function buildVideoPlayer(app) {
   const lib = mediaLibrary(app, 'video')   // 空态内容：视频库网格，铺满
@@ -171,6 +172,24 @@ export function buildVideoPlayer(app) {
     }
   })
 
+  const volBtn = h('button', { class: 'opt', title: '静音', onclick: () => player.setMute(!player.muted) }, player.muted ? '🔇' : '🔊')
+  const vol = h('input', { class: 'opt vp-vol', type: 'range', min: '0', max: '100', value: String(Math.round(player.volume * 100)), style: { width: '60px' } })
+  vol.addEventListener('input', () => { player.setVolume(vol.value / 100) })
+  player.on('volume', (v) => { vol.value = String(Math.round(v * 100)) })
+  player.on('mute', (m) => { volBtn.textContent = m ? '🔇' : '🔊' })
+  const queueBtn = h('button', { class: 'opt', title: '播放队列', onclick: () => app.openQueue() }, '☰')
+  const modeIcons = { order: '⏭', loop: '🔁', random: '🔀', one: '🔂' }
+  const modeLabel = { order: '顺序', loop: '列表循环', random: '随机', one: '单集循环' }
+  const modeBtn = h('button', { class: 'opt', title: '播放模式', onclick: () => {
+    const modes = ['order', 'loop', 'random', 'one']
+    const cur = player.playModes.video || 'order'
+    const i = modes.indexOf(cur)
+    const nextM = modes[(i + 1) % modes.length]
+    player.setPlayMode(nextM, 'video')
+    modeBtn.textContent = modeIcons[nextM]
+    toast('播放模式：' + modeLabel[nextM])
+  } }, modeIcons[player.playModes.video || 'order'] || '⏭')
+
     const opts = h('div', { class: 'vp-opts' },
     seekRow,   // 🔶 进度条在控制条最顶部
     h('button', { class: 'opt vp-back', title: '返回视频库', onclick: () => {
@@ -184,6 +203,7 @@ export function buildVideoPlayer(app) {
       showGrid();
       if (player) player.stop();
     } }, '← 返回'),
+    queueBtn, modeBtn, volBtn, vol,
     h('span', { class: 'opt', style: { pointerEvents: 'none', opacity: .7 } }, '⏩'), speedSel,
     audSel, subSel,
     h('button', { class: 'opt', title: '载入字幕(.srt/.vtt)', onclick: () => subInput.click() }, '📝 字幕'),
@@ -198,64 +218,9 @@ export function buildVideoPlayer(app) {
     h('span', { class: 'opt opt-ab ab-label', id: 'abA' }, 'A:--'),
     h('span', { class: 'opt opt-ab ab-label', id: 'abB' }, 'B:--')
   )
-  // ---------- 📺 投屏按钮 + 设备面板（状态条已统一到 castStatusBar.js）----------
-  const castBtn = h('button', { class: 'opt vp-cast', title: '投屏到电视', onclick: toggleCastPanel }, '📺 投屏')
-  const castPanel = h('div', { class: 'vp-cast-panel', hidden: true },
-    h('div', { class: 'vp-cast-head' }, '投屏到电视',
-      h('button', { class: 'vp-cast-close', title: '关闭', onclick: () => castPanel.hidden = true }, '✕')),
-    h('div', { class: 'vp-cast-body' }, '点击扫描附近设备…'),
-    h('button', { class: 'opt vp-cast-scan', onclick: startCastScan }, '🔍 扫描设备')
-  )
-  stage.appendChild(castPanel)
+  // ---------- 📺 投屏入口 → 统一 castCenter ----------
+  const castBtn = h('button', { class: 'opt vp-cast', title: '投屏中心 (DLNA/Miracast/屏幕镜像)', onclick: () => showCastCenter(app) }, '📺 投屏')
   opts.insertBefore(castBtn, opts.querySelector('.vp-fs'))
-
-  function toggleCastPanel() {
-    if (!cast.isHost()) { toast('当前环境不支持投屏', 'warn'); return }
-    castPanel.hidden = !castPanel.hidden
-    if (!castPanel.hidden) startCastScan()
-  }
-
-  async function startCastScan() {
-    const body = castPanel.querySelector('.vp-cast-body')
-    const scanBtn = castPanel.querySelector('.vp-cast-scan')
-    scanBtn.disabled = true
-    body.textContent = '正在扫描附近设备…'
-    cast.scan()
-    // 3 秒超时兜底
-    setTimeout(() => {
-      if (castPanel.hidden) return
-      renderDevices()
-    }, 3000)
-  }
-
-  function renderDevices() {
-    const body = castPanel.querySelector('.vp-cast-body')
-    const scanBtn = castPanel.querySelector('.vp-cast-scan')
-    scanBtn.disabled = false
-    const devs = cast.state.devices
-    if (!devs || devs.length === 0) {
-      body.innerHTML = '<div class="vp-cast-empty">没找到设备<br>请确保电视和手机/电脑在同一局域网</div>'
-      return
-    }
-    body.innerHTML = ''
-    devs.forEach((d) => {
-      const btn = h('button', { class: 'vp-cast-dev', onclick: () => selectDevice(d) },
-        h('span', { class: 'vp-cast-dev-name' }, d.name || '未知设备'),
-        h('span', { class: 'vp-cast-dev-sub' }, d.uri || d.host || '')
-      )
-      body.appendChild(btn)
-    })
-  }
-
-  async function selectDevice(d) {
-    castPanel.hidden = true
-    toast('正在投送到「' + (d.name || '电视') + '」…')
-    await cast.castTo(d.id)
-  }
-
-  // 监听投屏设备扫描（状态条已统一到 castStatusBar.js）
-  cast.on('devices', renderDevices)
-  cast.on('error', (msg) => { toast(msg, 'err') })
 
   stage.appendChild(opts)
 
@@ -340,6 +305,13 @@ export function buildVideoPlayer(app) {
     // 否则是 Android 兜底
     try { window.chrome?.webview?.postMessage(JSON.stringify({ type: 'fullscreen' })) } catch {}
   }})
+  // 🎬 video role 专属：退出全屏后自动返回首页
+  document.addEventListener('fullscreenchange', () => {
+    if (window.__winRole === 'video' && !document.fullscreenElement && !document.webkitFullscreenElement) {
+      // 延迟一帧确保退出动画完成，然后回首页
+      setTimeout(() => { ctx.showPage?.('home') }, 150)
+    }
+  })
 
   // 空态显示内容网格；播放时画面铺满覆盖
   // 🔶 ISS-20261008-005：返回时强制停 video（display:none 不自动 pause！）

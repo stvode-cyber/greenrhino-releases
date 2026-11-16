@@ -15,12 +15,16 @@
     "test:build": "node --test test/build-sw-cache.test.js",
     "test:e2e": "npx playwright test test/e2e/sw-cache.spec.js",
     "test:e2e:reuse": "PLAYWRIGHT_REUSE=1 npx playwright test test/e2e/sw-cache.spec.js",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:all": "npm run test && npm run test:e2e",
+    "setup-hooks": "node scripts/setup-hooks.mjs",
+    "postinstall": "node scripts/setup-hooks.mjs"
   },
   "dependencies": {
     "jsmediatags": "^3.9.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "eslint": "^10.13.0"
   }
 }

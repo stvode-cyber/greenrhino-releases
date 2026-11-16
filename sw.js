@@ -8,9 +8,8 @@
 // 不要改成其他格式！替换逻辑见 build-web.mjs 第 ~103 行。
 const CACHE = '__SW_CACHE__'
 const CORE = [
-  '/', '/index.html', '/favicon.svg', '/icons/icon.svg', '/manifest.webmanifest',
+  '/', '/index.html', '/offline.html', '/favicon.svg', '/icons/icon.svg', '/manifest.webmanifest',
   '/src/style.css',
-  '/src/css/base.css', '/src/css/components.css', '/src/css/role.css',
   '/src/main.js', '/src/player.js', '/src/store.js', '/src/lrc.js', '/src/metadata.js',
   '/src/cover.js', '/src/help.js', '/src/videoThumb.js', '/src/cast.js', '/src/id3.js',
   '/src/lyricFetch.js',
@@ -47,10 +46,10 @@ self.addEventListener('fetch', (e) => {
   // 外部打开端点：媒体流直连 LocalServer，禁止 SW 缓存（避免把大视频写进 SW 缓存）
   if (url.pathname.startsWith('/api/')) return
 
-  // 导航请求：网络优先，离线回退到已缓存的 index.html
+  // 导航请求：网络优先，离线回退到自定义离线页
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).catch(() => caches.match('/index.html').then((r) => r || caches.match('/')))
+      fetch(req).catch(() => caches.match('/offline.html'))
     )
     return
   }

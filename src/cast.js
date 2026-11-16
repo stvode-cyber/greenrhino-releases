@@ -187,14 +187,12 @@ function screenCastStart() {
   if (!state.host) return
   if (state.host !== 'android') { emit('error', '屏幕镜像仅 Android 支持'); return }
   try {
-    const url = window.RhinoBridge.startScreenCast()
-    if (url && url.startsWith('OK')) {
-      state.screenCasting = true
-      state.screenUrl = window.RhinoBridge.getScreenMirrorUrl() || ''
-      emit('screenCast', { on: true, url: state.screenUrl })
-    } else {
-      emit('error', url || '启动屏幕镜像失败')
+    const r = window.RhinoBridge.startScreenCast()
+    if (typeof r === 'string' && r.startsWith('ERROR')) {
+      emit('error', r)
     }
+    // ← 不在这里设 screenCasting=true！等 __castCb({type:'mirror',ok:true}) 回调再设
+    // MediaProjection 授权弹框还在等用户，此时 ScreenCaster 根本没启动
   } catch (e) { emit('error', 'screenCastStart failed: ' + e.message) }
 }
 

@@ -19,6 +19,7 @@ setTimeout(() => {
 }, 300)
 import { h, toast, openModal, formatTime } from './ui/dom.js'
 import { player } from './player.js'
+import { ctx } from './app/context.js'
 import { fmtQuota } from './app/format.js'
 import {
   addMediaFiles, addMediaFromAndroid, updateMedia, getSettings, addImportRecord, getAllMedia, getMedia, saveSettings, on as onStore, isMediaFile,
@@ -43,6 +44,7 @@ import { openSettings } from './ui/settings.js'
 import { openHelp } from './help.js'
 import { initGestures } from './ui/gestures.js'
 import { queueVideoThumbs } from './videoThumb.js'
+import { playItem, playList, openSleepModal, wirePlayerErrorHandlers, wireVisibilityPause } from './app/playerUtils.js'
 
 // store.js 事件总线
 const app = {
@@ -86,7 +88,7 @@ const stats = isHub ? buildStats(app) : null
 const cloud = (isHub || isMusic) ? buildCloud(app) : null
 let home = null
 try {
-  home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : buildHome(app))
+  home = isHub ? buildHome(app) : (ROLE === 'music' ? buildMusicHome(app) : ROLE === 'video' ? buildVideoHome(app) : buildHome(app))
 } catch (e) {
   console.error('[init] buildHome/buildMusicHome 崩了:', e?.message, e?.stack)
 }
@@ -112,12 +114,18 @@ document.querySelectorAll('.nav-item').forEach((b) => {
   if (b.dataset.view && !allowedViews.has(b.dataset.view)) b.style.display = 'none'
 })
 // 弹窗不提供「导入文件夹」目录导入（Hub 专有），保留单文件添加与拖拽导入
-if (!isHub) { const _ff = document.getElementById('import-folder'); if (_ff) _ff.style.display = 'none' }
+if (!isHub) {
+  const _ff = document.getElementById('import-folder'); if (_ff) _ff.style.display = 'none'
+  const _ft = document.getElementById('import-folder-top'); if (_ft) _ft.style.display = 'none'
+}
 
-// 影像窗口：藏起侧栏，做成纯黑居中的三段式播放器
+// 影像窗口：纯黑居中播放器，移除侧栏/顶栏/底栏，专属 video-nav（与 music role 对称）
 if (ROLE === 'video') {
+  document.documentElement.dataset.theme = 'dark'
   document.body.classList.add('win-video')
-  document.documentElement.dataset.theme = 'dark'   // 同步设深色主题，等不起异步 getSettings
+  var _tbv = document.getElementById('topbar'); if (_tbv) _tbv.remove()
+  var _asv = document.querySelector('aside'); if (_asv) _asv.remove()
+  var _bbv = document.getElementById('bottombar'); if (_bbv) _bbv.remove()
 }
 // 音乐窗口：浅色主题（参考图白底 + 酷狗绿点缀），挂载 win-music 供专属样式作用
 if (ROLE === 'music') {
@@ -127,6 +135,14 @@ if (ROLE === 'music') {
   var _as2 = document.querySelector('aside'); if (_as2) _as2.remove()
   var _bb2 = document.getElementById('bottombar'); if (_bb2) _bb2.remove()
 }
+
+// 🔶 大重构：填共享上下文（供后续拆出去的子模块 import 使用）
+ctx.app = app
+ctx.pages = pages
+ctx.ROLE = ROLE
+ctx.isHub = isHub
+ctx.isMusic = isMusic
+ctx.isVideo = isVideo
 
 // 打开另一角色窗口：原生壳经消息交给 C# 创建/聚焦弹窗；纯浏览器退回页内切换
 function openRoleWindow(role) {
@@ -155,6 +171,51 @@ function buildHome(app) {
     }
   })
   return { el, show() { setTimeout(() => input.focus?.(), 60) } }
+}
+
+// 🎬 Video App 专属首页（与 buildMusicHome 对称）
+function buildVideoHome(app) {
+  const hourNow = new Date().getHours()
+  const hi = hourNow < 5 ? '夜深了' : hourNow < 11 ? '早上好' : hourNow < 14 ? '中午好' : hourNow < 18 ? '下午好' : '晚上好'
+
+  const searchI = h('input', { class: 'hub-input mh-search', type: 'search', placeholder: '搜索本地视频…', autocomplete: 'off' })
+  const localN = h('span', { class: 'mh-card-count' }, '0')
+
+  const cardLocal = h('div', { class: 'mh-card', onclick: () => showPage('video') },
+    h('div', { class: 'mh-card-icon' }, '🎬'),
+    h('div', { class: 'mh-card-label' }, '本地视频'), localN)
+  const cardImport = h('div', { class: 'mh-card', onclick: () => doOpenFiles(app) },
+    h('div', { class: 'mh-card-icon' }, '📁'),
+    h('div', { class: 'mh-card-label' }, '导入视频'),
+    h('div', { class: 'mh-card-hint' }, '从文件管理器选片'))
+
+  // 空库引导
+  const emptyBox = h('div', { class: 'mh-empty-box', hidden: true },
+    h('div', { class: 'mh-empty-big' }, '🎬'),
+    h('p', {}, '还没有视频，先导入几部影片吧'),
+    h('div', { class: 'mh-empty-actions' },
+      h('button', { class: 'cta', onclick: () => doOpenFiles(app) }, '📁 导入视频'),
+      h('button', { class: 'ghost-btn', onclick: () => showPage('video') }, '📺 浏览所有')))
+
+  const el = h('div', { class: 'mh-home' },
+    h('div', { class: 'mh-hello' },
+      h('div', { class: 'mh-hi' }, hi + ' 👋'),
+      h('div', { class: 'mh-sub' }, '今天看点什么好呢')),
+    searchI,
+    h('div', { class: 'mh-cards' }, cardLocal, cardImport),
+    emptyBox)
+
+  async function refresh() {
+    const all = await getAllMedia()
+    const vids = all.filter((m) => m.type === 'video')
+    localN.textContent = vids.length
+    emptyBox.hidden = vids.length > 0
+  }
+  searchI.addEventListener('input', (e) => { app.search = e.target.value.trim(); video?.refresh?.() })
+  searchI.addEventListener('keydown', (e) => { if (e.key === 'Enter') { app.search = e.target.value.trim(); video?.refresh?.(); showPage('video') } })
+  refresh()
+
+  return { el, refresh, show() { setTimeout(() => searchI.focus?.(), 60) } }
 }
 
 // 🔶 DEC-20261009-005: 所有导入入口直接触发，不走中间层
@@ -494,6 +555,8 @@ function showPage(name) {
   // 底栏播放模式徽章跟随当前界面（音乐/视频各自独立）
   app.refreshModeBadge?.()
 }
+ctx.showPage = showPage  // 🔶 大重构：让 importManager 等子模块能用 showPage
+
 // 各窗默认落点：Hub 主控台(首页)、Music 进问候首页、Video 视频
 showPage(isHub ? 'home' : (ROLE === 'music' ? 'home' : ROLE))
 
@@ -564,231 +627,21 @@ setTimeout(async () => {
 const sidebar = document.getElementById('sidebar')
 document.getElementById('menu-toggle')?.addEventListener('click', () => sidebar?.classList.toggle('open'))
 
-// ---------- 主题 + 续播恢复 ----------
-getSettings().then(async (s) => {
-  // 音乐窗口固定浅色（白底 + 品牌绿点缀）；其余尊重用户设置
-  document.documentElement.setAttribute('data-theme', ROLE === 'music' ? 'light' : (s.theme || 'dark'))
-  app.mode = s.lastMode || 'music'
-  // 恢复音乐/视频各自的播放模式（旧版只存单一 playMode 时按此迁移）
-  player.setPlayModes(s.playModes || { music: s.playMode || 'loop', video: 'order' })
-  // 仅 Hub 的续播恢复：数据里若有上次播放的曲目，只在播放器中预载（autoplay:false），
-  // 不自动跳离「首页」落地页；外部打开（双击文件）由 __hostOpen 守卫接管。
-  if (isHub) {
-    if (s.resumeEnabled && s.lastPlayedId && !window.__hostOpened) {
-      const item = await getMedia(s.lastPlayedId)
-      if (item && pages[item.type]) {
-        player.setQueue([item], item.id)
-        player.playItem(item, { autoplay: false })
-      }
-    }
-  }
-  // 首次启动引导（仅 Hub 一次）
-  if (s.firstRun && isHub) openWelcome()
-}).catch((e) => console.error('[init] getSettings 恢复失败（非致命）:', e?.message))
-// 记住最后播放的曲目
-player.on('trackchanged', (item) => { if (item) saveSettings({ lastPlayedId: item.id }) })
-// 播放模式变更后持久化（音乐/视频各自独立保存）
-player.on('playmode', () => saveSettings({ playModes: player.playModes }))
+// ---------- bootstrap（已抽到 app/bootstrap.js） ----------
+import { initBootstrap, wirePlayerPersistence, wireMediaSession, wirePWA } from './app/bootstrap.js'
+initBootstrap().catch((e) => console.error('[init] bootstrap 失败:', e?.message))
+wirePlayerPersistence()
+wireMediaSession()
+wirePWA()
 
-// ---------- 导入进度浮层（大量文件时给出反馈，避免误以为卡死） ----------
-const importOverlay = (() => {
-  const bar = h('div', { class: 'import-bar-fill' })
-  const label = h('div', { class: 'import-label' }, '准备导入…')
-  const count = h('div', { class: 'import-count' }, '')
-  const el = h('div', { class: 'import-overlay', hidden: true },
-    h('div', { class: 'import-card' },
-      h('div', { class: 'import-title' }, '📥 正在导入媒体'),
-      label, count,
-      h('div', { class: 'import-bar' }, bar)))
-  document.body.appendChild(el)
-  let hideTimer = null
-  return {
-    progress(done, total, msg) {
-      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
-      el.hidden = false
-      const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 100
-      bar.style.width = pct + '%'
-      label.textContent = msg || '正在导入…'
-      count.textContent = `${done} / ${total}`
-    },
-    done(msg) {
-      bar.style.width = '100%'
-      label.textContent = msg || '导入完成'
-      count.textContent = '✓ 完成'
-      hideTimer = setTimeout(() => { el.hidden = true }, 1300)
-    },
-    hide() { el.hidden = true; if (hideTimer) clearTimeout(hideTimer) }
-  }
-})()
+// ---------- 导入（已抽到 app/importManager.js） ----------
+import { importOverlay, makeFileInput, importFilesDialog, importFolderDialog, importFiles, relocateMedia } from './app/importManager.js'
+ctx.importOverlay = importOverlay
+// doImport 内部引用 ctx.showPage，importManager 内部已实现，main.js 不再单独定义
 
-// ---------- 导入 ----------
-function makeFileInput() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.style.display = 'none'
-  document.body.appendChild(input)
-  input.addEventListener('change', () => { setTimeout(() => input.remove(), 0) }, { once: true })
-  return input
-}
-function importFilesDialog() {
-  const input = makeFileInput()
-  input.multiple = true
-  // 🔶 ISS-20261009-012：按 role 过滤 MIME type → SAF 只显示对应分类 tab
-  // player role 只要视频 tab，music role 只要音频 tab，hub 全量
-  input.accept = ROLE === 'video' ? 'video/*' : ROLE === 'music' ? 'audio/*' : 'audio/*,video/*'
-  input.onchange = () => doImport([...input.files], '手动添加')
-  input.click()
-}
-function importFolderDialog() {
-  // ISS-20260914-002：WebView / iOS 不支持 webkitdirectory → 自动降级为多文件选择
-  // feature detection 走 input.webkitdirectory 属性是否可赋值（部分浏览器静默失败）
-  const probe = document.createElement('input')
-  probe.type = 'file'
-  const supportsDir = 'webkitdirectory' in probe || 'directory' in probe
-  const input = makeFileInput()
-  input.multiple = true
-  if (supportsDir) {
-    input.webkitdirectory = true
-  } else {
-    toast('当前环境不支持文件夹选择，已切换为多文件模式', 'warn')
-  }
-  input.onchange = () => {
-    const files = [...input.files]
-    const folder = supportsDir ? (files[0]?.webkitRelativePath?.split('/')[0] || '文件夹') : '多文件'
-    if (files.length === 0) { toast('未选择任何文件', 'warn'); return }
-    doImport(files, folder)
-  }
-  input.click()
-}
-async function doImport(files, folder) {
-  const added = await importFiles(files, folder, importOverlay.progress)
-  if (added.length) {
-    importOverlay.done(`已导入 ${added.length} 个文件`)
-    // 跳到导入内容对应的页面（音乐→音乐页 / 视频→视频页）
-    showPage(added[0].type)
-  } else { importOverlay.hide(); toast('没有可导入的音频/视频文件', 'err') }
-}
-async function importFiles(files, folder = '导入', onProgress) {
-  // ① 离线自动歌词：扫描选中的文件，建立「去扩展名基名 -> .lrc 文件」映射
-  const lrcByName = {}
-  for (const f of files) {
-    if (/\.lrc$/i.test(f.name)) {
-      const base = f.name.replace(/\.[^.]+$/, '')
-      lrcByName[base] = f
-    }
-  }
-  onProgress?.(0, files.length, '准备导入')
-  const added = await addMediaFiles(files, folder, onProgress)
-  // 元数据解析阶段：进度条继续推进，让用户知道仍在处理（大量文件时此处最易卡顿）
-  const total = files.length + added.length
-  let done = files.length
-  for (const it of added) {
-    if (it.type === 'music') {
-      const base = it.name.replace(/\.[^.]+$/, '')
-      // 同名 .lrc 优先写入（不依赖元数据解析，避免 CDN 卡顿时歌词也丢失）
-      const lrcFile = lrcByName[base]
-      let lyric = ''
-      if (lrcFile) { try { lyric = (await lrcFile.text()).trim() } catch (e) {} }
-      if (lyric) { const upd = await updateMedia(it.id, { lyric }); if (upd) Object.assign(it, upd) }
-      // 解析元数据（本地零依赖 ID3 解析，完全离线）；无标签时从文件名推断
-      const tags = await parseTags(it.blob)
-      const guessed = guessFromFilename(it.name)
-      const patch = {}
-      patch.title = (tags && tags.title) ? tags.title : (guessed.title || it.name)
-      if (tags && tags.artist) patch.artist = tags.artist
-      else if (guessed.artist) patch.artist = guessed.artist
-      if (tags && tags.album) patch.album = tags.album
-      if (tags && tags.cover) patch.cover = tags.cover
-      if (tags && tags.lyrics && !lyric) patch.lyric = tags.lyrics   // 内嵌 USLT：无同名 lrc 时才用
-      if (Object.keys(patch).length) { const upd = await updateMedia(it.id, patch); if (upd) Object.assign(it, upd) }
-    }
-    done++; onProgress?.(done, total, '解析封面与歌词')
-  }
-  if (added.length) await addImportRecord({ folder, count: added.length })
-  app.refreshCurrent()
-  return added
-}
-// §12 文件已丢失 →「重新定位」：让用户重新选择一个文件替换丢失的 blob
-function relocateMedia(id) {
-  const input = makeFileInput()
-  // 🔶 ISS-20261009-012：同 importFilesDialog，按 role 过滤
-  input.accept = ROLE === 'video' ? 'video/*' : ROLE === 'music' ? 'audio/*' : 'audio/*,video/*'
-  input.onchange = async () => {
-    const file = input.files[0]
-    if (!file) return
-    const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|webm|mov|avi|m4v|ogv|ts|flv|wmv)$/i.test(file.name)
-    const type = isVideo ? 'video' : 'music'
-    const patch = { blob: file, size: file.size, name: file.name, type, mime: file.type || (type === 'video' ? 'video/mp4' : 'audio/mpeg') }
-    if (type === 'music') {
-      const tags = await parseTags(file)
-      const guessed = guessFromFilename(file.name)
-      patch.title = (tags && tags.title) ? tags.title : (guessed.title || file.name)
-      if (tags && tags.artist) patch.artist = tags.artist
-      else if (guessed.artist) patch.artist = guessed.artist
-      if (tags && tags.album) patch.album = tags.album
-      if (tags && tags.cover) patch.cover = tags.cover
-    }
-    await updateMedia(id, patch)
-    toast('已重新定位文件，可正常播放')
-    app.refreshCurrent()
-  }
-  input.click()
-}
+// ---------- 播放（已抽到 app/playerUtils.js → playItem / playList / openSleepModal） ----------
 
-// ---------- 播放 ----------
-function playItem(item) {
-  app.mode = item.type
-  // 🔶 队列上下文：activeSource（当前页面过滤后的列表）优先，其次 currentList
-  // 这样在收藏页点歌 → 队列是收藏列表；在音乐库点歌 → 队列是全部音乐
-  const source = app.activeSource?.length ? app.activeSource : (app.currentList || [])
-  const ctx = source.filter((i) => i.type === item.type)
-  const queueList = ctx.length ? ctx : [item]
-  // 🔶 保持用户当前页面：如果已在收藏/歌单等分类页就不跳走；只有在首页才跳到对应类型页
-  if (!['favorites', 'playlists', 'recent', 'cloud'].includes(app.page)) showPage(item.type)
-  player.setQueue(queueList, item.id)
-  player.playItem(item, { crossfade: player.isPlaying() })
-  // 🔶 ISS-20261010-027: 播放时就后台搜歌词（不用等进全屏）
-  if (!item.lyric && item.type !== 'video') {
-    fetchOnlineLyric(item).catch(() => {})
-  }
-}
-function playList(items, first) {
-  app.mode = first.type
-  showPage(first.type)
-  player.setQueue(items, first.id)
-  player.playItem(first, { crossfade: false })
-}
-
-// ---------- 睡眠定时 ----------
-function openSleepModal() {
-  const body = h('div', { class: 'mb' })
-  const opts = [['关闭', 0], ['10 分钟', 10], ['20 分钟', 20], ['30 分钟', 30], ['45 分钟', 45], ['60 分钟', 60], ['90 分钟', 90], ['播完当前曲停止', 'track']]
-  opts.forEach(([label, val]) => body.appendChild(h('button', {
-    class: 'ghost-btn', style: { width: '100%', marginBottom: '8px' },
-    onclick: () => { player.setSleep(val); toast(val === 'track' ? '将播完当前曲后停止' : val ? `${val} 分钟后停止` : '已关闭睡眠定时'); close() }
-  }, label)))
-  const modal = h('div', { class: 'modal' },
-    h('div', { class: 'mh' }, h('h3', {}, '睡眠定时'), h('button', { class: 'icon-btn', onclick: () => close() }, '✕')), body)
-  const close = openModal(modal)
-}
-
-// ---------- 首次启动引导 ----------
-function openWelcome() {
-  const body = h('div', { class: 'mb' },
-    h('p', { style: { color: 'var(--text-3)', margin: '0 0 14px', lineHeight: 1.6 } },
-      '这是一个完全离线的媒体播放器：你的音乐与视频都保存在本机，断网也能播放，数据不外传。'),
-    h('ul', { class: 'wl', style: { margin: '0 0 16px', paddingLeft: '18px', color: 'var(--text-2)', lineHeight: 1.8 } },
-      h('li', {}, '📥 从本机导入单个文件，或整个文件夹'),
-      h('li', {}, '🎚 音乐支持 EQ 均衡与实时频谱'),
-      h('li', {}, '🎬 视频支持字幕、多音轨、章节跳转'),
-      h('li', {}, '📲 可「安装」到桌面/主屏，像原生 App 一样离线使用')),
-    h('div', { style: { display: 'flex', gap: '8px' } },
-      h('button', { class: 'cta', onclick: () => { close(); app.importFilesDialog() } }, '导入媒体'),
-      h('button', { class: 'ghost-btn', onclick: () => { close(); openHelp() } }, '使用说明')))
-  const modal = h('div', { class: 'modal' },
-    h('div', { class: 'mh' }, h('h3', {}, '欢迎使用绿角犀播放器'), h('button', { class: 'icon-btn', onclick: () => close() }, '✕')), body)
-  const close = openModal(modal, { onClose: () => saveSettings({ firstRun: false }) })
-}
+// ---------- 首次启动引导（已抽到 app/bootstrap.js → openWelcome） ----------
 
 // ---------- 导航 / 顶栏 ----------
 // 音乐/视频切换：Hub 点导航弹独立窗口；弹窗内只有本类型的单向入口（仅 Hub 显示 music/video 项）。
@@ -813,6 +666,17 @@ musicNav?.addEventListener('click', (e) => {
   else if (k === 'nowplaying') openMusicFullpage()
   else if (k === 'mine') home?.showMine?.()
   musicNav.querySelectorAll('.mn-item').forEach((x) => x.classList.toggle('active', x === b && k !== 'nowplaying'))
+})
+// 🎬 播放器 App 底部三栏导航：首页（视频库）/ 中间大按钮（视频播放器）/ 设置
+const videoNav = document.getElementById('video-nav')
+videoNav?.addEventListener('click', (e) => {
+  const b = e.target.closest('.vn-item')
+  if (!b) return
+  const k = b.dataset.vn
+  if (k === 'home') showPage('home')
+  else if (k === 'player') showPage('video')
+  else if (k === 'settings') openSettings(app)
+  videoNav.querySelectorAll('.vn-item').forEach((x) => x.classList.toggle('active', x === b && k !== 'player'))
 })
 document.getElementById('search')?.addEventListener('input', (e) => {
   app.search = e.target.value.trim()
@@ -849,95 +713,13 @@ window.addEventListener('keydown', (e) => {
   }
 })
 
-// ---------- Media Session（锁屏/通知控制） ----------
-if ('mediaSession' in navigator) {
-  player.on('trackchanged', (item) => {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: item.title || item.name,
-      artist: item.artist || '',
-      album: item.album || '',
-      artwork: item.cover ? [{ src: item.cover }] : []
-    })
-  })
-  navigator.mediaSession.setActionHandler('play', () => player.play())
-  navigator.mediaSession.setActionHandler('pause', () => player.pause())
-  navigator.mediaSession.setActionHandler('previoustrack', () => player.prev())
-  navigator.mediaSession.setActionHandler('nexttrack', () => player.next(true))
-  player.on('play', () => { navigator.mediaSession.playbackState = 'playing' })
-  player.on('pause', () => { navigator.mediaSession.playbackState = 'paused' })
-}
+// ---------- Media Session（已抽到 app/bootstrap.js → wireMediaSession） ----------
 
-// ---------- 异常态：解码失败 / 文件丢失（设计文档 §12） ----------
-// 解码失败与文件丢失共用一套「队列内自动跳过」保护，避免 error/lost 重复触发导致多次 next 或死循环
-let _skipGuard = false
-let _skipStreak = 0
-player.on('loaded', () => { _skipStreak = 0; _skipGuard = false }) // 成功加载则重置连续失败计数
-function trySkipInQueue(badItem, label) {
-  if (_skipGuard) return
-  // 以出错的曲目定位索引（error/lost 可能早于 playItem 写入 current，故优先用事件携带的 item）
-  const bad = badItem || player.current
-  if (bad) { const i = player.queue.findIndex(q => q && q.id === bad.id); if (i >= 0) player.index = i }
-  if (player.queue.length > 1 && player.playMode !== 'one') {
-    _skipStreak++
-    if (_skipStreak > player.queue.length) { toast(`连续多曲无法播放（${label}），已停止`, 'err'); player.pause(); _skipGuard = false; _skipStreak = 0; return }
-    _skipGuard = true
-    setTimeout(() => { player.next(true); _skipGuard = false }, 1000)
-  }
-}
-// 🔶 ISS-20261009-004：player role 下 video error/lost 由 videoPlayer.js 全权处理（删库+toast）
-// 避免 3 个 handler 叠 toast 污染画面
-player.on('error', (msg, item) => {
-  if (item?.type === 'video' && window.__winRole === 'video') { trySkipInQueue(item, '格式不支持'); return }
-  toast(msg || '该格式暂不支持播放', 'err')
-  trySkipInQueue(item, '格式不支持')
-})
-player.on('lost', (item) => {
-  if (item?.type === 'video' && window.__winRole === 'video') return
-  toast(`「${item?.title || item?.name || '该文件'}」文件已丢失`, 'err')
-  app.refreshCurrent() // 让媒体库标灰显示
-  trySkipInQueue(item, '文件已丢失')
-})
+// ---------- 异常态 / 后台暂停（已抽到 app/playerUtils.js → wirePlayerErrorHandlers / wireVisibilityPause） ----------
+wirePlayerErrorHandlers()
+wireVisibilityPause()
 
-// ---------- 进度落盘 ----------
-window.addEventListener('beforeunload', () => player.flushProgress())
-document.addEventListener('visibilitychange', () => { if (document.hidden) player.flushProgress() })
-
-// 暴露调试入口
-window.__player = player
-
-// 注册 Service Worker（http/https 下启用，实现离线缓存与可安装）
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {})
-  })
-}
-
-// ---------- PWA 安装入口（设计文档：可安装离线应用） ----------
-const installBtn = document.getElementById('install-btn')
-let deferredPrompt = null
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault() // 阻止浏览器默认迷你条，改用我们自己的按钮
-  deferredPrompt = e
-  if (installBtn) installBtn.hidden = false
-})
-window.addEventListener('appinstalled', () => {
-  if (installBtn) installBtn.hidden = true
-  deferredPrompt = null
-  toast('绿角犀播放器已安装，感谢使用 🎉')
-})
-installBtn?.addEventListener('click', async () => {
-  if (!deferredPrompt || typeof deferredPrompt.prompt !== 'function') {
-    toast('浏览器未提供安装入口，可在菜单选择「安装绿角犀播放器 / 添加到主屏幕」', 'info')
-    return
-  }
-  deferredPrompt.prompt()
-  try {
-    const { outcome } = await deferredPrompt.userChoice
-    if (outcome === 'accepted') toast('已开始安装，感谢使用绿角犀播放器')
-  } catch {}
-  deferredPrompt = null
-  installBtn.hidden = true
-})
+// ---------- SW / PWA 安装（已抽到 app/bootstrap.js → wirePWA） ----------
 
   console.log('绿角犀播放器 · 离线媒体播放器已就绪')
 

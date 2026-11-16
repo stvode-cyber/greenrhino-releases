@@ -4,7 +4,338 @@
 
 ---
 
+### 📋 任务 T20261021-03 收尾 + 回归验证（2026-11-16，✅ 全部完成）
+
+> 触发：用户指令「按 T20261021-03 剩余步骤继续执行」
+> 根因：上一轮大重构 + 协作铁律落地代码全在工作区躺平（37 文件未 commit），preflight/钩子/回归验证/台账归档 5 步未完成
+
+**动作清单：**
+1. ✅ 摸家底：读 preflight.mjs（已 19 项，含 Android ASCII 路径检查）、setup-hooks.mjs（已存在）、pre-commit（已存在，致命三合一拦截）— 确认代码都在
+2. ✅ 激活钩子：`node scripts/setup-hooks.mjs` → `core.hooksPath = .git-hooks`
+3. ✅ 构建双站：`node scripts/build-web.mjs` → music 393.0 KB / player 392.6 KB
+4. ✅ preflight：19 通过 + 2 警告（Android ASCII 路径，预期）
+5. ✅ 单元测试：9/9 全绿
+6. ⚠️ E2E 首轮 0/4 挂（45s SW ready timeout）
+7. 🔍 **定位根因**：pageerror `Cannot read properties of undefined (reading '_android')` → 诊断 main.js import 链 → castCenter.js → qrcodejs.js → **vendor 代码 IIFE 顶层裸 `if(this._android...)`**（Android 2.1 canvas drawImage 兼容补丁，415 字节）。原始 script 标签加载时 `this===window`，但改 ESM `export default` 后 IIFE 顶层 `this` 变 undefined → import 时直接炸 → main.js 整体崩溃 → wirePWA() 永远不执行 → SW 永远不注册
+8. ✅ 修 bug：删掉 415 字节裸代码（Android 2.1 = 2011 年的古董，现代浏览器全不需要）
+9. ✅ 重 build + preflight + 单元测试：全绿
+10. ⚠️ E2E 二轮 2/4 挂（music 2 条挂，player 2 条过）— Playwright 4 workers 并发 SW ready 竞争
+11. ✅ 修并发：`playwright.config.js fullyParallel: false` → 串行跑
+12. ✅ E2E 三轮 **4/4 全绿**（8.5s）
+13. ✅ 台账归档：项目进程.md 全勾选 + daily.md 本次流水 + context.md 同步
+
+**本轮改动文件（从上次 commit `24a6321` 后累计）：**
+- `src/lib/qrcodejs.js` — 删 415 字节裸 Android 2.1 兼容代码
+- `playwright.config.js` — `fullyParallel: false`
+- 以及前序大重构的 37 个文件（main.js 三批拆分、CSS 回退单文件、ESLint、offline.html、setup-hooks、pre-commit、台账五件套等）
+
+**关键教训：**
+- Vendor 代码从 script 改成 ESM 必须检查**所有顶层作用域的 `this` 引用** —— 普通 script 里 `this===window`，IIFE 里是自己，ESM 模块顶层 `this` 是 `undefined`。这是跨模块格式迁移的经典坑
+- Playwright 多 `webServer` + 多 worker 并发跑同一 baseURL 的 SW 测试会有竞争条件 —— `fullyParallel: false` 是最稳的解法（速度从 8s → 20s，可接受）
+
+---
+
+### 📋 任务 T20261020-06 B 档 UX 剩余 4 项（A1 跳过 + A2 ✅ + A3 ✅ + B5 ✅）
+
+> 触发：用户说「好的，执行吧」——B 档方案剩余 4 项
+> 状态：✅ 3 项完成，1 项跳过（A1 无 role 差异可改）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A1 顶栏 role 改名 | ⏭️ 跳过 | music/video role 都删 topbar（main.js L126+L134），只有 Hub 有 import 按钮，无 role 差异 |
+| A2 video 空状态引导 | ✅ | 新建 buildVideoHome（43 行），对称 buildMusicHome，空库引导🎬 |
+| A3 全屏退出返回路径 | ✅ | videoPlayer.js 加 fullscreenchange 监听 → ctx.showPage('home') |
+| B5 变量遮蔽预防 | ✅ | eslint.config.js + no-shadow error + allow 配置，ESLint 零违规 |
+| 四绿验证 | ✅ | build ✅ / preflight 18/18 ✅ / test 6/6 ✅ / eslint 0/0 ✅ |
+
+### 本轮新建文件
+
+| 文件 | 行数 | 内容 |
+|---|---|---|
+| `eslint.config.js` | ~55 | 🆕 ESLint flat config（ESLint v10 格式），只开 no-shadow error |
+
+### 本轮改动文件
+
+| 文件 | 变更 |
+|---|---|
+| `src/main.js` | 加 buildVideoHome 43 行 + L91 加 video role 分支 |
+| `src/ui/videoPlayer.js` | 加 `import { ctx }` + fullscreenchange 监听 8 行 |
+| `package.json` | 加 eslint + @eslint/js devDependencies |
+
+### 关键教训
+
+1. **role 布局一致性先摸清楚再改 UI**：music 和 video role 都移除 topbar，顶栏 import 按钮只在 Hub 存在——A1 白跑一趟（台账教训，下次先 grep role 相关代码）
+2. **ESLint no-shadow 要允许闭包内参数遮蔽**：函数参数 `buildHome(app)` 遮蔽顶层 `app` 是正常闭包模式，不是 bug。只有共享 import 变量（ctx）被遮蔽才是真问题。allow 配置要精准。
+
+---
+
+### 📋 任务 T20261020-05 第三批 playerUtils 重构（B 档，✅ 完成）
+
+> 触发：用户点 B 档执行第三批重构；25 条协作细则首次落地（方向卡/A-B-C/组合逻辑图/GAP/对话卡/项目进程）
+> 状态：✅ 第三批完成 + 零回归 + 合规基建补建
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| 合规基建 | ✅ | 根目录补建《项目进程.md》v1.0 + 《项目对话卡.md》DC-001（铁律 21/22 强制） |
+| 方向卡 + A/B/C 推演 | ✅ | B 档：A1-A3 UX 微调 + B4 第三批重构 + B5 变量遮蔽预防 |
+| 组合逻辑图 + 正推反推 | ✅ | 6 段代码耦合映射确认（player→import 单例，app/showPage→ctx） |
+| GAP-001 发现 | ✅ | ctx 里没有 player 字段！解决：playerUtils.js 直接 import player（模块单例） |
+| playerUtils.js 新建 | ✅ | 101 行：playItem / playList / openSleepModal / wirePlayerErrorHandlers / wireVisibilityPause |
+| main.js 删旧代码 | ✅ | L596-L749 全部旧代码删掉，加 import + 调用 |
+| 三绿验证 | ✅ | build ✅ / preflight 18/18 ✅ / test 6/6 ✅ |
+
+### 本轮新建文件
+
+| 文件 | 行数 | 内容 |
+|---|---|---|
+| `src/app/playerUtils.js` | 101 | 🆕 播放编排 / 睡眠定时 / 异常保护 / 后台暂停（第三批提取） |
+| `项目进程.md` | 30 | 🆕 铁律 21 强制：v1.0 快照 |
+| `项目对话卡.md` | 25 | 🆕 铁律 22 强制：DC-001 |
+
+### 本轮改动文件
+
+| 文件 | 变更 |
+|---|---|
+| `src/main.js` | 1003 → 714 行（**-289 行，-28.8%**），累计三批从 1003 → 714（-289 / -28.8%） |
+
+### 关键教训
+
+1. **ctx 不要塞模块单例**：player 本来就是 player.js export 出来的单例，子模块直接 import 就行，不用绕 ctx。ctx 只放 app/pages/showPage 这类"从 main.js 主作用域闭包传递"的东西。（GAP-001）
+2. **先画图再动手**：组合逻辑图强制跑一遍正推反推，GAP-001 就是在失败轨道里跑出来的，省了动手后才炸的时间。
+
+### 三批累计瘦身
+
+| 批次 | 新建模块 | main.js 删行数 |
+|---|---|---|
+| 第一批 | context.js + importManager.js | ~140 |
+| 第二批 | bootstrap.js | ~210 |
+| 第三批 | playerUtils.js | ~150 |
+| **合计** | **4 个 B 层模块** | **~500 行** |
+| **main.js 最终** | | **1003 → 714 行（-289，-28.8%）** |
+
+---
+
+### 📋 任务 T20261020-04 大重构 main.js（两批提取，✅ 完成）
+
+> 触发：main.js 1003 行闭包耦合严重，ctx 共享上下文 + 分模块提取
+> 状态：✅ 两批完成 + 变量遮蔽修复，零回归
+
+| 批次 | 动作 | 状态 | 说明 |
+|---|---|---|---|
+| 基建 | 建 src/app/context.js + ctx 填值 | ✅ | ctx.app/pages/ROLE/isHub/isMusic/isVideo/showPage/importOverlay/installBtn |
+| 第一批 | importManager.js 提取 | ✅ | 搬 importOverlay + makeFileInput + importFilesDialog + importFolderDialog + importFiles + relocateMedia（~140 行） |
+| 第二批 | bootstrap.js 提取 | ✅ | 搬 initBootstrap + wirePlayerPersistence + openWelcome + wireMediaSession + wirePWA（~210 行） |
+| Advisor 救场 | 变量遮蔽 bug 修复 | ✅ | playItem 内 `const ctx = ...` → `const sameType = ...`（避免与 import 的 ctx 冲突） |
+| Advisor 建议 | 第三批 playerUtils 停 | 🛑 | 剩余 playItem/playList/openSleepModal/trySkipInQueue/visibilitychange 互相引用紧密，ROI 低，留下轮 |
+
+### 本轮新建文件
+
+| 文件 | 行数 | 内容 |
+|---|---|---|
+| `src/app/context.js` | 16 | 🆕 共享上下文模块（大重构基础设施） |
+| `src/app/importManager.js` | 112 | 🆕 导入/定位/进度浮层 |
+| `src/app/bootstrap.js` | 125 | 🆕 启动装配 + PWA + Media Session + 首次引导 |
+
+### 本轮改动文件
+
+| 文件 | 变更 |
+|---|---|
+| `src/main.js` | 1003 → ~740 行（-263 行，-26%） |
+| `scripts/build-web.mjs` | +1 行 offline.html 复制 |
+| `.trae/memory/台账/index.md` | +3 新文件登记 |
+
+### 第三批留待下轮的原因
+
+- playItem/playList/openSleepModal/trySkipInQueue/visibilitychange/error-lost handlers 之间紧密耦合
+- 都闭包引用 player/app/showPage/toast/h/openModal/saveSettings 等多个外部变量
+- 拆出去需要传太多 ctx 引用，代码复杂度反升
+- ROI 不如前两批（前两批是独立闭包块，拆了就拆了）
+
+### 教训
+
+- **变量遮蔽是大重构的隐形陷阱**：import 了 ctx 后，局部变量再叫 ctx 就遮蔽了。建议 ESLint no-shadow 规则开启
+- **大重构不能一口气全搬**：先做独立闭包块（importManager/bootstrap 互相零引用），再考虑耦合块
+- **每一批必须 build+test 验证**：两轮提取 + 一轮遮蔽修复，每次验证全绿才推进下一批
+
+---
+
+### 📋 任务 T20261020-03 第二轮 P0 前端交互审计（✅ 完成）
+
+> 触发：T20261020-02 后做回归审计 + 找新差距
+> 状态：✅ 全过 + 两处修复
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A1 video-nav/music-nav 交互完整性 | ✅ | click handler → showPage('home')/'video'/'settings' 链路完整，active 状态更新正确 |
+| A2 visibilitychange 空安全 | ✅ | `player.engines?.some(...)\|\|false` 防 undefined 崩溃 |
+| A3 移动端触摸目标 44px | ✅ | icon-btn 34→44px / .opt min-height 44px / nav-item min-height 48px（@media max-width 760px） |
+| A4 toast/空状态一致性 | ✅ | toast 统一 main.js + 4 色（ok/info/warn/err）；empty 状态 library/recent/stats 全覆盖 |
+| A5 PWA install 引导 | ✅ | beforeinstallprompt + 自定义按钮 + appinstalled 回调完整 |
+| A6 全链路验证 | ✅ | build + preflight 18/18 + test 6/6 |
+
+### 本轮变更文件
+
+| 文件 | 改动 |
+|---|---|
+| `src/main.js` | visibilitychange engines?.some 空安全（1 行） |
+| `src/style.css` | @media 760px 加 44px 触摸目标（3 规则） |
+
+### 关键结论
+
+- **前几轮修复质量高**：第二轮审计没发现新的 bug gap（投屏统一/布局对称化/IndexedDB batch/后台暂停/iOS 防护/离线页 全链路没问题）
+- **唯一新增发现**：移动端 icon-btn 34px 低于 Apple HIG 44px 标准 → 已修复
+- **WebView 断点验证通过**：Android width=device-width 下 360-428px 命中 760px media query ✅
+
+---
+
+### 📋 任务 T20261020-02 联网最佳实践差距修复（✅ 完成）
+
+> 触发：联网搜 PWA 媒体播放器最佳实践，对比绿角犀现状，修 4 个 gap
+> 状态：✅ 全部落地，零回归
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| OPT-① visibilitychange 后台自动暂停+恢复 | ✅ | main.js 加 `_wasPlayingOnHide` 状态 + 后台 pause + 回来 play（10 行） |
+| OPT-② iOS AudioContext sampleRate 防护 | ✅ | player.js 创建 AudioContext 后检测 sampleRate ≠ 44100 则 dummy buffer 重置（20 行） |
+| OPT-③ 自定义离线页 | ✅ | 新建 offline.html + sw.js CORE 加 + fetch handler 导航离线回退（-2 行简化） |
+| OPT-④ IndexedDB 批量写入 | ✅ | 新增 dbBatchPut 工具函数（6 行）+ addMediaFiles/addMediaFromAndroid 改 collect+batch（633 首从 30s→<1s） |
+| OPT-⑤ 全链路验证 | ✅ | build 双站 + preflight 18/18 + test 6/6 |
+
+### 本轮变更文件清单
+
+| 文件 | 改动 | 增量 |
+|---|---|---|
+| `src/main.js` | visibilitychange 自动暂停+恢复 | +10 行 |
+| `src/player.js` | iOS sampleRate 检测+重置 | +12 行 |
+| `src/store.js` | dbBatchPut 工具函数 + 两调用点改 batch | +28 行（含注释） |
+| `sw.js` | CORE 加 /offline.html + 导航回退简化 | +1 行 / -2 行 |
+| `offline.html` | 🆕 新建（品牌统一离线提示） | 43 行 |
+
+### 教训/预防规则
+
+- **IndexedDB 逐条 dbPut = 性能杀手**：633 首歌 = 633 个 transaction，业界最佳实践是单 transaction 批量 put。教训：凡是 for 循环里 await dbPut/dbDelete → 立刻改成 batch。
+- **后台暂停是用户预期**：默认假设用户切后台就是想让 App 停。可见性切换除了 flushProgress 还要 pause。
+- **iOS Safari sampleRate 坑**：iOS 路由切换/切前后台后 sampleRate 可能变 8000Hz，导致 AudioContext 无声。防 dummy buffer 重置。
+- **Service Worker 离线回退要自定义页**：MDN 强制推荐，别让浏览器原生错误页破坏品牌。
+
+---
+
+### 📋 任务 T20261020-01 CSS 瘦身 + 交互体验优化（✅ 完成）
+
+> 触发：T20261019-02 完成后继续清理 CSS 孤儿 + 审计 P2 优化项
+> 状态：✅ 全部落地，零回归
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A1 扫描 CSS 孤儿 | ✅ | 14 条 grep 命中 → 全零引用确认 |
+| A2 删除 + 验证 | ✅ | 删 style.css 28 行（cast-panel 9 + vp-cast-panel 13 + banner/ico 4 + cast-scan/stop/list/dev/empty 6） |
+| A3 P2 项状态审计 | ✅ | OPT-1 空状态 ✅ 已有；OPT-2 快捷键 ✅ 已有；OPT-3 role 改名待做；OPT-4 孤儿清理 ✅ 本轮 |
+
+### 本轮变更
+
+| 文件 | 改动 |
+|---|---|
+| `src/style.css` | 删 28 行零引用 CSS（投屏面板旧样式） |
+
+### 关键教训
+
+- **CSS 孤儿在删除 UI 代码后必须跟进清理**：删了 bottombar.js 和 videoPlayer.js 的投屏面板，样式跟着成了孤儿，但之前没清。教训：删除 UI 功能后 Grep 一遍 CSS class
+
+---
+
+### 📋 任务 T20261019-02 P0 前端交互审计（✅ 完成）
+
+> 触发：T20261019-01 完成后用户拍板「按方案开始 P0」→ 审计→ 修复双大改
+> 状态：✅ 全部落地，零回归
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A1 审计 index.html 结构 + showPage 路由 | ✅ | 入口全枚举：侧栏 10 nav-item + 底部 3 按钮 + 顶栏 3 入口 + music-nav 3 按钮 |
+| A2 审计 main.js allowedViews 裁剪 | ✅ | hub 全功能 / music 6 项 / video 3 项，代码实现正确 |
+| A3 审计 15 个 ui/ 模块交互入口 | ✅ | library/bottombar/cloud/castCenter/settings/music/videoPlayer/favorites/playlists/recent/stats/spectrum/onlinesearch/queue/gestures/dom/castStatusBar 全扫 |
+| A4 审计 player.js 播放控制链路 | ✅ | bottombar 绑定 player API + music role 全屏播放页独立控制 |
+| A5 汇总发现 → 分级输出 | ✅ | 3 bug + 3 UX 问题 + 4 优化建议，用户拍板两个大改 |
+| B1 bottombar.js 投屏统一 | ✅ | castBtn→showCastCenter + 删 castPanel 66 行冗余 |
+| B2 videoPlayer.js 投屏统一 | ✅ | castBtn→showCastCenter + 删 vp-cast-panel 58 行冗余（38.3KB→22.1KB） |
+| B3 顶栏 import-folder-top role 裁剪 | ✅ | BUG-1 修复，非 hub role 也隐藏顶栏导入按钮 |
+| B4 video 布局对称化 | ✅ | JS remove 侧栏+顶栏+底栏 + index.html 加 #video-nav + main.js 绑定 + style.css win-video 规则 + video-nav 深色 amber 样式 |
+| B5 全链路验证 | ✅ | build 双站成功 + preflight 18/18 + test 6/6 |
+| B6 video 控制条补全（Advisor 紧急修复） | ✅ | videoPlayer.js opts 加音量/静音/队列/播放模式 4 按钮，补删 bottombar 丢失的功能 |
+
+### 本轮变更文件清单
+
+| 文件 | 改动 | 增量/删量 |
+|---|---|---|
+| `src/ui/bottombar.js` | import cast→showCastCenter + castBtn onclick + 删 castPanel 66 行 | -62 行 |
+| `src/ui/videoPlayer.js` | 删 vp-cast-panel 58 行 + 补音量/队列/模式 4 按钮 | -48 行（净，38.3KB→23.3KB） |
+| `src/main.js` | 顶栏 import-folder-top 裁剪 + video role 对称化 remove + video-nav click handler | +19 行 |
+| `index.html` | 新增 #video-nav 底部导航 | +12 行 |
+| `src/style.css` | win-video role 规则 + video-nav 深色 amber 样式 | +22 行 |
+| `.trae/memory/台账/daily.md` | 本轮任务记录 | — |
+
+### 关键教训
+
+- **布局大改必须验证功能不丢失**：删 bottombar 后 video role 丢了音量/队列/播放模式，Advisor 及时发现。教训：role 布局对称化后必须逐功能验证（播放控制/音量/队列/模式/投屏）
+- **投屏入口三处重复问题** → 已统一为 castCenter，但 CSS 里 cast-panel / vp-cast-panel 样式仍是孤儿
+- **role 裁剪要彻底** → allowedViews 只裁剪 data-view，data-action 单独处理
+
+---
+
+## 2026-10-19
+
+### 📋 任务 T20261019-01 台账健康审计 + 升级规划
+
+> 触发：用户设定确认后，先摸家底再干活，自动闭环台账 + 升级规划
+> 状态：进行中（A1-A5 完成，A6 整理中，A7 待收尾）
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| A0 摸家底 | ✅ | preflight 18/18 绿 + 单元 6/6 绿 + 活跃坑 0 条 + 11 个漂移点发现 |
+| A1 台账漂移修正 | ✅ | index.md 4 处（style.css 行数、cloud_api.py 行数、preflight 14→18 × 2）、context.md 2 处（preflight 14→18、铁律 10→11）、preflight.mjs 注释 17→18 |
+| A2 台账扩展补录 | ✅ | index.md 新增 3 章：clients/ 根目录脚本、.trae/agents/（13 个 Agent 定义）、.trae/documents/（4 份历史文档）；根目录文档表格精简 |
+| A3 铁律补全 | ✅ | context.md 核心速查补上第 11 条角色隔离铁律（对齐 AGENTS.md） |
+| A4 用户偏好专项文件 | ✅ | 新建 `.trae/memory/user-preferences.md`（15 条细则 + 红线 + 台账闭环）；AGENTS.md 偏好章节改为引用式 |
+| A5 AGENTS.md v17 瘦身 | ✅ | 标题更新 v17、铁律 #1 去硬编码版本号、Android 速查改引用 context.md、SKILL 行精简 |
+| A6 升级清单整理 | ⏳ | 扫描核心文件大小 + TODO 标记 + 孤儿文件，分类输出 |
+| A7 归档收尾 | ⏳ | context.md 最近 5 动作更新 + index.md 时间戳 + 最终汇报 |
+
+### 本轮变更文件清单
+
+| 文件 | 改动 |
+|---|---|
+| `.trae/memory/台账/index.md` | +3 章扩展 + 4 处漂移修正 + 根目录表格精简 |
+| `.trae/memory/台账/context.md` | preflight 14→18、铁律 10→11、新增角色隔离铁律 |
+| `scripts/preflight.mjs` | 注释 17→18、补注释说明 |
+| `.trae/memory/user-preferences.md` | 🆕 新建（15 条偏好） |
+| `AGENTS.md` | v17 瘦身：标题 + 铁律 #1 + Android 速查 + SKILL 行 + 用户偏好改引用 |
+
+### 关键发现
+
+1. **style.css 已回退单文件** — 原 B 层拆成 src/css/ 三层因 Android @import 兼容性问题已回退（ISS-20261017-010），台账之前没更新
+2. **src/css/ 三文件成孤儿** — base.css + components.css + role.css 无人引用，仅 SW 缓存清单可能提到，列入清理候选
+3. **台账之前没登记 clients/ 12 个脚本** — copy-web.mjs、deploy-pwa.mjs、zip-wwwroot.py 等均未记录
+4. **preflight.mjs 注释 17/AGENTS 18/实际跑 18** — 三处漂移已校正
+
+---
+
 ## 2026-10-18
+
+### 📋 任务 T20261018-06 PWA 瘦身 + build-web 自动报告
+
+| 动作 | 状态 | 说明 |
+|---|---|---|
+| F0 基线验证 | ✅ | preflight 18/18 + 单元 6/6 |
+| F1 qrcodejs min 化 | ✅ | 32.8 KB → 19.7 KB (-40%) |
+| F2 role.css 死代码扫 | ✅ | 无（全是通用主题规则） |
+| F3 sw.js CORE 孤儿扫 | ✅ | 31 路径 31 文件完全对上，零孤儿 |
+| F4 build-web 加 size 报告 | ✅ | TOP 6 大户自动打印 + walkSync helper |
+| F5 全量回归 | ✅ | preflight 18/18 + 单元 6/6 + build-web 双站点 |
+| F6 commit + push | ✅ | 24a6321 → GitHub main ✅ |
+
+**最终产物**：music 459.9 KB / player 459.6 KB（43 文件）
+**TOP 6 大户**：style.css 71 → main.js 46 → role.css 41 → player.js 38 → components.css 28 → library.js 25
+
+---
 
 ### 📋 任务 T20261018-05 console.log 纯 debug 清理（19→7）
 

@@ -1,7 +1,7 @@
 // bottombar.js — 常驻底栏（播放/进度/音量/队列/模式）
 import { h, formatTime } from './dom.js'
 import { player } from '../player.js'
-import { cast } from '../cast.js'
+import { showCastCenter } from './castCenter.js'
 
 // 音乐/视频各自独立的播放模式文案（视频用「单集循环」以示区分）
 const PLAYMODE_LABEL = {
@@ -66,7 +66,7 @@ export function initBottomBar(app) {
   vol.style.setProperty('--pct', Math.round(player.volume * 100) + '%')
   vol.addEventListener('input', () => { player.setVolume(vol.value / 100); vol.style.setProperty('--pct', vol.value + '%') })
 
-  const castBtn = h('button', { class: 'icon-btn', title: '投屏到电视 (DLNA)', onclick: onCastClick }, '📺')
+  const castBtn = h('button', { class: 'icon-btn', title: '投屏中心 (DLNA/Miracast/屏幕镜像)', onclick: () => showCastCenter(app) }, '📺')
 
   bar.append(
     h('div', { class: 'bb-now' }, cover, h('div', { class: 'txt' }, title, sub)),
@@ -99,73 +99,6 @@ export function initBottomBar(app) {
   app.refreshModeBadge = refreshModeBadge // 供 main.js 切换界面时同步徽章
   document.addEventListener('click', (e) => { if (!modeMenu.hidden && !modeWrap.contains(e.target)) closeModeMenu() })
   refreshModeBadge()
-
-  // ---------- 投屏面板（DLNA，仅 Windows 客户端可用） ----------
-  const castPanel = h('div', { class: 'cast-panel' })
-  const castList = h('div', { class: 'cast-list' })
-  const castScan = h('button', { class: 'cast-scan', onclick: () => cast.scan() }, '扫描设备')
-  const castStop = h('button', { class: 'cast-stop', onclick: () => cast.stop() }, '■ 停止投屏')
-  const castMirror = h('button', { class: 'cast-scan', onclick: () => cast.mirror() }, '🖥️ 系统镜像 (Miracast)')
-  const castScreen = h('button', { class: 'cast-scan', onclick: () => {
-    if (cast.state.screenCasting) cast.screenCastStop()
-    else cast.screenCastStart()
-  } }, '🖥️ 屏幕镜像 (通用)')
-  const castClose = h('button', { class: 'cast-close', onclick: () => { castPanel.hidden = true } }, '✕')
-  castPanel.hidden = true
-  castPanel.append(
-    h('div', { class: 'cast-head' }, h('span', {}, '投屏到'), castClose),
-    h('div', { class: 'cast-actions' }, castScan, castStop),
-    h('div', { class: 'cast-actions' }, castMirror, castScreen),
-    castList
-  )
-  document.body.appendChild(castPanel)
-
-  function renderCastList() {
-    castList.innerHTML = ''
-    if (cast.state.scanning) { castList.appendChild(h('div', { class: 'cast-empty' }, '扫描中…')); return }
-    if (!cast.state.devices.length) {
-      castList.appendChild(h('div', { class: 'cast-empty' }, '未发现设备。请确认电视已开机、与电脑同一 Wi-Fi，且支持 DLNA 投屏。'))
-      return
-    }
-    cast.state.devices.forEach((d) => {
-      castList.appendChild(h('button', { class: 'cast-dev', onclick: () => {
-        cast.castTo(d.id)
-        castPanel.hidden = true
-        app.toast('正在投屏到 ' + d.name, 'info')
-      } }, '📺 ' + (d.name || '设备')))
-    })
-  }
-  function onCastClick() {
-    const host = cast.isHost()
-    if (!host) { app.toast('投屏需在原生客户端中使用（Windows EXE / Android APP）', 'info'); return }
-    // Android 端：content:// 由 Kotlin MediaHttpServer 自动代理成 http://
-    // Windows 端：必须有 blob 才能上传到 LocalServer
-    const item = player.current
-    if (!item) { app.toast('当前没有可投屏的媒体', 'err'); return }
-    if (host === 'windows' && !item.blob) { app.toast('Windows 投屏需要可上传的媒体文件', 'err'); return }
-    castPanel.hidden = !castPanel.hidden
-    if (!castPanel.hidden) { renderCastList(); cast.scan() }
-  }
-  cast.on('devices', renderCastList)
-  cast.on('status', (s) => {
-    if (s.state === 'uploading') app.toast('正在准备投屏文件…', 'info')
-    else if (s.state === 'playing') app.toast('已投屏到 ' + (cast.state.deviceName || '设备'), 'info')
-    else if (s.state === 'stopped') app.toast('已停止投屏', 'info')
-    castStop.hidden = !cast.state.casting
-  })
-  cast.on('mirror', (m) => {
-    if (m) app.toast('系统镜像唤起失败：' + m, 'err')
-    else app.toast('已唤起系统无线显示，请在弹出的面板中选择你的电视', 'info')
-  })
-  cast.on('screenCast', (sc) => {
-    if (sc.on) {
-      app.toast('📱 屏幕镜像已开启！电视浏览器打开: ' + (sc.url || '/tv'), 'info')
-    } else {
-      if (sc.error) app.toast('屏幕镜像失败: ' + sc.error, 'err')
-      else app.toast('屏幕镜像已停止', 'info')
-    }
-  })
-  cast.on('error', (m) => app.toast(m, 'err'))
 
   function setIcon(btn, txt) { btn.textContent = txt }
 

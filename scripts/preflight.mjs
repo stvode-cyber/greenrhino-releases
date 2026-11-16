@@ -1,7 +1,7 @@
 // preflight.mjs — 发布前检查（AGENTS.md 发布检查清单自动化）
 // 用法：node scripts/preflight.mjs
 //
-// 检查项（共 17 项）：
+// 检查项（共 18 项）：
 //   1. sw.js 源码必须含 '__SW_CACHE__' 占位符
 //   2. sw.js 源码不含 greenrhino-v\d+ 硬编码
 //   3. build-web.mjs APP_VERSION 与 ROLES.cache 版本一致
@@ -19,7 +19,7 @@
 //  15. .iss OutputBaseFilename 含正确版本号（ISS-20260910-001）
 //  16. android-music build.gradle versionName/versionCode 同步
 //  17. android-player build.gradle versionName/versionCode 同步
-//  （AGENTS.md 声明 14 项 + ISS-0910 补 3 项 = 17 项）
+//  （AGENTS.md 声明 14 项 + ISS-0910 补 3 项 + 版本号 1 项 = 18 项）
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -141,6 +141,23 @@ for (const role of ['music', 'player']) {
     ok(`android-${role} build.gradle versionName=${vn} versionCode=${vc}`)
   else bad(`android-${role} build.gradle 版本不同步：versionName=${vn}（期望 ${appVer}）versionCode=${vc}（期望 ${majorNum}）`)
 }
+
+// 18. Android 构建目录 ASCII 路径（铁律#9）
+for (const role of ['music', 'player']) {
+  const aDir = path.join(ROOT, 'clients', `android-${role}`)
+  // 只检查 android-{role} 目录本身的路径，不检查项目根
+  // 铁律#9: 项目根含 emoji+中文 → JDK Illegal char
+  const hasNonAscii = [...aDir].some(c => c.charCodeAt(0) > 127)
+  if (!fs.existsSync(aDir)) { warn_(`clients/android-${role}/ 目录不存在`); continue }
+  // 铁律#9 只在实际构建路径触发，preflight 这里只给警告——因为用户可能在 C:\greenrhino-build\ 构建
+  if (hasNonAscii) warn_(`android-${role} 路径含非 ASCII 字符（${aDir}），构建前需复制到 C:/greenrhino-build/`)
+  else ok(`android-${role} 构建目录路径纯 ASCII`)
+}
+
+// 19. bump-version.mjs 存在（版本五落点自动化）
+const bumpScript = path.join(ROOT, 'scripts', 'bump-version.mjs')
+if (fs.existsSync(bumpScript)) ok('scripts/bump-version.mjs 存在（版本五落点自动化）')
+else bad('scripts/bump-version.mjs 不存在（版本号需手动同步五落点）')
 
 console.log(`\n📊 结果：✅ ${pass} 通过  ❌ ${fail} 失败  ⚠️  ${warn} 警告`)
 if (fail > 0) { console.log('\n❌ 有失败项，请修复后再发布'); process.exit(1) }

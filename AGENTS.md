@@ -1,7 +1,7 @@
 # AGENTS.md — 绿角犀项目全局规则
 
 > 本文件对所有 AI 员工注入，是跨角色的行为基线。修改代码前必须通读。
-> 最后更新：2026-10-17（v16 · 重构瘦身）
+> 最后更新：2026-10-19（v17 · 用户偏好引用化 + 瘦身）
 
 ---
 
@@ -54,10 +54,10 @@ test/                    # 单元 + E2E
 ## 不可变约束（11 条铁律）
 
 ### 1. 版本五落点一致（ISS-20260910-001 已关单）
-`scripts/build-web.mjs` 的 `APP_VERSION = 'v16'` 是所有产物的版本基线。五落点必须同步：
+版本号由 `scripts/build-web.mjs` 的 `APP_VERSION` 统一管理，五落点必须同步：
 - `build-web.mjs` APP_VERSION
-- `gr-music-v16` / `gr-player-v16` cache 桶
-- `.iss` OutputBaseFilename（GreenRhinoMusic-setup-v16 / GreenRhinoPlayer-setup-v16）
+- `gr-music-{version}` / `gr-player-{version}` cache 桶
+- `.iss` OutputBaseFilename
 - `android-music/build.gradle` versionName + versionCode
 - `android-player/build.gradle` versionName + versionCode
 - **工具**：`npm run bump` 一键覆盖五落点；`npm run preflight` 18 项自动验
@@ -179,26 +179,16 @@ Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -E
 - `assetlinks.json` SHA256 指纹必须从真实 keystore 生成，**不要手写**
 - `ffmpeg.exe`（98MB）必须被 gitignore
 
-## 🧑‍💼 用户行为偏好（v16 精简版）
+## 🧑‍💼 用户行为偏好（v17 · 引用专项文件）
 
-> 1号的行为偏好，换 AI 自动遵守。**三句话总结**：
+> 详细 15 条细则 + 红线 + 台账闭环 → [.trae/memory/user-preferences.md](.trae/memory/user-preferences.md)
+> 这里只放三句话核心速查：
 
-**① 我只说「同意/否决/改这里」，其他全自动** — 别让我跑命令、改配置、选路径，AI 自己干自己验证，干完汇报。
+**① 我只说「同意/否决/改这里」，其他全自动** — AI 自己干自己验证，干完汇报。
 
-**② 需要我动手的直接说大白话** — 「插 USB」「点 UI 第3个按钮」「登录」，别绕弯解释为什么，直接说要做啥。
+**② 大白话 + 脑图代码格式** — 用 `├─` `└─` 格式，别绕弯。
 
-**③ 质量优先不计成本** — 最强最稳方案，不惜工时；代码/台账持续瘦身，新 AI 进门 30 秒能开工。
-
-### 执行细则（3 句话的展开）
-
-| 细则 | 说明 |
-|---|---|
-| 大白话回复 | 不用术语，一句话就一句话 |
-| 不输出运行指令 | `npm run dev`、`adb install -r` 这种 AI 自己执行，别让我跑 |
-| 大任务先报理解 | 说清楚我要做啥（脑图格式），我点头了再动手 |
-| 不越界 | 跟绿角犀无关的别瞎搞，发现不对直接问 |
-| 件件记到查 | 每次任务自动写台账，可追溯 |
-| 自动闭环 | 做完 → 归档台账 → 汇报，不用我催 |
+**③ 质量优先不计成本** — 最强最稳方案，新 AI 进门 30 秒开工。
 
 ---
 
@@ -215,15 +205,9 @@ Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -E
 | `npm run test` / `test:all` | 单元 / 单元+E2E |
 | `git push origin main` | 推远程 |
 
-### Android 构建速查（铁律 #9 强制 ASCII 路径）
-
-```powershell
-Copy-Item clients\android-{music,player} C:\greenrhino-build\ -Recurse -Force -Exclude build,.gradle
-Copy-Item release\pwa-site-* C:\greenrhino-build\android-*\app\src\main\assets\pwa\ -Recurse -Force
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
-$env:ANDROID_HOME = "C:\Users\Administrator\Android\Sdk"
-cd C:\greenrhino-build\android-player; .\gradlew.bat assembleDebug --no-daemon
-```
+### Android 构建速查
+> ⚠️ 铁律 #9 强制：必须复制到 `C:\greenrhino-build\`（纯 ASCII 路径）再跑 gradlew。
+> 完整命令 → `context.md` 里的「Android 构建铁律」章节。
 
 ### 台账导航
 
@@ -231,4 +215,4 @@ cd C:\greenrhino-build\android-player; .\gradlew.bat assembleDebug --no-daemon
 
 ### SKILL 核心 7 个
 
-`.trae/skills/` → ledger-health-check（台账体检·大任务前必走）/ security-secrets-index（敏感信息索引·审计时加载）/ frontend-component-spec / code-review-checklist / unit-test-spec / docker-deploy-guide / security-audit-guide
+`.trae/skills/` → ledger-health-check / security-secrets-index / frontend-component-spec / code-review-checklist / unit-test-spec / docker-deploy-guide / security-audit-guide

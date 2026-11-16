@@ -1,5 +1,5 @@
-# GitHub Actions workflows must be LF
-.github/workflows/*.yml text eol=lf
-# Force all yml/yaml to LF
-*.yml text eol=lf
-*.yaml text eol=lf
+# .gitattributes — 强制文本文件 LF 行尾，防 Windows 自动转 CRLF
+* text=auto eol=lf
+
+# 钩子脚本必须用 LF（Windows Git 自动转 CRLF 会让 shebang 失效）
+.git-hooks/pre-commit text eol=lf

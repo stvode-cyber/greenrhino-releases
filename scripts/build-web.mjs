@@ -110,8 +110,9 @@ function buildRole(key) {
   sw = sw.replace(/'__SW_CACHE__'/, `'${cfg.cache}'`)
   fs.writeFileSync(path.join(out, 'sw.js'), sw)
 
-  // 4) favicon / icons / src / public（全量复制；public 可能不存在则跳过）
+  // 4) favicon / icons / src / public / offline.html（全量复制；public 可能不存在则跳过）
   copyPath(path.join(ROOT, 'favicon.svg'), path.join(out, 'favicon.svg'))
+  copyPath(path.join(ROOT, 'offline.html'), path.join(out, 'offline.html'))
   if (fs.existsSync(path.join(ROOT, 'icons'))) copyPath(path.join(ROOT, 'icons'), path.join(out, 'icons'))
   if (fs.existsSync(path.join(ROOT, 'src'))) copyPath(path.join(ROOT, 'src'), path.join(out, 'src'))
   if (fs.existsSync(path.join(ROOT, 'public'))) copyPath(path.join(ROOT, 'public'), path.join(out, 'public'))

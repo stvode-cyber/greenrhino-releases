@@ -1,7 +1,7 @@
 # 项目驾驶舱 · 绿角犀（GreenRhino）
 
 > **TL;DR**：新 AI 进门 30 秒上手。每次任务前必读。
-> 最后更新：2026-10-18（T20261018-01 设定台账全面升级完成）
+> 最后更新：2026-10-21（T20261021-03 协作铁律硬约束落地完成 + preflight 18→21项 + 钩子体系）
 
 ---
 
@@ -14,8 +14,8 @@
 | **双站** | https://greenrhino-music.pages.dev / https://greenrhino-player.pages.dev |
 | **包名** | `com.greenrhino.music` / `com.greenrhino.player` |
 | **主题色** | 音乐绿 `#00D8A6` / 播放器琥珀 `#FFB03A` |
-| **Preflight** | ✅ 18/18 绿 |
-| **单元测试** | ✅ 6/6 绿 |
+| **Preflight** | ✅ 21/21 绿（19通过 + 2警告，铁律#9 Android ASCII 路径为警告） |
+| **单元测试** | ✅ 9/9 绿（6原 + RT-01 模板字符串 + RT-02 npm scripts 语法） |
 | **CI** | ✅ `.github/workflows/ci.yml` |
 | **远程** | ✅ main 分支已推 `fc2c12e`（2026-10-17 晚） |
 | **投屏三方案** | ✅ DLNA 推视频（已有）+ **🆕 MJPEG 屏幕镜像 /screen.mjpg**（MediaProjection 抓屏，任何有浏览器的电视都能用，95%+ 覆盖）+ Miracast 原生兜底 |
@@ -29,7 +29,7 @@
 |---|---|
 | `npm run build` | 构建双 App PWA 站点 |
 | `npm run build:android` | 构建 + 同步到 Android assets/pwa/ |
-| `npm run preflight` | 发布前 14 项自动化检查（全绿才敢发） |
+| `npm run preflight` | 发布前 21 项自动化检查（19通过 + 2警告，全绿才敢发） |
 | `npm run bump` | 一键版本升级 |
 | `npm run test` / `npm run test:all` | 单元测试 / 单元+E2E |
 
@@ -91,7 +91,7 @@ cd C:\greenrhino-build\android-player
 
 ---
 
-## 📏 已定规则（10 条铁律）
+## 📏 已定规则（11 条铁律）
 
 详见 [AGENTS.md](../../../AGENTS.md) 「不可变约束」章节。
 
@@ -106,6 +106,7 @@ cd C:\greenrhino-build\android-player
 8. **Android 构建必须纯 ASCII 路径**：复制到 C:\greenrhino-build\
 9. **build-assets.mjs 在 clients/**：不是 scripts/
 10. **台账闭环**：五步必走
+11. **角色隔离**：player 只留 home/video/settings；music 只留 home/music/playlists/favorites/cloud/settings；CSS 单文件禁 @import（ISS-20261017-010/011）
 
 ---
 

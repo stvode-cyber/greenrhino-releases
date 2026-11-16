@@ -133,3 +133,59 @@ test('cache 名里的版本号与 build-web.mjs 的 APP_VERSION 同步', () => {
     `player cache ${playerCache} 应包含 APP_VERSION ${version}`
   )
 })
+
+// ────────────────────────────────────────
+// RT-01 回归：preflight.mjs 必须能被 Node 正常加载
+// （之前犯的傻：模板字符串里写 \\greenrhino-build\\ 导致 SyntaxError）
+// ────────────────────────────────────────
+test('preflight.mjs 能被 Node 正常 parse（无 SyntaxError）', () => {
+  const preflightPath = path.join(ROOT, 'scripts', 'preflight.mjs')
+  assert.ok(fs.existsSync(preflightPath), 'preflight.mjs 必须存在')
+  // 用 Node --check 模式验证语法（只 parse 不执行）
+  try {
+    execSync('node --check scripts/preflight.mjs', { cwd: ROOT, stdio: 'pipe' })
+  } catch (e) {
+    assert.fail('preflight.mjs 语法错误！' + e.stderr?.toString())
+  }
+})
+
+// ────────────────────────────────────────
+// RT-01 回归：模板字符串不含反斜杠路径转义（\\xxx\\）
+// ────────────────────────────────────────
+test('preflight.mjs 模板字符串不含反斜杠路径转义', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'preflight.mjs'), 'utf8')
+  // 匹配模板字符串里的 \\xxx\\ 形式（反斜杠转义后跟路径分隔符）
+  const badEscape = src.match(/`[^`]*\\\[a-zA-Z]/g)
+  assert.ok(
+    !badEscape || badEscape.length === 0,
+    'preflight.mjs 模板字符串里不应有反斜杠路径转义（改用正斜杠 / 或单引号字符串），' +
+      '发现: ' + (badEscape?.join(', ') ?? '(无)')
+  )
+})
+
+// ────────────────────────────────────────
+// RT-02 回归：npm scripts 禁止 bash 语法（跨平台炸坑）
+// 之前犯的傻：postinstall 写 "git config ... 2>/dev/null || true"
+// → Windows cmd.exe 不认 || true → exit code 1
+// 规则：npm scripts 里禁止写 bash 专属语法（|| / && / 2>/dev/null / $var）
+// ────────────────────────────────────────
+test('package.json scripts 不含 bash 专属语法', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+  const scripts = pkg.scripts || {}
+  const bashPatterns = [
+    [/\|\|\s*true/, '|| true（bash 专属，Windows cmd.exe 不认）'],
+    [/\|\|\s*false/, '|| false'],
+    [/2>\/dev\/null/, '2>/dev/null（bash 专属）'],
+    [/>\/dev\/null/, '>/dev/null（bash 专属）'],
+    [/\$\{?\w+\}?/, '$VAR（bash 变量，Windows 用 %VAR%）'],
+    // 注意：&& 在 cmd.exe 和 bash 里都支持，不禁
+  ]
+  for (const [name, cmd] of Object.entries(scripts)) {
+    for (const [re, desc] of bashPatterns) {
+      assert.ok(
+        !re.test(cmd),
+        `npm script "${name}" 包含 bash 专属语法 "${desc}"，请改用 Node.js 脚本。命令内容: ${cmd}`
+      )
+    }
+  }
+})

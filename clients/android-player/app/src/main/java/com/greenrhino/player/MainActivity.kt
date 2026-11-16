@@ -55,6 +55,10 @@ class MainActivity : ComponentActivity() {
     ) { result ->
         if (result.resultCode == RESULT_OK && result.data != null) {
             ScreenCaster.start(this, result.resultCode, result.data!!)
+            // 🔶 回推前端：ScreenCaster 已启动，前端更新状态 + URL
+            webView.evaluateJavascript(
+                "if(window.__castCb)window.__castCb({type:'mirror',ok:true})", null
+            )
         } else {
             webView.evaluateJavascript(
                 "if(window.__castCb)window.__castCb({type:'mirror',ok:false,msg:'授权被拒绝'})", null

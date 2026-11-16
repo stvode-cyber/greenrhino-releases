@@ -10,7 +10,7 @@ const reuse = process.env.PLAYWRIGHT_REUSE === '1'
 export default defineConfig({
   testDir: 'test/e2e',
   timeout: 45_000, // SW 注册可能慢，放宽
-  fullyParallel: true,
+  fullyParallel: false,
   reporter: 'list',
 
   // 两个静态服务器（在各自目录里起，避免绝对路径转义问题）

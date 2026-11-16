@@ -1,0 +1,79 @@
+#!/usr/bin/env sh
+# .git-hooks/pre-commit — 致命三合一拦截（规则24）
+# 一个会话不许同时凑齐：私货 + 脏内容 + 外发口
+# 用法：git config core.hooksPath .git-hooks
+# 退出码：0=放行  1=拒提交
+
+echo "🔒 pre-commit 钩子已激活（致命三合一拦截）"
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMRTUXB)
+
+if [ -z "$STAGED_FILES" ]; then
+  echo "  ✅ 无暂存文件，放行"
+  exit 0
+fi
+
+FAIL=0
+WARN=0
+
+# === 规则1：私货拦截 — 未授权二进制 ===
+for f in $STAGED_FILES; do
+  case "$f" in
+    *.exe|*.dll|*.bin|*.so|*.dylib)
+      # 白名单：ffmpeg.exe 已在 gitignore，不会进暂存
+      echo "  ❌ 私货拦截：检测到未授权二进制 → $f"
+      FAIL=1
+      ;;
+  esac
+done
+
+# === 规则2：脏内容拦截 — 调试日志 ===
+WHITELIST='(package\.json|manifest\.webmanifest|assetlinks\.json|CHANGELOG\.md|\.md$)'
+for f in $STAGED_FILES; do
+  # 跳过白名单文件
+  if echo "$f" | grep -qE "$WHITELIST"; then
+    continue
+  fi
+  # 扫描 console.log / TODO: debug
+  if git diff --cached -- "$f" | grep -qE '^\+.*console\.log\('; then
+    echo "  ⚠️  脏内容警告：console.log → $f"
+    WARN=$((WARN + 1))
+  fi
+  if git diff --cached -- "$f" | grep -qE '^\+.*//\s*TODO:\s*debug'; then
+    echo "  ⚠️  脏内容警告：// TODO: debug → $f"
+    WARN=$((WARN + 1))
+  fi
+done
+
+# === 规则3：外发口拦截 — 硬编码外部 URL ===
+# 用两步法（grep -E 不支持前瞻断言，改用先匹配 http 再排除内网）
+for f in $STAGED_FILES; do
+  if echo "$f" | grep -qE "$WHITELIST"; then
+    continue
+  fi
+  # Step1: 找新增行里的 http:// 或 https://
+  HAS_HTTP=$(git diff --cached -- "$f" | grep -E '^\+.*https?://' | head -1)
+  if [ -n "$HAS_HTTP" ]; then
+    # Step2: 排除 localhost / 127.0.0.1 / 内网 IP / 纯IP（无域名的 http 也算合法外发口）
+    # 如果排除后还有剩下 → 就是硬编码外部 URL
+    EXTERNAL_URL=$(echo "$HAS_HTTP" | grep -vE 'localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.')
+    if [ -n "$EXTERNAL_URL" ]; then
+      echo "  ⚠️  外发口警告：硬编码外部 URL → $f"
+      WARN=$((WARN + 1))
+    fi
+  fi
+done
+
+# === 汇总 ===
+echo "---"
+if [ "$FAIL" -eq 1 ]; then
+  echo "❌ 私货拦截触发，提交被拒！请移除二进制文件后再提交"
+  exit 1
+fi
+
+if [ "$WARN" -gt 0 ]; then
+  echo "⚠️  ${WARN} 条警告（脏内容/外发口），建议处理。如需强制提交：git commit --no-verify"
+fi
+
+echo "✅ 钩子检查通过（${WARN} 条警告），放行"
+exit 0
